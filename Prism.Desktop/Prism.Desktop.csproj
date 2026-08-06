@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
@@ -17,7 +17,7 @@
   <!-- 复制 UAssetCLI 输出与编码器到输出目录（运行与发布自包含） -->
   <Target Name="CopyUAssetCliOutput" AfterTargets="Build">
     <ItemGroup>
-      <UAssetCliOutput Include="..\..\UAssetCLI\bin\$(Configuration)\net10.0\**\*.*" />
+      <UAssetCliOutput Include="..\UAssetCLI\bin\$(Configuration)\net10.0\**\*.*" />
     </ItemGroup>
     <Copy SourceFiles="@(UAssetCliOutput)"
           DestinationFiles="@(UAssetCliOutput->'$(OutDir)UAssetCLI\%(RecursiveDir)%(Filename)%(Extension)')"
@@ -25,7 +25,7 @@
   </Target>
   <Target Name="CopyEncoderTools" AfterTargets="Build">
     <ItemGroup>
-      <EncoderTools Include="..\..\UAssetTextureWeb\tools\*.exe" />
+      <EncoderTools Include="..\tools\*.exe" />
     </ItemGroup>
     <Copy SourceFiles="@(EncoderTools)"
           DestinationFiles="@(EncoderTools->'$(OutDir)tools\%(Filename)%(Extension)')"
