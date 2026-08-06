@@ -1,0 +1,128 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Prism.Desktop.App"
+             xmlns:local="using:Prism.Desktop"
+             RequestedThemeVariant="Default">
+
+    <Application.DataTemplates>
+        <local:ViewLocator />
+    </Application.DataTemplates>
+
+    <Application.Resources>
+        <ResourceDictionary>
+            <!-- 主题相关色（Light/Dark 两套） -->
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="PrimaryWashBrush" Color="#0d94881f" />
+                    <SolidColorBrush x:Key="SurfaceBrush" Color="#f5f3ee" />
+                    <SolidColorBrush x:Key="CardBrush" Color="#ffffff" />
+                    <SolidColorBrush x:Key="DividerBrush" Color="#e8e6e0" />
+                    <SolidColorBrush x:Key="TextMutedBrush" Color="#8a8982" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="PrimaryWashBrush" Color="#0d948833" />
+                    <SolidColorBrush x:Key="SurfaceBrush" Color="#1b1b1d" />
+                    <SolidColorBrush x:Key="CardBrush" Color="#262629" />
+                    <SolidColorBrush x:Key="DividerBrush" Color="#3a3a3d" />
+                    <SolidColorBrush x:Key="TextMutedBrush" Color="#9a9a9e" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+
+            <!-- 主题无关色 -->
+            <SolidColorBrush x:Key="PrimaryBrush" Color="#0d9488" />
+            <SolidColorBrush x:Key="PrimaryHoverBrush" Color="#0b7f75" />
+            <SolidColorBrush x:Key="PrimaryLightBrush" Color="#3cb8a8" />
+            <SolidColorBrush x:Key="DangerBrush" Color="#b43a2a" />
+
+            <!-- 主题强调色（Fluent 控件拾取 SystemAccentColor） -->
+            <Color x:Key="SystemAccentColor">#0d9488</Color>
+            <Color x:Key="SystemAccentColorDark1">#0b7f75</Color>
+            <Color x:Key="SystemAccentColorDark2">#096b63</Color>
+            <Color x:Key="SystemAccentColorDark3">#075751</Color>
+            <Color x:Key="SystemAccentColorLight1">#3cb8a8</Color>
+            <Color x:Key="SystemAccentColorLight2">#6bcfc3</Color>
+            <Color x:Key="SystemAccentColorLight3">#9ae0d8</Color>
+        </ResourceDictionary>
+    </Application.Resources>
+
+    <Application.Styles>
+        <FluentTheme />
+
+        <!-- 标签页 -->
+        <Style Selector="Button.tab">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="14,7" />
+            <Setter Property="FontSize" Value="12.5" />
+        </Style>
+        <Style Selector="Button.tab:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource PrimaryWashBrush}" />
+        </Style>
+        <Style Selector="Button.tab.active">
+            <Setter Property="Background" Value="{DynamicResource PrimaryWashBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <!-- 按钮：主按钮 -->
+        <Style Selector="Button.primary">
+            <Setter Property="Background" Value="{DynamicResource PrimaryBrush}" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="16,9" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource PrimaryHoverBrush}" />
+        </Style>
+
+        <!-- 按钮：强调（浅色底） -->
+        <Style Selector="Button.accent">
+            <Setter Property="Background" Value="{DynamicResource PrimaryWashBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="12,7" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+        <Style Selector="Button.accent:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource PrimaryBrush}" />
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+
+        <!-- 按钮：幽灵（无底） -->
+        <Style Selector="Button.ghost">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="10,7" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+        <Style Selector="Button.ghost:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource PrimaryWashBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+        </Style>
+
+        <!-- 卡片 -->
+        <Style Selector="Border.card">
+            <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+
+        <!-- 卡片按钮（主页功能入口） -->
+        <Style Selector="Button.card">
+            <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <Style Selector="Button.card:pointerover /template/ ContentPresenter">
+            <Setter Property="BorderBrush" Value="{DynamicResource PrimaryLightBrush}" />
+        </Style>
+    </Application.Styles>
+</Application>

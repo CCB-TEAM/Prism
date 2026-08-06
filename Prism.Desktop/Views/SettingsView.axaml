@@ -1,0 +1,130 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Prism.Desktop.ViewModels"
+             x:Class="Prism.Desktop.Views.SettingsView"
+             x:DataType="vm:MainViewModel">
+
+    <ScrollViewer>
+        <StackPanel MaxWidth="620"
+                    HorizontalAlignment="Center"
+                    Margin="0,28"
+                    Spacing="20">
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <Button Content="←"
+                        FontSize="16"
+                        Foreground="{DynamicResource TextMutedBrush}"
+                        Background="Transparent"
+                        Command="{Binding GoHomeCommand}" />
+                <TextBlock Text="设置"
+                           FontSize="20"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center" />
+            </StackPanel>
+
+            <!-- 通用 -->
+            <Border Classes="card" Padding="22">
+                <StackPanel Spacing="14">
+                    <TextBlock Text="通用" FontSize="12" FontWeight="SemiBold" Opacity="0.6" />
+                    <CheckBox Content="显示纹理缩略图（生成预览较耗性能，默认关闭）"
+                              IsChecked="{Binding ShowThumbnails}" />
+                    <CheckBox Content="替换时使用 Oodle 压缩"
+                              IsChecked="{Binding UseOodleCompression}" />
+                    <CheckBox Content="合并前询问冲突替换"
+                              IsChecked="{Binding AskBeforeReplace}" />
+                </StackPanel>
+            </Border>
+
+            <!-- 路径 -->
+            <Border Classes="card" Padding="22">
+                <StackPanel Spacing="14">
+                    <TextBlock Text="路径" FontSize="12" FontWeight="SemiBold" Opacity="0.6" />
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="Pak 文件" FontSize="11" Opacity="0.55" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBox Text="{Binding PakPath}" Width="380" />
+                            <Button Content="浏览"
+                                    Command="{Binding BrowsePakCommand}"
+                                    Classes="ghost" />
+                        </StackPanel>
+                    </StackPanel>
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="Usmap 映射" FontSize="11" Opacity="0.55" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBox Text="{Binding UsmapPath}" Width="380" />
+                            <Button Content="浏览"
+                                    Command="{Binding BrowseUsmapCommand}"
+                                    Classes="ghost" />
+                        </StackPanel>
+                    </StackPanel>
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="导出目录" FontSize="11" Opacity="0.55" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBox Text="{Binding ExportDirectory}" Width="380" />
+                            <Button Content="浏览"
+                                    Command="{Binding BrowseExportDirCommand}"
+                                    Classes="ghost" />
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- 合并 -->
+            <Border Classes="card" Padding="22">
+                <StackPanel Spacing="14">
+                    <TextBlock Text="合并" FontSize="12" FontWeight="SemiBold" Opacity="0.6" />
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="合并 Pak" FontSize="11" Opacity="0.55" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBox Text="{Binding MergePakPath}" Width="380" />
+                            <Button Content="浏览"
+                                    Command="{Binding BrowseMergePakCommand}"
+                                    Classes="ghost" />
+                        </StackPanel>
+                    </StackPanel>
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="合并输出" FontSize="11" Opacity="0.55" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBox Text="{Binding MergeOutputPath}" Width="380" />
+                            <Button Content="浏览"
+                                    Command="{Binding BrowseMergeOutputCommand}"
+                                    Classes="ghost" />
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- AES -->
+            <Border Classes="card" Padding="22">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="AES 密钥" FontSize="12" FontWeight="SemiBold" Opacity="0.6" />
+                    <TextBox Text="{Binding AesKey}"
+                             PlaceholderText="如需解密请填写"
+                             Width="380"
+                             HorizontalAlignment="Left" />
+                    <TextBlock Text="注意：AES 密钥会明文保存在本地配置文件（Prism.Desktop.settings.json）中。"
+                               FontSize="10"
+                               Opacity="0.5"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+
+            <!-- 信息 -->
+            <Border Classes="card" Padding="22">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="信息" FontSize="12" FontWeight="SemiBold" Opacity="0.6" />
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <TextBlock Text="版本" FontSize="11" Opacity="0.55" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding VersionText}" FontSize="13" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding CliStatus}" FontSize="13" />
+                    <TextBlock Text="{Binding AstcencStatus}" FontSize="13" />
+                    <TextBlock Text="{Binding TexconvStatus}" FontSize="13" />
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <TextBlock Text="临时目录" FontSize="11" Opacity="0.55" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding TempDirectory}" FontSize="12" TextWrapping="Wrap" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

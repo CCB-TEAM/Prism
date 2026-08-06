@@ -368,3 +368,35 @@ OodleSharp-master/
 # Android package outputs
 *.apk
 *.aab
+
+# Local Codex/tooling scratch data
+.codex-tmp/
+
+# Upstream desktop-project GitHub metadata copied locally
+.github/
+
+# Signing keys and local release material
+*.keystore
+
+# Local downloaded/reference source trees
+BinkadecWithWavHeader-main/
+FModel/
+UAssetCLI/
+UAssetTextureWeb/
+UE4LocalizationsTool-master/
+astc-encoder-main/
+bc7enc_rdo-master/
+binka_decoder-main/
+binkaenc-main/
+native/
+nihav-master-320ede8/
+test/
+
+# Vendored UAssetAPI extras not needed by the Prism build
+UAssetAPI-master/.editorconfig
+UAssetAPI-master/.gitignore
+UAssetAPI-master/UAssetAPI.sln
+UAssetAPI-master/.github/
+UAssetAPI-master/docs/
+UAssetAPI-master/UAssetAPI.Benchmark/
+UAssetAPI-master/UAssetAPI.Tests/
