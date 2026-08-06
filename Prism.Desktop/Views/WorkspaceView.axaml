@@ -1,0 +1,442 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Prism.Desktop.ViewModels"
+             xmlns:models="using:Prism.Desktop.Models"
+             xmlns:views="using:Prism.Desktop.Views"
+             x:Class="Prism.Desktop.Views.WorkspaceView"
+             x:DataType="vm:MainViewModel">
+
+    <DockPanel>
+        <!-- 顶栏 -->
+        <Border DockPanel.Dock="Top" Padding="12,10">
+            <DockPanel>
+                <Button DockPanel.Dock="Left"
+                        Content="←"
+                        FontSize="16"
+                        Foreground="{DynamicResource TextMutedBrush}"
+                        Background="Transparent"
+                        Command="{Binding GoHomeCommand}"
+                        Margin="0,0,12,0" />
+                <TextBlock Text="解包 &amp; 模组"
+                           FontSize="15"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center" />
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="{Binding StatusText}"
+                               FontSize="11"
+                               Opacity="0.65"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"
+                               MaxWidth="500" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- 忙时进度条 -->
+        <ProgressBar DockPanel.Dock="Top"
+                     Height="3"
+                     IsIndeterminate="True"
+                     IsVisible="{Binding IsBusy}" />
+
+        <!-- 标签行：标签左侧，搜索固定右侧 -->
+        <Border DockPanel.Dock="Top"
+                Padding="12,4"
+                BorderBrush="{DynamicResource DividerBrush}"
+                BorderThickness="0,0,0,1">
+            <DockPanel>
+                <StackPanel Orientation="Horizontal" Spacing="2">
+                    <Button Content="配置"
+                            Classes="tab"
+                            Classes.active="{Binding IsConfigTab}"
+                            Command="{Binding SwitchConfigTabCommand}" />
+                    <Button Content="浏览"
+                            Classes="tab"
+                            Classes.active="{Binding IsBrowseTab}"
+                            Command="{Binding SwitchBrowseTabCommand}" />
+                    <Button Content="替换"
+                            Classes="tab"
+                            Classes.active="{Binding IsPatchTab}"
+                            Command="{Binding SwitchPatchTabCommand}" />
+                </StackPanel>
+                <StackPanel DockPanel.Dock="Right"
+                            Orientation="Horizontal"
+                            Spacing="8"
+                            IsVisible="{Binding IsBrowseTab}">
+                    <TextBox Text="{Binding SearchQuery}"
+                             Width="170"
+                             PlaceholderText="搜索..."
+                             FontSize="12" />
+                    <Button Content="搜索"
+                            Command="{Binding SearchCommand}"
+                            Classes="ghost" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- 内容 -->
+        <Panel>
+
+            <!-- ═══════ 配置 ═══════ -->
+            <StackPanel IsVisible="{Binding IsConfigTab}" Margin="24" Spacing="16" MaxWidth="560" HorizontalAlignment="Left">
+                    <Border Classes="card" Padding="24">
+                        <StackPanel Spacing="16">
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="PAK 文件" FontSize="11" Opacity="0.55" FontWeight="SemiBold" />
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <TextBlock Text="{Binding PakPath}"
+                                               FontSize="12"
+                                               Opacity="0.8"
+                                               VerticalAlignment="Center"
+                                               MaxWidth="300"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <Button Content="选择 Pak"
+                                            Command="{Binding BrowsePakCommand}"
+                                            Classes="ghost" />
+                                </StackPanel>
+                            </StackPanel>
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="USMAP 映射" FontSize="11" Opacity="0.55" FontWeight="SemiBold" />
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <TextBlock Text="{Binding UsmapPath}"
+                                               FontSize="12"
+                                               Opacity="0.8"
+                                               VerticalAlignment="Center"
+                                               MaxWidth="300"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <Button Content="选择 Usmap"
+                                            Command="{Binding BrowseUsmapCommand}"
+                                            Classes="ghost" />
+                                </StackPanel>
+                            </StackPanel>
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="AES 密钥" FontSize="11" Opacity="0.55" FontWeight="SemiBold" />
+                                <TextBox Text="{Binding AesKey}"
+                                         PlaceholderText="如需解密请填写"
+                                         Width="300"
+                                         HorizontalAlignment="Left" />
+                            </StackPanel>
+                            <Button Content="打开 Pak"
+                                    Command="{Binding OpenPakCommand}"
+                                    Classes="primary"
+                                    HorizontalAlignment="Left" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Classes="card" Padding="24">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="导出" FontSize="11" Opacity="0.55" FontWeight="SemiBold" />
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <TextBox Text="{Binding ExportDirectory}"
+                                         Width="300"
+                                         PlaceholderText="导出目录" />
+                                <Button Content="选择目录"
+                                        Command="{Binding BrowseExportDirCommand}"
+                                        Classes="ghost" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+            <!-- ═══════ 浏览（响应式） ═══════ -->
+            <Panel IsVisible="{Binding IsBrowseTab}">
+                    <!-- 横屏：左列表 + 右详情 -->
+                    <Grid x:Name="LandscapeLayout"
+                          ColumnDefinitions="420,*">
+                        <views:FileBrowserView />
+                        <Border Grid.Column="1"
+                                BorderBrush="{DynamicResource DividerBrush}"
+                                BorderThickness="1,0,0,0"
+                                Background="{DynamicResource CardBrush}">
+                            <ScrollViewer>
+                                <views:PreviewPaneView />
+                            </ScrollViewer>
+                        </Border>
+                    </Grid>
+
+                    <!-- 竖屏：列表 + 底部预览抽屉 -->
+                    <DockPanel x:Name="PortraitLayout">
+                        <Border x:Name="PortraitDrawer"
+                                DockPanel.Dock="Bottom"
+                                BorderBrush="{DynamicResource DividerBrush}"
+                                BorderThickness="0,1,0,0"
+                                Background="{DynamicResource CardBrush}"
+                                BoxShadow="0 -4 20 0 #26000000">
+                            <Border.Transitions>
+                                <Transitions>
+                                    <DoubleTransition Property="MaxHeight"
+                                                      Duration="0:0:0.35"
+                                                      Easing="CubicEaseOut" />
+                                </Transitions>
+                            </Border.Transitions>
+                            <StackPanel>
+                                <!-- 把手（拖拽热区） -->
+                                <Border x:Name="DrawerHandle"
+                                        Height="22"
+                                        Background="Transparent"
+                                        Cursor="SizeNorthSouth"
+                                        PointerPressed="OnDrawerHandlePressed"
+                                        PointerMoved="OnDrawerHandleMoved"
+                                        PointerReleased="OnDrawerHandleReleased">
+                                    <Border Width="32"
+                                            Height="4"
+                                            CornerRadius="2"
+                                            Background="{DynamicResource DividerBrush}"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center" />
+                                </Border>
+                                <!-- 标题栏（仅展示，点击不再收起） -->
+                                <DockPanel Margin="14,4,14,10">
+                                    <TextBlock Text="{Binding PreviewTitle}"
+                                               FontSize="13"
+                                               FontWeight="SemiBold"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <TextBlock DockPanel.Dock="Right"
+                                               Text="拖拽上方把手调整高度"
+                                               FontSize="10"
+                                               Opacity="0.4" />
+                                </DockPanel>
+                                <!-- 内容区：高度由外层 Border.MaxHeight 控制，不再单独封顶 -->
+                                <ScrollViewer IsVisible="{Binding IsPreviewExpanded}">
+                                    <views:PreviewPaneView />
+                                </ScrollViewer>
+                            </StackPanel>
+                        </Border>
+                        <!-- 最后一个子元素填充剩余空间 -->
+                        <views:FileBrowserView />
+                    </DockPanel>
+                </Panel>
+
+            <!-- ═══════ 替换（响应式） ═══════ -->
+            <Panel IsVisible="{Binding IsPatchTab}">
+                    <!-- 横屏：左列表 + 右详情（双卡片并排） -->
+                    <DockPanel x:Name="PatchLandscapeLayout">
+                        <Border DockPanel.Dock="Top"
+                                Padding="14,10"
+                                BorderBrush="{DynamicResource DividerBrush}"
+                                BorderThickness="0,0,0,1">
+                            <DockPanel>
+                                <TextBlock Text="替换任务"
+                                           FontSize="14"
+                                           FontWeight="SemiBold"
+                                           VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding PatchItems.Count, StringFormat=  （{0} 项）}"
+                                           FontSize="11"
+                                           Opacity="0.6"
+                                           VerticalAlignment="Center" />
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="10">
+                                    <CheckBox Content="Oodle 压缩"
+                                              IsChecked="{Binding UseOodleCompression}"
+                                              VerticalAlignment="Center" />
+                                    <Button Content="构建 Pak"
+                                            Command="{Binding BuildPatchPakCommand}"
+                                            Classes="primary" />
+                                </StackPanel>
+                            </DockPanel>
+                        </Border>
+                        <Grid ColumnDefinitions="300,*">
+                            <Border Grid.Column="0"
+                                    BorderBrush="{DynamicResource DividerBrush}"
+                                    BorderThickness="0,0,1,0">
+                                <ListBox ItemsSource="{Binding PatchItems}"
+                                         SelectedItem="{Binding SelectedPatchItem}"
+                                         Background="Transparent">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate x:DataType="models:PatchItem">
+                                            <StackPanel Spacing="3">
+                                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                                    <TextBlock Text="{Binding Name}"
+                                                               FontSize="12"
+                                                               FontWeight="SemiBold"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="{Binding Format}"
+                                                               FontSize="10"
+                                                               Opacity="0.6"
+                                                               VerticalAlignment="Center" />
+                                                </StackPanel>
+                                                <TextBlock Text="{Binding SourcePath}"
+                                                           FontSize="10"
+                                                           Opacity="0.55"
+                                                           TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="已替换"
+                                                           FontSize="10"
+                                                           Foreground="{DynamicResource PrimaryBrush}"
+                                                           IsVisible="{Binding IsReplaced}" />
+                                                <TextBlock Text="失败"
+                                                           FontSize="10"
+                                                           Foreground="{DynamicResource DangerBrush}"
+                                                           IsVisible="{Binding IsFailed}" />
+                                                <TextBlock Text="待替换"
+                                                           FontSize="10"
+                                                           Opacity="0.6"
+                                                           IsVisible="{Binding IsPending}" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </Border>
+                            <ScrollViewer Grid.Column="1">
+                                <StackPanel Margin="18" Spacing="12">
+                                    <TextBlock Text="从浏览页选择纹理资产后点击「加入替换」，再在此选择替换图片。"
+                                               FontSize="12"
+                                               Opacity="0.6"
+                                               IsVisible="{Binding HasNoPatchItems}" />
+                                    <StackPanel IsVisible="{Binding HasPatchItems}">
+                                        <TextBlock Text="{Binding SelectedPatchItem.SourcePath}"
+                                                   FontSize="12"
+                                                   FontWeight="SemiBold"
+                                                   TextWrapping="Wrap" />
+                                        <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                                            <Border Classes="card" Padding="12">
+                                                <StackPanel Spacing="8">
+                                                    <TextBlock Text="原始" FontSize="10" Opacity="0.6" />
+                                                    <Image Source="{Binding SelectedPatchItem.OriginalPreview}"
+                                                           Stretch="Uniform"
+                                                           MaxHeight="280" />
+                                                </StackPanel>
+                                            </Border>
+                                            <Border Grid.Column="1" Classes="card" Padding="12">
+                                                <StackPanel Spacing="8">
+                                                    <TextBlock Text="替换" FontSize="10" Opacity="0.6" />
+                                                    <Image Source="{Binding SelectedPatchItem.ReplacementPreview}"
+                                                           Stretch="Uniform"
+                                                           MaxHeight="280" />
+                                                    <TextBlock Text="{Binding SelectedPatchItem.ReplacementName}"
+                                                               FontSize="11"
+                                                               Opacity="0.6" />
+                                                </StackPanel>
+                                            </Border>
+                                        </Grid>
+                                        <TextBlock Text="{Binding SelectedPatchItem.Error}"
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource DangerBrush}"
+                                                   TextWrapping="Wrap"
+                                                   IsVisible="{Binding SelectedPatchItem.IsFailed}" />
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <Button Content="选择替换图片"
+                                                    Command="{Binding PickReplacementCommand}"
+                                                    Classes="accent" />
+                                            <Button Content="移除"
+                                                    Command="{Binding RemovePatchItemCommand}"
+                                                    Classes="ghost" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
+                    </DockPanel>
+
+                    <!-- 竖屏：列表在上（180px）+ 详情在下（卡片单列） -->
+                    <DockPanel x:Name="PatchPortraitLayout">
+                        <Border DockPanel.Dock="Top"
+                                Padding="12,8"
+                                BorderBrush="{DynamicResource DividerBrush}"
+                                BorderThickness="0,0,0,1">
+                            <DockPanel>
+                                <TextBlock Text="替换任务"
+                                           FontSize="13"
+                                           FontWeight="SemiBold"
+                                           VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding PatchItems.Count, StringFormat=  （{0} 项）}"
+                                           FontSize="11"
+                                           Opacity="0.6"
+                                           VerticalAlignment="Center" />
+                                <Button DockPanel.Dock="Right"
+                                        Content="构建 Pak"
+                                        Command="{Binding BuildPatchPakCommand}"
+                                        Classes="primary"
+                                        FontSize="11"
+                                        Padding="10,5" />
+                            </DockPanel>
+                        </Border>
+                        <Grid RowDefinitions="180,*">
+                            <ListBox Grid.Row="0"
+                                     ItemsSource="{Binding PatchItems}"
+                                     SelectedItem="{Binding SelectedPatchItem}"
+                                     Background="Transparent"
+                                     BorderBrush="{DynamicResource DividerBrush}"
+                                     BorderThickness="0,0,0,1">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="models:PatchItem">
+                                        <StackPanel Spacing="2">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <TextBlock Text="{Binding Name}"
+                                                           FontSize="12"
+                                                           FontWeight="SemiBold"
+                                                           TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding Format}"
+                                                           FontSize="10"
+                                                           Opacity="0.6"
+                                                           VerticalAlignment="Center" />
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding SourcePath}"
+                                                       FontSize="10"
+                                                       Opacity="0.55"
+                                                       TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Text="已替换"
+                                                       FontSize="10"
+                                                       Foreground="{DynamicResource PrimaryBrush}"
+                                                       IsVisible="{Binding IsReplaced}" />
+                                            <TextBlock Text="失败"
+                                                       FontSize="10"
+                                                       Foreground="{DynamicResource DangerBrush}"
+                                                       IsVisible="{Binding IsFailed}" />
+                                            <TextBlock Text="待替换"
+                                                       FontSize="10"
+                                                       Opacity="0.6"
+                                                       IsVisible="{Binding IsPending}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                            <ScrollViewer Grid.Row="1">
+                                <StackPanel Margin="14" Spacing="10">
+                                    <TextBlock Text="从浏览页选择纹理资产后点击「加入替换」，再在此选择替换图片。"
+                                               FontSize="12"
+                                               Opacity="0.6"
+                                               IsVisible="{Binding HasNoPatchItems}" />
+                                    <StackPanel IsVisible="{Binding HasPatchItems}">
+                                        <TextBlock Text="{Binding SelectedPatchItem.SourcePath}"
+                                                   FontSize="12"
+                                                   FontWeight="SemiBold"
+                                                   TextWrapping="Wrap" />
+                                        <Border Classes="card" Padding="12">
+                                            <StackPanel Spacing="8">
+                                                <TextBlock Text="原始" FontSize="10" Opacity="0.6" />
+                                                <Image Source="{Binding SelectedPatchItem.OriginalPreview}"
+                                                       Stretch="Uniform"
+                                                       MaxHeight="200" />
+                                            </StackPanel>
+                                        </Border>
+                                        <Border Classes="card" Padding="12">
+                                            <StackPanel Spacing="8">
+                                                <TextBlock Text="替换" FontSize="10" Opacity="0.6" />
+                                                <Image Source="{Binding SelectedPatchItem.ReplacementPreview}"
+                                                       Stretch="Uniform"
+                                                       MaxHeight="200" />
+                                                <TextBlock Text="{Binding SelectedPatchItem.ReplacementName}"
+                                                           FontSize="11"
+                                                           Opacity="0.6" />
+                                            </StackPanel>
+                                        </Border>
+                                        <TextBlock Text="{Binding SelectedPatchItem.Error}"
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource DangerBrush}"
+                                                   TextWrapping="Wrap"
+                                                   IsVisible="{Binding SelectedPatchItem.IsFailed}" />
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <Button Content="选择替换图片"
+                                                    Command="{Binding PickReplacementCommand}"
+                                                    Classes="accent" />
+                                            <Button Content="移除"
+                                                    Command="{Binding RemovePatchItemCommand}"
+                                                    Classes="ghost" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
+                    </DockPanel>
+                </Panel>
+        </Panel>
+    </DockPanel>
+</UserControl>

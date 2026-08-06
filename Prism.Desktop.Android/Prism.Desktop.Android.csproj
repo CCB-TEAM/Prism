@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-android</TargetFramework>
+    <SupportedOSPlatformVersion>23</SupportedOSPlatformVersion>
+    <Nullable>enable</Nullable>
+    <ApplicationId>com.ccbteam.prism.desktop</ApplicationId>
+    <ApplicationVersion>1</ApplicationVersion>
+    <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+    <AndroidPackageFormat>apk</AndroidPackageFormat>
+    <EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
+    <!-- 与 Android 版 Prism 一致：Release 禁用裁剪/AOT，避免兼容问题 -->
+    <TrimMode Condition="'$(Configuration)' == 'Release'">none</TrimMode>
+    <PublishTrimmed Condition="'$(Configuration)' == 'Release'">false</PublishTrimmed>
+    <RunAOTCompilation Condition="'$(Configuration)' == 'Release'">false</RunAOTCompilation>
+    <AndroidEnableProguard Condition="'$(Configuration)' == 'Release'">false</AndroidEnableProguard>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Android" Version="12.1.1" />
+    <PackageReference Include="Xamarin.AndroidX.Core.SplashScreen" Version="1.0.1.15" />
+  </ItemGroup>
+
+  <!-- Android 原生库（arm64-v8a：Pak 打包 / 纹理编码 / Oodle / C++ 运行时） -->
+  <ItemGroup>
+    <AndroidNativeLibrary Include="..\third_party\lib\arm64-v8a\libc++_shared.so" Abi="arm64-v8a" Condition="Exists('..\third_party\lib\arm64-v8a\libc++_shared.so')" />
+    <AndroidNativeLibrary Include="..\third_party\lib\arm64-v8a\liboodle-data-shared.so" Abi="arm64-v8a" Condition="Exists('..\third_party\lib\arm64-v8a\liboodle-data-shared.so')" />
+    <AndroidNativeLibrary Include="..\third_party\lib\arm64-v8a\libprism_codecs.so" Abi="arm64-v8a" Condition="Exists('..\third_party\lib\arm64-v8a\libprism_codecs.so')" />
+    <AndroidNativeLibrary Include="..\third_party\lib\arm64-v8a\librepak_bind.so" Abi="arm64-v8a" Condition="Exists('..\third_party\lib\arm64-v8a\librepak_bind.so')" />
+    <AndroidNativeLibrary Include="..\third_party\lib\armeabi-v7a\liboodle-data-shared.so" Abi="armeabi-v7a" Condition="Exists('..\third_party\lib\armeabi-v7a\liboodle-data-shared.so')" />
+    <AndroidNativeLibrary Include="..\third_party\lib\x86\liboodle-data-shared.so" Abi="x86" Condition="Exists('..\third_party\lib\x86\liboodle-data-shared.so')" />
+    <AndroidNativeLibrary Include="..\third_party\lib\x86_64\liboodle-data-shared.so" Abi="x86_64" Condition="Exists('..\third_party\lib\x86_64\liboodle-data-shared.so')" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Prism.Desktop\Prism.Desktop.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,14 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Prism.Desktop.ViewModels"
+             xmlns:views="using:Prism.Desktop.Views"
+             x:Class="Prism.Desktop.Views.MainView"
+             x:DataType="vm:MainViewModel">
+
+    <Panel>
+        <views:HomeView x:Name="HomeViewControl" IsVisible="{Binding IsHomeVisible}" />
+        <views:WorkspaceView x:Name="WorkspaceViewControl" DataContext="{Binding}" IsVisible="{Binding IsWorkspaceVisible}" />
+        <views:MergeView x:Name="MergeViewControl" IsVisible="{Binding IsMergeVisible}" />
+        <views:SettingsView x:Name="SettingsViewControl" IsVisible="{Binding IsSettingsVisible}" />
+    </Panel>
+</UserControl>

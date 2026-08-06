@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PakTool.Core\PakTool.Core.csproj" />
+    <ProjectReference Include="..\UAssetTexture.Core\UAssetTexture.Core.csproj" />
+  </ItemGroup>
+
+  <!-- 复制 UAssetCLI 输出与编码器到输出目录（运行与发布自包含） -->
+  <Target Name="CopyUAssetCliOutput" AfterTargets="Build">
+    <ItemGroup>
+      <UAssetCliOutput Include="..\UAssetCLI\bin\$(Configuration)\net10.0\**\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(UAssetCliOutput)"
+          DestinationFiles="@(UAssetCliOutput->'$(OutDir)UAssetCLI\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyEncoderTools" AfterTargets="Build">
+    <ItemGroup>
+      <EncoderTools Include="..\tools\*.exe" />
+    </ItemGroup>
+    <Copy SourceFiles="@(EncoderTools)"
+          DestinationFiles="@(EncoderTools->'$(OutDir)tools\%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.1" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.1" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.1" />
+    <PackageReference Include="AvaloniaUI.DiagnosticsSupport" Version="2.2.3">
+      <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
+      <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+  </ItemGroup>
+</Project>

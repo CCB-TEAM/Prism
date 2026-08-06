@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Prism PC</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <h1>Prism</h1>
+        <span>PC WebUI</span>
+      </div>
+      <div id="status" class="status">Ready.</div>
+    </header>
+    <div class="progress"></div>
+
+    <section class="toolbar">
+      <div class="toolbar-row">
+        <label class="path-field wide">
+          <span>Pak</span>
+          <input id="pakPath" autocomplete="off" spellcheck="false" />
+        </label>
+        <label class="path-field">
+          <span>Usmap</span>
+          <input id="usmapPath" autocomplete="off" spellcheck="false" />
+        </label>
+        <label class="path-field aes">
+          <span>AES</span>
+          <input id="aesKey" autocomplete="off" spellcheck="false" />
+        </label>
+        <button id="openPak" class="btn primary">Open</button>
+      </div>
+
+      <div class="toolbar-row compact">
+        <button id="upFolder" class="btn" disabled>Up</button>
+        <div id="currentPath" class="current-path">/</div>
+        <label class="search-field">
+          <span>Search</span>
+          <input id="searchText" autocomplete="off" spellcheck="false" />
+        </label>
+        <button id="searchButton" class="btn">Search</button>
+      </div>
+
+      <details class="merge-box">
+        <summary>Pak Merge</summary>
+        <div class="merge-grid">
+          <label class="path-field">
+            <span>Second Pak</span>
+            <input id="mergePakPath" autocomplete="off" spellcheck="false" />
+          </label>
+          <label class="path-field">
+            <span>Output</span>
+            <input id="mergeOutputPath" autocomplete="off" spellcheck="false" />
+          </label>
+          <label class="check">
+            <input id="replaceConflicts" type="checkbox" checked />
+            <span>Use second on conflict</span>
+          </label>
+          <label class="check">
+            <input id="askConflicts" type="checkbox" checked />
+            <span>Ask before conflict replace</span>
+          </label>
+          <label class="check">
+            <input id="oodleCompression" type="checkbox" />
+            <span>Oodle</span>
+          </label>
+          <button id="inspectMerge" class="btn">Inspect</button>
+          <button id="buildMerge" class="btn primary">Build Merged</button>
+        </div>
+        <pre id="mergeResult" class="merge-result"></pre>
+      </details>
+    </section>
+
+    <main class="main">
+      <section class="browse">
+        <div class="list-head">
+          <span>Name</span>
+          <span>Type</span>
+          <span>Size</span>
+        </div>
+        <div id="entryList" class="list"></div>
+      </section>
+
+      <aside class="detail">
+        <div class="preview-box">
+          <div id="previewStage" class="preview-stage">
+            <span class="preview-hint">No selection</span>
+          </div>
+        </div>
+        <div class="detail-actions">
+          <label class="path-field export">
+            <span>Export Dir</span>
+            <input id="exportDirectory" autocomplete="off" spellcheck="false" />
+          </label>
+          <button id="exportRaw" class="btn" disabled>Raw</button>
+          <button id="exportPreview" class="btn" disabled>Preview</button>
+        </div>
+        <div class="selected-path" id="selectedPath"></div>
+        <div id="details" class="details"></div>
+      </aside>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

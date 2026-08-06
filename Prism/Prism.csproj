@@ -6,18 +6,28 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationId>com.ccbteam.prism</ApplicationId>
-    <ApplicationVersion>1</ApplicationVersion>
-    <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+    <ApplicationVersion>3</ApplicationVersion>
+    <ApplicationDisplayVersion>1.2</ApplicationDisplayVersion>
     <EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
-    <!-- Full trimming can remove Android/WebView callbacks and parser code used dynamically. -->
-    <TrimMode Condition="'$(Configuration)' == 'Release'">partial</TrimMode>
+    <!-- CET 兼容：Release 禁用裁剪和 AOT -->
+    <TrimMode Condition="'$(Configuration)' == 'Release'">none</TrimMode>
+    <PublishTrimmed Condition="'$(Configuration)' == 'Release'">false</PublishTrimmed>
+    <RunAOTCompilation Condition="'$(Configuration)' == 'Release'">false</RunAOTCompilation>
+    <AndroidEnableProguard Condition="'$(Configuration)' == 'Release'">false</AndroidEnableProguard>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\PakTool.Core\PakTool.Core.csproj" />
+    <ProjectReference Include="..\UAssetTexture.Core\UAssetTexture.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\mainwebview.html" />
   </ItemGroup>
   <ItemGroup>
     <!-- Oodle native shared libs built from OodleUE-main .a files (run android-jni/build.sh) -->
+    <AndroidNativeLibrary Include="..\third_party\lib\arm64-v8a\libc++_shared.so" Abi="arm64-v8a" Condition="Exists('..\third_party\lib\arm64-v8a\libc++_shared.so')" />
     <AndroidNativeLibrary Include="..\third_party\lib\arm64-v8a\liboodle-data-shared.so" Abi="arm64-v8a" Condition="Exists('..\third_party\lib\arm64-v8a\liboodle-data-shared.so')" />
+    <AndroidNativeLibrary Include="..\third_party\lib\arm64-v8a\libprism_codecs.so" Abi="arm64-v8a" Condition="Exists('..\third_party\lib\arm64-v8a\libprism_codecs.so')" />
+    <AndroidNativeLibrary Include="..\third_party\lib\arm64-v8a\librepak_bind.so" Abi="arm64-v8a" Condition="Exists('..\third_party\lib\arm64-v8a\librepak_bind.so')" />
     <AndroidNativeLibrary Include="..\third_party\lib\armeabi-v7a\liboodle-data-shared.so" Abi="armeabi-v7a" Condition="Exists('..\third_party\lib\armeabi-v7a\liboodle-data-shared.so')" />
     <AndroidNativeLibrary Include="..\third_party\lib\x86\liboodle-data-shared.so" Abi="x86" Condition="Exists('..\third_party\lib\x86\liboodle-data-shared.so')" />
     <AndroidNativeLibrary Include="..\third_party\lib\x86_64\liboodle-data-shared.so" Abi="x86_64" Condition="Exists('..\third_party\lib\x86_64\liboodle-data-shared.so')" />
