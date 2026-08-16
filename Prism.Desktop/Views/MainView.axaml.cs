@@ -21,6 +21,10 @@ public partial class MainView : UserControl
             if (DataContext is MainViewModel vm)
             {
                 vm.TopLevel ??= TopLevel.GetTopLevel(this);
+                if (OperatingSystem.IsAndroid())
+                {
+                    _ = vm.RestoreAndroidExportFolderAsync();
+                }
             }
         };
         SizeChanged += (_, e) =>

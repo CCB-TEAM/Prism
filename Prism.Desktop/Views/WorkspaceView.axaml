@@ -9,27 +9,29 @@
     <DockPanel>
         <!-- 顶栏 -->
         <Border DockPanel.Dock="Top" Padding="12,10">
-            <DockPanel>
-                <Button DockPanel.Dock="Left"
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <Button Grid.Column="0"
                         Content="←"
                         FontSize="16"
                         Foreground="{DynamicResource TextMutedBrush}"
                         Background="Transparent"
                         Command="{Binding GoHomeCommand}"
                         Margin="0,0,12,0" />
-                <TextBlock Text="解包 &amp; 模组"
+                <TextBlock Grid.Column="1"
+                           Text="解包 &amp; 模组"
                            FontSize="15"
                            FontWeight="SemiBold"
-                           VerticalAlignment="Center" />
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
-                    <TextBlock Text="{Binding StatusText}"
-                               FontSize="11"
-                               Opacity="0.65"
-                               VerticalAlignment="Center"
-                               TextTrimming="CharacterEllipsis"
-                               MaxWidth="500" />
-                </StackPanel>
-            </DockPanel>
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" />
+                <TextBlock Grid.Column="2"
+                           Text="{Binding StatusText}"
+                           FontSize="11"
+                           Opacity="0.65"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           MaxWidth="{Binding TopStatusMaxWidth}"
+                           ToolTip.Tip="{Binding StatusText}" />
+            </Grid>
         </Border>
 
         <!-- 忙时进度条 -->
@@ -38,82 +40,119 @@
                      IsIndeterminate="True"
                      IsVisible="{Binding IsBusy}" />
 
-        <!-- 标签行：标签左侧，搜索固定右侧 -->
+        <!-- 标签行：宽屏标签在左、搜索固定右侧；窄屏搜索换到第二行，按钮不会再被挤出 -->
         <Border DockPanel.Dock="Top"
                 Padding="12,4"
                 BorderBrush="{DynamicResource DividerBrush}"
                 BorderThickness="0,0,0,1">
-            <DockPanel>
-                <StackPanel Orientation="Horizontal" Spacing="2">
-                    <Button Content="配置"
-                            Classes="tab"
-                            Classes.active="{Binding IsConfigTab}"
-                            Command="{Binding SwitchConfigTabCommand}" />
-                    <Button Content="浏览"
-                            Classes="tab"
-                            Classes.active="{Binding IsBrowseTab}"
-                            Command="{Binding SwitchBrowseTabCommand}" />
-                    <Button Content="替换"
-                            Classes="tab"
-                            Classes.active="{Binding IsPatchTab}"
-                            Command="{Binding SwitchPatchTabCommand}" />
+            <StackPanel Spacing="6">
+                <DockPanel IsVisible="{Binding IsCompact, Converter={x:Static BoolConverters.Not}}">
+                    <StackPanel Orientation="Horizontal" Spacing="2">
+                        <Button Content="配置"
+                                Classes="tab"
+                                Classes.active="{Binding IsConfigTab}"
+                                Command="{Binding SwitchConfigTabCommand}" />
+                        <Button Content="浏览"
+                                Classes="tab"
+                                Classes.active="{Binding IsBrowseTab}"
+                                Command="{Binding SwitchBrowseTabCommand}" />
+                        <Button Content="替换"
+                                Classes="tab"
+                                Classes.active="{Binding IsPatchTab}"
+                                Command="{Binding SwitchPatchTabCommand}" />
+                    </StackPanel>
+                    <StackPanel DockPanel.Dock="Right"
+                                Orientation="Horizontal"
+                                Spacing="8"
+                                IsVisible="{Binding IsBrowseTab}">
+                        <TextBox Text="{Binding SearchQuery}"
+                                 Width="170"
+                                 PlaceholderText="搜索..."
+                                 FontSize="12"
+                                 KeyDown="OnSearchKeyDown" />
+                        <Button Content="搜索"
+                                Command="{Binding SearchCommand}"
+                                Classes="ghost" />
+                    </StackPanel>
+                </DockPanel>
+
+                <StackPanel IsVisible="{Binding IsCompact}">
+                    <StackPanel Orientation="Horizontal" Spacing="2">
+                        <Button Content="配置"
+                                Classes="tab"
+                                Classes.active="{Binding IsConfigTab}"
+                                Command="{Binding SwitchConfigTabCommand}" />
+                        <Button Content="浏览"
+                                Classes="tab"
+                                Classes.active="{Binding IsBrowseTab}"
+                                Command="{Binding SwitchBrowseTabCommand}" />
+                        <Button Content="替换"
+                                Classes="tab"
+                                Classes.active="{Binding IsPatchTab}"
+                                Command="{Binding SwitchPatchTabCommand}" />
+                    </StackPanel>
+                    <Grid ColumnDefinitions="*,Auto"
+                          ColumnSpacing="8"
+                          Margin="0,2,0,0"
+                          IsVisible="{Binding IsBrowseTab}">
+                        <TextBox Grid.Column="0"
+                                 Text="{Binding SearchQuery}"
+                                 PlaceholderText="搜索..."
+                                 FontSize="12"
+                                 KeyDown="OnSearchKeyDown" />
+                        <Button Grid.Column="1"
+                                Content="搜索"
+                                Command="{Binding SearchCommand}"
+                                Classes="ghost" />
+                    </Grid>
                 </StackPanel>
-                <StackPanel DockPanel.Dock="Right"
-                            Orientation="Horizontal"
-                            Spacing="8"
-                            IsVisible="{Binding IsBrowseTab}">
-                    <TextBox Text="{Binding SearchQuery}"
-                             Width="170"
-                             PlaceholderText="搜索..."
-                             FontSize="12" />
-                    <Button Content="搜索"
-                            Command="{Binding SearchCommand}"
-                            Classes="ghost" />
-                </StackPanel>
-            </DockPanel>
+            </StackPanel>
         </Border>
 
         <!-- 内容 -->
         <Panel>
 
             <!-- ═══════ 配置 ═══════ -->
-            <StackPanel IsVisible="{Binding IsConfigTab}" Margin="24" Spacing="16" MaxWidth="560" HorizontalAlignment="Left">
-                    <Border Classes="card" Padding="24">
+            <ScrollViewer IsVisible="{Binding IsConfigTab}">
+                <StackPanel Margin="16,20" Spacing="16" MaxWidth="560" HorizontalAlignment="Stretch">
+                    <Border Classes="card" Padding="20">
                         <StackPanel Spacing="16">
                             <StackPanel Spacing="6">
                                 <TextBlock Text="PAK 文件" FontSize="11" Opacity="0.55" FontWeight="SemiBold" />
-                                <StackPanel Orientation="Horizontal" Spacing="10">
-                                    <TextBlock Text="{Binding PakPath}"
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                    <TextBlock Grid.Column="0"
+                                               Text="{Binding PakPath}"
                                                FontSize="12"
                                                Opacity="0.8"
                                                VerticalAlignment="Center"
-                                               MaxWidth="300"
-                                               TextTrimming="CharacterEllipsis" />
-                                    <Button Content="选择 Pak"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding PakPath}" />
+                                    <Button Grid.Column="1"
+                                            Content="选择 Pak"
                                             Command="{Binding BrowsePakCommand}"
                                             Classes="ghost" />
-                                </StackPanel>
+                                </Grid>
                             </StackPanel>
                             <StackPanel Spacing="6">
                                 <TextBlock Text="USMAP 映射" FontSize="11" Opacity="0.55" FontWeight="SemiBold" />
-                                <StackPanel Orientation="Horizontal" Spacing="10">
-                                    <TextBlock Text="{Binding UsmapPath}"
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                    <TextBlock Grid.Column="0"
+                                               Text="{Binding UsmapPath}"
                                                FontSize="12"
                                                Opacity="0.8"
                                                VerticalAlignment="Center"
-                                               MaxWidth="300"
-                                               TextTrimming="CharacterEllipsis" />
-                                    <Button Content="选择 Usmap"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding UsmapPath}" />
+                                    <Button Grid.Column="1"
+                                            Content="选择 Usmap"
                                             Command="{Binding BrowseUsmapCommand}"
                                             Classes="ghost" />
-                                </StackPanel>
+                                </Grid>
                             </StackPanel>
                             <StackPanel Spacing="6">
                                 <TextBlock Text="AES 密钥" FontSize="11" Opacity="0.55" FontWeight="SemiBold" />
                                 <TextBox Text="{Binding AesKey}"
-                                         PlaceholderText="如需解密请填写"
-                                         Width="300"
-                                         HorizontalAlignment="Left" />
+                                         PlaceholderText="如需解密请填写" />
                             </StackPanel>
                             <Button Content="打开 Pak"
                                     Command="{Binding OpenPakCommand}"
@@ -122,20 +161,27 @@
                         </StackPanel>
                     </Border>
 
-                    <Border Classes="card" Padding="24">
+                    <Border Classes="card" Padding="20">
                         <StackPanel Spacing="10">
                             <TextBlock Text="导出" FontSize="11" Opacity="0.55" FontWeight="SemiBold" />
-                            <StackPanel Orientation="Horizontal" Spacing="10">
-                                <TextBox Text="{Binding ExportDirectory}"
-                                         Width="300"
-                                         PlaceholderText="导出目录" />
-                                <Button Content="选择目录"
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                <TextBox Grid.Column="0"
+                                         Text="{Binding ExportDirectory}"
+                                         PlaceholderText="导出目录"
+                                         ToolTip.Tip="{Binding ExportDirectory}" />
+                                <Button Grid.Column="1"
+                                        Content="选择目录"
                                         Command="{Binding BrowseExportDirCommand}"
                                         Classes="ghost" />
-                            </StackPanel>
+                            </Grid>
+                            <TextBlock Text="Android 会通过系统目录授权保存此位置，无需“所有文件”权限。"
+                                       FontSize="10"
+                                       Opacity="0.5"
+                                       IsVisible="{Binding IsAndroid}" />
                         </StackPanel>
                     </Border>
                 </StackPanel>
+            </ScrollViewer>
 
             <!-- ═══════ 浏览（响应式） ═══════ -->
             <Panel IsVisible="{Binding IsBrowseTab}">
@@ -284,8 +330,67 @@
                                         <TextBlock Text="{Binding SelectedPatchItem.SourcePath}"
                                                    FontSize="12"
                                                    FontWeight="SemiBold"
-                                                   TextWrapping="Wrap" />
-                                        <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                                                   TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding SelectedPatchItem.SourcePath}"/>
+
+                                        <!-- locres 编辑器 -->
+                                        <StackPanel IsVisible="{Binding SelectedPatchItem.IsLocres}">
+                                            <TextBox Text="{Binding SelectedPatchItem.LocresFilterText}"
+                                                     PlaceholderText="搜索本地化条目..."
+                                                     FontSize="12" />
+                                            <StackPanel Orientation="Horizontal"
+                                                Spacing="8"
+                                                IsVisible="{Binding SelectedPatchItem.IsPaged}">
+                                                <Button Content="上一页"
+                                                        Command="{Binding SelectedPatchItem.PrevLocresPageCommand}"
+                                                        Classes="ghost"
+                                                        FontSize="11" />
+                                                <TextBlock Text="{Binding SelectedPatchItem.LocresPageText}"
+                                                           VerticalAlignment="Center"
+                                                           FontSize="11"
+                                                           Opacity="0.6" />
+                                                <Button Content="下一页"
+                                                        Command="{Binding SelectedPatchItem.NextLocresPageCommand}"
+                                                        Classes="ghost"
+                                                        FontSize="11" />
+                                            </StackPanel>
+                                            <TextBlock Text="修改文本后按回车或失焦自动写回，然后构建补丁 Pak。"
+                                                       FontSize="10"
+                                                       Opacity="0.5" />
+                                            <ListBox ItemsSource="{Binding SelectedPatchItem.FilteredLocresEntries}"
+                                                     MaxHeight="420"
+                                                     Background="Transparent">
+                                                <ListBox.Styles>
+                                                    <Style Selector="ListBoxItem">
+                                                        <Setter Property="Padding" Value="0" />
+                                                        <Setter Property="IsTabStop" Value="False" />
+                                                    </Style>
+                                                </ListBox.Styles>
+                                                <ListBox.ItemTemplate>
+                                                    <DataTemplate x:DataType="models:LocresEntryVM">
+                                                        <Grid ColumnDefinitions="180,*"
+                                                              ColumnSpacing="8"
+                                                              Margin="0,2">
+                                                            <TextBlock Text="{Binding DisplayKey}"
+                                                                       FontSize="11"
+                                                                       TextWrapping="Wrap"
+                                                                       VerticalAlignment="Center" />
+                                                            <TextBox Grid.Column="1"
+                                                                     Text="{Binding Text}"
+                                                                     TextWrapping="Wrap"
+                                                                     MinHeight="44"
+                                                                     FontSize="12"
+                                                                     KeyDown="OnLocresTextKeyDown"
+                                                                     LostFocus="OnLocresTextLostFocus" />
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ListBox.ItemTemplate>
+                                            </ListBox>
+                                        </StackPanel>
+
+                                        <!-- 纹理对比卡片 -->
+                                        <Grid ColumnDefinitions="*,*"
+                                              ColumnSpacing="12"
+                                              IsVisible="{Binding SelectedPatchItem.IsTexture}">
                                             <Border Classes="card" Padding="12">
                                                 <StackPanel Spacing="8">
                                                     <TextBlock Text="原始" FontSize="10" Opacity="0.6" />
@@ -302,14 +407,14 @@
                                                            MaxHeight="280" />
                                                     <TextBlock Text="{Binding SelectedPatchItem.ReplacementName}"
                                                                FontSize="11"
-                                                               Opacity="0.6" />
+                                                               Opacity="0.6" TextTrimming="CharacterEllipsis" />
                                                 </StackPanel>
                                             </Border>
                                         </Grid>
                                         <TextBlock Text="{Binding SelectedPatchItem.Error}"
                                                    FontSize="11"
                                                    Foreground="{DynamicResource DangerBrush}"
-                                                   TextWrapping="Wrap"
+                                                   TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="3"
                                                    IsVisible="{Binding SelectedPatchItem.IsFailed}" />
                                         <StackPanel Orientation="Horizontal" Spacing="8">
                                             <Button Content="选择替换图片"
@@ -398,8 +503,66 @@
                                         <TextBlock Text="{Binding SelectedPatchItem.SourcePath}"
                                                    FontSize="12"
                                                    FontWeight="SemiBold"
-                                                   TextWrapping="Wrap" />
-                                        <Border Classes="card" Padding="12">
+                                                   TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding SelectedPatchItem.SourcePath}"/>
+
+                                        <!-- locres 编辑器 -->
+                                        <StackPanel IsVisible="{Binding SelectedPatchItem.IsLocres}">
+                                            <TextBox Text="{Binding SelectedPatchItem.LocresFilterText}"
+                                                     PlaceholderText="搜索本地化条目..."
+                                                     FontSize="12" />
+                                            <StackPanel Orientation="Horizontal"
+                                                Spacing="8"
+                                                IsVisible="{Binding SelectedPatchItem.IsPaged}">
+                                                <Button Content="上一页"
+                                                        Command="{Binding SelectedPatchItem.PrevLocresPageCommand}"
+                                                        Classes="ghost"
+                                                        FontSize="11" />
+                                                <TextBlock Text="{Binding SelectedPatchItem.LocresPageText}"
+                                                           VerticalAlignment="Center"
+                                                           FontSize="11"
+                                                           Opacity="0.6" />
+                                                <Button Content="下一页"
+                                                        Command="{Binding SelectedPatchItem.NextLocresPageCommand}"
+                                                        Classes="ghost"
+                                                        FontSize="11" />
+                                            </StackPanel>
+                                            <TextBlock Text="修改文本后按回车或失焦自动写回，然后构建补丁 Pak。"
+                                                       FontSize="10"
+                                                       Opacity="0.5" />
+                                            <ListBox ItemsSource="{Binding SelectedPatchItem.FilteredLocresEntries}"
+                                                     MaxHeight="420"
+                                                     Background="Transparent">
+                                                <ListBox.Styles>
+                                                    <Style Selector="ListBoxItem">
+                                                        <Setter Property="Padding" Value="0" />
+                                                        <Setter Property="IsTabStop" Value="False" />
+                                                    </Style>
+                                                </ListBox.Styles>
+                                                <ListBox.ItemTemplate>
+                                                    <DataTemplate x:DataType="models:LocresEntryVM">
+                                                        <Grid ColumnDefinitions="120,*"
+                                                              ColumnSpacing="6"
+                                                              Margin="0,2">
+                                                            <TextBlock Text="{Binding DisplayKey}"
+                                                                       FontSize="10"
+                                                                       TextWrapping="Wrap"
+                                                                       VerticalAlignment="Center" />
+                                                            <TextBox Grid.Column="1"
+                                                                     Text="{Binding Text}"
+                                                                     TextWrapping="Wrap"
+                                                                     MinHeight="40"
+                                                                     FontSize="12"
+                                                                     KeyDown="OnLocresTextKeyDown"
+                                                                     LostFocus="OnLocresTextLostFocus" />
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ListBox.ItemTemplate>
+                                            </ListBox>
+                                        </StackPanel>
+
+                                        <Border Classes="card"
+                                                Padding="12"
+                                                IsVisible="{Binding SelectedPatchItem.IsTexture}">
                                             <StackPanel Spacing="8">
                                                 <TextBlock Text="原始" FontSize="10" Opacity="0.6" />
                                                 <Image Source="{Binding SelectedPatchItem.OriginalPreview}"
@@ -407,7 +570,7 @@
                                                        MaxHeight="200" />
                                             </StackPanel>
                                         </Border>
-                                        <Border Classes="card" Padding="12">
+                                        <Border Classes="card" Padding="12" IsVisible="{Binding SelectedPatchItem.IsTexture}">
                                             <StackPanel Spacing="8">
                                                 <TextBlock Text="替换" FontSize="10" Opacity="0.6" />
                                                 <Image Source="{Binding SelectedPatchItem.ReplacementPreview}"
@@ -415,18 +578,19 @@
                                                        MaxHeight="200" />
                                                 <TextBlock Text="{Binding SelectedPatchItem.ReplacementName}"
                                                            FontSize="11"
-                                                           Opacity="0.6" />
+                                                           Opacity="0.6" TextTrimming="CharacterEllipsis" />
                                             </StackPanel>
                                         </Border>
                                         <TextBlock Text="{Binding SelectedPatchItem.Error}"
                                                    FontSize="11"
                                                    Foreground="{DynamicResource DangerBrush}"
-                                                   TextWrapping="Wrap"
+                                                   TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="3"
                                                    IsVisible="{Binding SelectedPatchItem.IsFailed}" />
                                         <StackPanel Orientation="Horizontal" Spacing="8">
                                             <Button Content="选择替换图片"
                                                     Command="{Binding PickReplacementCommand}"
-                                                    Classes="accent" />
+                                                    Classes="accent"
+                                                    IsVisible="{Binding SelectedPatchItem.IsTexture}" />
                                             <Button Content="移除"
                                                     Command="{Binding RemovePatchItemCommand}"
                                                     Classes="ghost" />

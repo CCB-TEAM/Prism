@@ -8,30 +8,51 @@
     <DockPanel>
         <!-- 路径栏 -->
         <Border DockPanel.Dock="Top"
-                Padding="12,8"
+                Padding="10,6"
                 BorderBrush="{DynamicResource DividerBrush}"
                 BorderThickness="0,0,0,1">
-            <DockPanel>
-                <Button DockPanel.Dock="Left"
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <Button Grid.Column="0"
                         Content="上级"
                         Command="{Binding UpCommand}"
                         Classes="ghost" />
-                <Button DockPanel.Dock="Right"
-                        Content="加入替换"
-                        Command="{Binding AddSelectedToPatchCommand}"
-                        Classes="accent"
-                        Margin="8,0,0,0" />
-                <Button DockPanel.Dock="Right"
-                        Content="导出"
-                        Command="{Binding ExportRawCommand}"
-                        Classes="ghost" />
-                <TextBlock Text="{Binding CurrentPathText}"
+                <TextBlock Grid.Column="1"
+                           Text="{Binding CurrentPathText}"
                            VerticalAlignment="Center"
                            Margin="8,0"
                            FontSize="12"
                            Opacity="0.6"
-                           TextTrimming="CharacterEllipsis" />
-            </DockPanel>
+                           TextTrimming="CharacterEllipsis"
+                           Background="Transparent"
+                           InputElement.IsHoldingEnabled="True"
+                           Holding="OnPathHolding"
+                           ToolTip.Tip="长按复制路径" />
+                <StackPanel Grid.Column="2"
+                            Orientation="Horizontal"
+                            Spacing="6">
+                    <Button Content="分享"
+                            Command="{Binding ShareRawCommand}"
+                            Classes="ghost"
+                            IsVisible="{Binding IsAndroid}" />
+                    <Button Content="导出"
+                            Command="{Binding ExportRawCommand}"
+                            Classes="ghost"
+                            IsVisible="{Binding IsAndroid, Converter={x:Static BoolConverters.Not}}" />
+                    <Button Content="更多" Classes="ghost">
+                        <Button.Flyout>
+                            <MenuFlyout>
+                                <MenuItem Header="导出当前文件夹（原始）"
+                                          Command="{Binding ExportFolderRawCommand}" />
+                                <MenuItem Header="导出当前文件夹（PNG 图片）"
+                                          Command="{Binding ExportFolderImagesCommand}" />
+                            </MenuFlyout>
+                        </Button.Flyout>
+                    </Button>
+                    <Button Content="加入替换"
+                            Command="{Binding AddSelectedToPatchCommand}"
+                            Classes="accent" />
+                </StackPanel>
+            </Grid>
         </Border>
 
         <!-- 列表 -->

@@ -21,15 +21,25 @@ public partial class MainViewModel : ViewModelBase
     private UAssetCliRunner? _cliRunner;
     private int _cliRunnerTried;
     private readonly AppSettings _settings;
+    private string _exportDirectoryBookmark;
+    private IStorageFolder? _exportFolder;
     private bool _loaded;
 
     public MainViewModel()
     {
         _settings = AppSettingsStore.Load();
+        if (!_settings.ThumbnailDefaultApplied)
+        {
+            // 一次性迁移：本版本起缩略图默认开启（手机性能足够）。
+            _settings.ShowThumbnails = true;
+            _settings.ThumbnailDefaultApplied = true;
+        }
+
         ShowThumbnails = _settings.ShowThumbnails;
         UseOodleCompression = _settings.UseOodleCompression;
         AskBeforeReplace = _settings.AskBeforeReplace;
         ExportDirectory = _settings.ExportDirectory;
+        _exportDirectoryBookmark = _settings.ExportDirectoryBookmark;
         PakPath = _settings.PakPath;
         UsmapPath = _settings.UsmapPath;
         MergePakPath = _settings.MergePakPath;
@@ -37,6 +47,8 @@ public partial class MainViewModel : ViewModelBase
         AesKey = _settings.AesKey;
         InitializeSettings();
         _loaded = true;
+        SaveSettings();
+        CleanupAndroidCaches();
     }
 
     /// <summary>窗口引用，用于文件选择对话框；由 MainWindow 在 Opened 时注入。</summary>
@@ -52,9 +64,26 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     public partial bool IsLandscape { get; set; } = true;
 
+    /// <summary>紧凑布局：手机宽度下自动改为上下排布，避免按钮被挤出屏幕。</summary>
+    [ObservableProperty]
+    public partial bool IsCompact { get; set; }
+
+    /// <summary>是否运行在 Android 上（共享 UI 仅在 Android 显示分享入口、走 SAF 等）。</summary>
+    public bool IsAndroid => OperatingSystem.IsAndroid();
+
     public bool IsNotLandscape => !IsLandscape;
+    public bool IsNotCompact => !IsCompact;
+
+    /// <summary>顶栏状态文本最大宽度：窄屏压短，避免把标题/返回键挤出屏幕。</summary>
+    public double TopStatusMaxWidth => IsCompact ? 150 : 480;
 
     partial void OnIsLandscapeChanged(bool value) => OnPropertyChanged(nameof(IsNotLandscape));
+
+    partial void OnIsCompactChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsNotCompact));
+        OnPropertyChanged(nameof(TopStatusMaxWidth));
+    }
 
     partial void OnWindowWidthChanged(double value)
     {
@@ -62,6 +91,12 @@ public partial class MainViewModel : ViewModelBase
         if (landscape != IsLandscape)
         {
             IsLandscape = landscape;
+        }
+
+        bool compact = value < 620;
+        if (compact != IsCompact)
+        {
+            IsCompact = compact;
         }
     }
 
@@ -117,6 +152,17 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsConfigTab));
         OnPropertyChanged(nameof(IsBrowseTab));
         OnPropertyChanged(nameof(IsPatchTab));
+
+        // 离开浏览页就停止后台缩略图；回到浏览页时只补缺失的缩略图。
+        if (value == 1)
+        {
+            StartThumbnails();
+        }
+        else
+        {
+            _resumeThumbnailsAfterUserAction = false;
+            _thumbCts?.Cancel();
+        }
     }
 
     [RelayCommand]
@@ -166,11 +212,15 @@ public partial class MainViewModel : ViewModelBase
 
     public bool CanUp => !string.IsNullOrEmpty(CurrentFolder);
 
-    public bool CanExportRaw => SelectedItem is { IsDirectory: false } && IsPakOpen;
+    public bool CanExportRaw => SelectedItem is { IsDirectory: false } && IsPakOpen && !IsBusy;
 
-    public bool CanExportPreview => SelectedItem is { IsDirectory: false } && HasPreview;
+    public bool CanExportPreview => SelectedItem is { IsDirectory: false } && HasPreview && !IsBusy;
 
-    public bool CanAddToPatch => SelectedItem is { IsDirectory: false } && IsPakOpen;
+    public bool CanShareRaw => CanExportRaw && IsAndroid;
+
+    public bool CanSharePreview => CanExportPreview && IsAndroid;
+
+    public bool CanAddToPatch => SelectedItem is { IsDirectory: false } && IsPakOpen && !IsBusy;
 
     partial void OnCurrentFolderChanged(string value) => UpCommand.NotifyCanExecuteChanged();
 
@@ -178,21 +228,35 @@ public partial class MainViewModel : ViewModelBase
     {
         ExportRawCommand.NotifyCanExecuteChanged();
         ExportPreviewCommand.NotifyCanExecuteChanged();
+        ShareRawCommand.NotifyCanExecuteChanged();
+        SharePreviewCommand.NotifyCanExecuteChanged();
         AddSelectedToPatchCommand.NotifyCanExecuteChanged();
     }
 
-    partial void OnHasPreviewChanged(bool value) => ExportPreviewCommand.NotifyCanExecuteChanged();
+    partial void OnHasPreviewChanged(bool value)
+    {
+        ExportPreviewCommand.NotifyCanExecuteChanged();
+        SharePreviewCommand.NotifyCanExecuteChanged();
+    }
 
     // ============ 预览 ============
 
     [ObservableProperty]
     public partial Bitmap? PreviewImage { get; set; }
 
+    public bool HasImagePreview => PreviewImage is not null;
+
+    partial void OnPreviewImageChanged(Bitmap? value) => OnPropertyChanged(nameof(HasImagePreview));
+
     [ObservableProperty]
     public partial string PreviewTitle { get; set; } = string.Empty;
 
     [ObservableProperty]
     public partial string PreviewText { get; set; } = string.Empty;
+
+    public bool HasTextPreview => !string.IsNullOrWhiteSpace(PreviewText);
+
+    partial void OnPreviewTextChanged(string value) => OnPropertyChanged(nameof(HasTextPreview));
 
     [ObservableProperty]
     public partial ObservableCollection<DetailItem> PreviewDetails { get; set; } = [];
@@ -215,12 +279,57 @@ public partial class MainViewModel : ViewModelBase
     public partial bool IsAudioPlaying { get; set; }
 
     [ObservableProperty]
+    public partial bool IsAudioPaused { get; set; }
+
+    [ObservableProperty]
     public partial string AudioStatus { get; set; } = string.Empty;
 
     [ObservableProperty]
     public partial string AudioButtonText { get; set; } = "播放";
 
-    partial void OnIsAudioPlayingChanged(bool value) => AudioButtonText = value ? "停止" : "播放";
+    [ObservableProperty]
+    public partial double AudioDuration { get; set; }
+
+    [ObservableProperty]
+    public partial double AudioPosition { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsAudioSeeking { get; set; }
+
+    public string AudioTimeText => $"{FormatAudioTime(AudioPosition)} / {FormatAudioTime(AudioDuration)}";
+
+    /// <summary>内置播放器进度条：Android 支持拖动定位；Windows 的 Win32 播放器不提供 seek。</summary>
+    public bool CanSeekAudio => HasAudioPreview && AudioDuration > 0 && OperatingSystem.IsAndroid();
+
+    partial void OnIsAudioPlayingChanged(bool value)
+    {
+        UpdateAudioButtonText();
+        OnPropertyChanged(nameof(CanSeekAudio));
+    }
+
+    partial void OnIsAudioPausedChanged(bool value) => UpdateAudioButtonText();
+
+    private void UpdateAudioButtonText()
+    {
+        AudioButtonText = IsAudioPlaying ? "暂停" : IsAudioPaused ? "继续" : "播放";
+    }
+
+    partial void OnAudioDurationChanged(double value)
+    {
+        OnPropertyChanged(nameof(CanSeekAudio));
+        OnPropertyChanged(nameof(AudioTimeText));
+    }
+
+    partial void OnAudioPositionChanged(double value) => OnPropertyChanged(nameof(AudioTimeText));
+
+    partial void OnHasAudioPreviewChanged(bool value) => OnPropertyChanged(nameof(CanSeekAudio));
+
+    [ObservableProperty]
+    public partial ModelPreviewDto? ModelPreview { get; set; }
+
+    public bool HasModelPreview => ModelPreview is not null;
+
+    partial void OnModelPreviewChanged(ModelPreviewDto? value) => OnPropertyChanged(nameof(HasModelPreview));
 
     [ObservableProperty]
     public partial string PreviewEmptyText { get; set; } = "此文件无预览";
@@ -228,7 +337,7 @@ public partial class MainViewModel : ViewModelBase
     private string? _audioTempFile;
 
     [RelayCommand]
-    private void ToggleAudioPlayback()
+    private async Task ToggleAudioPlayback()
     {
         if (!HasAudioPreview || _audioTempFile is null)
         {
@@ -237,13 +346,141 @@ public partial class MainViewModel : ViewModelBase
 
         if (IsAudioPlaying)
         {
-            Win32PlaySound.Stop();
+            // 暂停，保留进度；再次点击继续播放。
+            if (OperatingSystem.IsAndroid())
+            {
+                if (NativeAudioSetPausedAsync is not null)
+                {
+                    try
+                    {
+                        await NativeAudioSetPausedAsync(true);
+                        IsAudioPlaying = false;
+                        IsAudioPaused = true;
+                        return;
+                    }
+                    catch (Exception ex)
+                    {
+                        StatusText = "音频暂停失败：" + ex.Message;
+                        IsAudioPlaying = false;
+                        IsAudioPaused = false;
+                        return;
+                    }
+                }
+
+                if (NativeAudioStopAsync is not null)
+                {
+                    await NativeAudioStopAsync();
+                }
+            }
+            else
+            {
+                Win32PlaySound.Stop();
+            }
+
             IsAudioPlaying = false;
+            IsAudioPaused = false;
             return;
         }
 
-        Win32PlaySound.PlayFile(_audioTempFile);
+        if (OperatingSystem.IsAndroid() && IsAudioPaused)
+        {
+            if (NativeAudioSetPausedAsync is not null)
+            {
+                IsAudioPlaying = true;
+                IsAudioPaused = false;
+                try
+                {
+                    await NativeAudioSetPausedAsync(false);
+                }
+                catch (Exception ex)
+                {
+                    IsAudioPlaying = false;
+                    StatusText = "音频继续播放失败：" + ex.Message;
+                }
+
+                return;
+            }
+        }
+
         IsAudioPlaying = true;
+        IsAudioPaused = false;
+        if (OperatingSystem.IsAndroid())
+        {
+            if (NativeAudioPlayAsync is null)
+            {
+                IsAudioPlaying = false;
+                StatusText = "音频播放服务未就绪，请重新打开应用后重试。";
+                return;
+            }
+
+            try
+            {
+                // 内置播放器支持拖动进度后从指定位置开始播放。
+                await NativeAudioPlayAsync(_audioTempFile, AudioPosition);
+            }
+            catch (Exception ex)
+            {
+                IsAudioPlaying = false;
+                StatusText = "音频播放失败：" + ex.Message;
+            }
+        }
+        else
+        {
+            AudioPosition = 0;
+            Win32PlaySound.PlayFile(_audioTempFile);
+        }
+    }
+
+    [RelayCommand]
+    private async Task SeekAudioAsync()
+    {
+        if (!CanSeekAudio || NativeAudioSeekAsync is null)
+        {
+            return;
+        }
+
+        await NativeAudioSeekAsync(Math.Clamp(AudioPosition, 0, AudioDuration));
+    }
+
+    /// <summary>供 Android MediaPlayer 定时回传播放进度。</summary>
+    public void UpdateAudioPlaybackState(double positionSeconds, double durationSeconds)
+    {
+        if (IsAudioSeeking)
+        {
+            return;
+        }
+
+        if (durationSeconds > 0)
+        {
+            AudioDuration = durationSeconds;
+        }
+
+        AudioPosition = Math.Clamp(positionSeconds, 0, AudioDuration > 0 ? AudioDuration : positionSeconds);
+    }
+
+    /// <summary>供 Android MediaPlayer 播放完成回调。</summary>
+    public void NotifyNativeAudioPlaybackCompleted()
+    {
+        if (IsAudioPlaying)
+        {
+            IsAudioPlaying = false;
+        }
+
+        IsAudioPaused = false;
+        AudioPosition = 0;
+    }
+
+    private static string FormatAudioTime(double totalSeconds)
+    {
+        if (double.IsNaN(totalSeconds) || totalSeconds < 0)
+        {
+            totalSeconds = 0;
+        }
+
+        TimeSpan time = TimeSpan.FromSeconds(totalSeconds);
+        return time.TotalHours >= 1
+            ? time.ToString(@"h\:mm\:ss")
+            : time.ToString(@"mm\:ss");
     }
 
     // ============ 替换（Patch） ============
@@ -297,6 +534,13 @@ public partial class MainViewModel : ViewModelBase
     {
         BuildPatchPakCommand.NotifyCanExecuteChanged();
         PickReplacementCommand.NotifyCanExecuteChanged();
+        ExportRawCommand.NotifyCanExecuteChanged();
+        ExportPreviewCommand.NotifyCanExecuteChanged();
+        ShareRawCommand.NotifyCanExecuteChanged();
+        SharePreviewCommand.NotifyCanExecuteChanged();
+        AddSelectedToPatchCommand.NotifyCanExecuteChanged();
+        ExportFolderRawCommand.NotifyCanExecuteChanged();
+        ExportFolderImagesCommand.NotifyCanExecuteChanged();
     }
 
     // ============ 持久化 ============
@@ -310,7 +554,15 @@ public partial class MainViewModel : ViewModelBase
 
     partial void OnExportDirectoryChanged(string value) => SaveSettings();
 
-    partial void OnPakPathChanged(string value) => SaveSettings();
+    partial void OnPakPathChanged(string value)
+    {
+        ExportRawCommand.NotifyCanExecuteChanged();
+        ShareRawCommand.NotifyCanExecuteChanged();
+        AddSelectedToPatchCommand.NotifyCanExecuteChanged();
+        ExportFolderRawCommand.NotifyCanExecuteChanged();
+        ExportFolderImagesCommand.NotifyCanExecuteChanged();
+        SaveSettings();
+    }
 
     partial void OnUsmapPathChanged(string value) => SaveSettings();
 
@@ -364,9 +616,11 @@ public partial class MainViewModel : ViewModelBase
         }
 
         _settings.ShowThumbnails = ShowThumbnails;
+        _settings.ThumbnailDefaultApplied = true;
         _settings.UseOodleCompression = UseOodleCompression;
         _settings.AskBeforeReplace = AskBeforeReplace;
         _settings.ExportDirectory = ExportDirectory;
+        _settings.ExportDirectoryBookmark = OperatingSystem.IsAndroid() ? _exportDirectoryBookmark : string.Empty;
         _settings.PakPath = PakPath;
         _settings.UsmapPath = UsmapPath;
         _settings.MergePakPath = MergePakPath;
@@ -426,6 +680,7 @@ public partial class MainViewModel : ViewModelBase
             }
 
             StatusText = $"已打开 {Path.GetFileName(PakPath)}：{result.FileCount:N0} 个文件。";
+            AddLog($"打开 Pak：{Path.GetFileName(PakPath)}（{result.FileCount:N0} 个文件）");
             CurrentTabIndex = 1;
             await NavigateToAsync(string.Empty);
         });
@@ -436,7 +691,15 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanUp))]
     private async Task UpAsync()
     {
-        await NavigateToAsync(ParentOf(CurrentFolder));
+        PrioritizeUserAction();
+        try
+        {
+            await NavigateToAsync(ParentOf(CurrentFolder));
+        }
+        finally
+        {
+            ResumeThumbnailsAfterUserAction();
+        }
     }
 
     /// <summary>双击目录项进入，双击文件项预览。</summary>
@@ -449,13 +712,21 @@ public partial class MainViewModel : ViewModelBase
             return;
         }
 
-        if (item.IsDirectory)
+        PrioritizeUserAction();
+        try
         {
-            await NavigateToAsync(item.FullPath);
+            if (item.IsDirectory)
+            {
+                await NavigateToAsync(item.FullPath);
+            }
+            else
+            {
+                await PreviewAsync(item);
+            }
         }
-        else
+        finally
         {
-            await PreviewAsync(item);
+            ResumeThumbnailsAfterUserAction();
         }
     }
 
@@ -489,6 +760,7 @@ public partial class MainViewModel : ViewModelBase
             Entries = new ObservableCollection<EntryItem>(results.Select(EntryItem.Create));
             CurrentPathText = $"搜索：{SearchQuery.Trim()}";
             StatusText = $"搜索命中 {results.Count:N0} 项。";
+            AddLog($"搜索“{SearchQuery.Trim()}”命中 {results.Count:N0} 项");
             ClearPreview();
             StartThumbnails();
         });
@@ -545,6 +817,7 @@ public partial class MainViewModel : ViewModelBase
             PreviewTitle = preview.Title;
             PreviewText = preview.Text ?? string.Empty;
             PreviewImage = null;
+            ModelPreview = null;
             if (preview.Data is { Length: > 0 })
             {
                 using MemoryStream ms = new(preview.Data);
@@ -554,9 +827,10 @@ public partial class MainViewModel : ViewModelBase
             List<DetailItem> details = preview.Details.Select(d => new DetailItem(d.Label, d.Value)).ToList();
             PreviewEmptyText = "此文件无预览";
 
-            // 模型：追加几何信息
+            // 模型：保存几何数据供 3D 线框预览，并追加几何信息
             if (preview.Model is { } model)
             {
+                ModelPreview = model;
                 details.Add(new DetailItem("网格类型", model.MeshType));
                 details.Add(new DetailItem("顶点数", $"{model.VertexCount:N0}"));
                 details.Add(new DetailItem("三角形", $"{model.TriangleCount:N0}"));
@@ -565,6 +839,8 @@ public partial class MainViewModel : ViewModelBase
 
             // 音频：加载可播放的 WAV
             StopAudioPreview();
+            AudioDuration = 0;
+            AudioPosition = 0;
             if (string.Equals(preview.Kind, "audio", StringComparison.OrdinalIgnoreCase) || preview.CanPlay)
             {
                 try
@@ -618,21 +894,48 @@ public partial class MainViewModel : ViewModelBase
 
     private void StopAudioPreview()
     {
-        Win32PlaySound.Stop();
-        IsAudioPlaying = false;
-        HasAudioPreview = false;
-        if (_audioTempFile is not null)
-        {
-            try
-            {
-                File.Delete(_audioTempFile);
-            }
-            catch
-            {
-            }
+        string? oldAudioFile = _audioTempFile;
+        _audioTempFile = null;
+        IsAudioSeeking = false;
+        IsAudioPaused = false;
+        AudioDuration = 0;
+        AudioPosition = 0;
 
-            _audioTempFile = null;
+        if (OperatingSystem.IsAndroid())
+        {
+            IsAudioPlaying = false;
+            if (NativeAudioStopAsync is not null)
+            {
+                if (oldAudioFile is not null)
+                {
+                    string fileToDelete = oldAudioFile;
+                    _ = NativeAudioStopAsync().ContinueWith(
+                        _ => TryDeleteFile(fileToDelete),
+                        CancellationToken.None,
+                        TaskContinuationOptions.None,
+                        TaskScheduler.Default);
+                }
+                else
+                {
+                    _ = NativeAudioStopAsync();
+                }
+            }
+            else if (oldAudioFile is not null)
+            {
+                TryDeleteFile(oldAudioFile);
+            }
         }
+        else
+        {
+            Win32PlaySound.Stop();
+            IsAudioPlaying = false;
+            if (oldAudioFile is not null)
+            {
+                TryDeleteFile(oldAudioFile);
+            }
+        }
+
+        HasAudioPreview = false;
     }
 
     // ============ 导出 ============
@@ -641,14 +944,53 @@ public partial class MainViewModel : ViewModelBase
     private async Task ExportRawAsync()
     {
         EntryItem? item = SelectedItem;
-        if (item is null || string.IsNullOrWhiteSpace(ExportDirectory))
+        if (item is null)
         {
-            StatusText = "请先选择导出目录。";
             return;
         }
 
         await RunBusyAsync(async () =>
         {
+            if (OperatingSystem.IsAndroid())
+            {
+                IReadOnlyDictionary<string, byte[]> rawFiles;
+                await _gate.WaitAsync();
+                try
+                {
+                    rawFiles = await _session.ReadRelatedRawFilesAsync(item.FullPath);
+                }
+                finally
+                {
+                    _gate.Release();
+                }
+
+                if (rawFiles.Count == 0)
+                {
+                    StatusText = "该资源没有可导出的关联文件。";
+                    return;
+                }
+
+                if (!await EnsureAndroidExportFolderAsync())
+                {
+                    StatusText = "请先在设置中选择导出目录。";
+                    return;
+                }
+
+                var files = rawFiles.Select(pair => new PreviewExportFileDto(
+                    Path.GetFileName(pair.Key),
+                    "application/octet-stream",
+                    pair.Value)).ToArray();
+                int written = await WriteFilesToAndroidExportFolderAsync(files);
+                StatusText = $"已导出 {written:N0} 个原始文件到 {ExportDirectory}";
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(ExportDirectory))
+            {
+                StatusText = "请先选择导出目录。";
+                return;
+            }
+
             ExportResult result;
             await _gate.WaitAsync();
             try
@@ -670,9 +1012,8 @@ public partial class MainViewModel : ViewModelBase
     private async Task ExportPreviewAsync()
     {
         EntryItem? item = SelectedItem;
-        if (item is null || string.IsNullOrWhiteSpace(ExportDirectory))
+        if (item is null)
         {
-            StatusText = "请先选择导出目录。";
             return;
         }
 
@@ -689,16 +1030,536 @@ public partial class MainViewModel : ViewModelBase
                 _gate.Release();
             }
 
-            List<string> written = [];
+            if (export.Files.Count == 0)
+            {
+                StatusText = "没有生成可导出的预览文件。";
+                return;
+            }
+
+            if (OperatingSystem.IsAndroid())
+            {
+                if (!await EnsureAndroidExportFolderAsync())
+                {
+                    StatusText = "请先在设置中选择导出目录。";
+                    return;
+                }
+
+                int written = await WriteFilesToAndroidExportFolderAsync(export.Files);
+                StatusText = $"已导出 {written:N0} 个预览文件到 {ExportDirectory}";
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(ExportDirectory))
+            {
+                StatusText = "请先选择导出目录。";
+                return;
+            }
+
+            List<string> writtenPaths = [];
             foreach (PreviewExportFileDto file in export.Files)
             {
                 string outputPath = Path.Combine(ExportDirectory, SanitizeFileName(file.FileName));
                 await File.WriteAllBytesAsync(outputPath, file.Data);
-                written.Add(outputPath);
+                writtenPaths.Add(outputPath);
             }
 
-            StatusText = $"已导出 {written.Count:N0} 个预览文件。";
+            StatusText = $"已导出 {writtenPaths.Count:N0} 个预览文件。";
         });
+    }
+
+    // ============ Android 系统分享（单文件导出可直接发送到其他应用） ============
+
+    [RelayCommand(CanExecute = nameof(CanShareRaw))]
+    private async Task ShareRawAsync()
+    {
+        EntryItem? item = SelectedItem;
+        if (item is null || !OperatingSystem.IsAndroid())
+        {
+            return;
+        }
+
+        await RunBusyAsync(async () =>
+        {
+            IReadOnlyDictionary<string, byte[]> rawFiles;
+            await _gate.WaitAsync();
+            try
+            {
+                rawFiles = await _session.ReadRelatedRawFilesAsync(item.FullPath);
+            }
+            finally
+            {
+                _gate.Release();
+            }
+
+            if (rawFiles.Count == 0)
+            {
+                StatusText = "该资源没有可分享的关联文件。";
+                return;
+            }
+
+            string stageDir = CreateShareStagingDirectory();
+            try
+            {
+                List<string> paths = [];
+                var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach ((string pakPath, byte[] data) in rawFiles)
+                {
+                    string fileName = MakeUniqueFileName(SanitizeFileName(Path.GetFileName(pakPath)), usedNames);
+                    string localPath = Path.Combine(stageDir, fileName);
+                    await File.WriteAllBytesAsync(localPath, data);
+                    paths.Add(localPath);
+                }
+
+                await InvokeNativeShareAsync(paths, $"Prism 分享：{item.Name}");
+            }
+            finally
+            {
+                TryDeleteDirectory(stageDir);
+            }
+        });
+    }
+
+    [RelayCommand(CanExecute = nameof(CanSharePreview))]
+    private async Task SharePreviewAsync()
+    {
+        EntryItem? item = SelectedItem;
+        if (item is null || !OperatingSystem.IsAndroid())
+        {
+            return;
+        }
+
+        await RunBusyAsync(async () =>
+        {
+            PreviewExportDto export;
+            await _gate.WaitAsync();
+            try
+            {
+                export = await _session.ReadTypedPreviewExportAsync(item.FullPath);
+            }
+            finally
+            {
+                _gate.Release();
+            }
+
+            if (export.Files.Count == 0)
+            {
+                StatusText = "没有生成可分享的预览文件。";
+                return;
+            }
+
+            string stageDir = CreateShareStagingDirectory();
+            try
+            {
+                List<string> paths = [];
+                var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (PreviewExportFileDto file in export.Files)
+                {
+                    string fileName = MakeUniqueFileName(SanitizeFileName(file.FileName), usedNames);
+                    string localPath = Path.Combine(stageDir, fileName);
+                    await File.WriteAllBytesAsync(localPath, file.Data);
+                    paths.Add(localPath);
+                }
+
+                await InvokeNativeShareAsync(paths, $"Prism 分享：{item.Name}");
+            }
+            finally
+            {
+                TryDeleteDirectory(stageDir);
+            }
+        });
+    }
+
+    // ============ 文件夹批量导出 ============
+
+    public bool CanExportFolder => IsPakOpen && !IsBusy;
+
+    [RelayCommand(CanExecute = nameof(CanExportFolder))]
+    private Task ExportFolderRawAsync() => ExportFolderAsync("raw");
+
+    [RelayCommand(CanExecute = nameof(CanExportFolder))]
+    private Task ExportFolderImagesAsync() => ExportFolderAsync("images");
+
+    private async Task ExportFolderAsync(string kind)
+    {
+        if (!IsPakOpen)
+        {
+            StatusText = "请先打开 Pak。";
+            return;
+        }
+
+        string rootFolder = string.IsNullOrWhiteSpace(CurrentFolder)
+            ? string.Empty
+            : CurrentFolder.Trim('/') + "/";
+
+        await RunBusyAsync(async () =>
+        {
+            if (OperatingSystem.IsAndroid() && !await EnsureAndroidExportFolderAsync())
+            {
+                StatusText = "请先在设置中选择导出目录。";
+                return;
+            }
+
+            if (!OperatingSystem.IsAndroid() && string.IsNullOrWhiteSpace(ExportDirectory))
+            {
+                StatusText = "请先选择导出目录。";
+                return;
+            }
+
+            IReadOnlyList<ArchiveEntryDto> entries;
+            await _gate.WaitAsync();
+            try
+            {
+                entries = await _session.ListAsync(rootFolder, recursive: true);
+            }
+            finally
+            {
+                _gate.Release();
+            }
+
+            ArchiveEntryDto[] files = entries
+                .Where(entry => !entry.IsDirectory)
+                .DistinctBy(entry => entry.FullPath, StringComparer.OrdinalIgnoreCase)
+                .OrderBy(entry => entry.FullPath, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            if (files.Length == 0)
+            {
+                StatusText = "当前文件夹中没有可导出的文件。";
+                return;
+            }
+
+            var rawPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var androidFolders = OperatingSystem.IsAndroid()
+                ? new Dictionary<string, IStorageFolder>(StringComparer.OrdinalIgnoreCase) { [string.Empty] = _exportFolder! }
+                : null;
+            int exportedAssets = 0;
+            int exportedFiles = 0;
+            int skipped = 0;
+            int failed = 0;
+            long totalBytes = 0;
+
+            for (int i = 0; i < files.Length; i++)
+            {
+                ArchiveEntryDto entry = files[i];
+                if (i == 0 || i % 10 == 0)
+                {
+                    StatusText = kind == "raw"
+                        ? $"正在导出原始文件 {i + 1}/{files.Length}..."
+                        : $"正在导出图片 {i + 1}/{files.Length}...";
+                    await Task.Yield();
+                }
+
+                try
+                {
+                    if (kind == "raw")
+                    {
+                        IReadOnlyDictionary<string, byte[]> rawFiles;
+                        await _gate.WaitAsync();
+                        try
+                        {
+                            rawFiles = await _session.ReadRelatedRawFilesAsync(entry.FullPath);
+                        }
+                        finally
+                        {
+                            _gate.Release();
+                        }
+
+                        bool wroteAny = false;
+                        foreach ((string pakPath, byte[] data) in rawFiles)
+                        {
+                            if (!rawPaths.Add(pakPath))
+                            {
+                                continue;
+                            }
+
+                            string relativePath = GetFolderRelativePath(rootFolder, pakPath);
+                            string relativeDirectory = GetParentFolder(relativePath);
+                            string fileName = GetFileNameFromPakPath(relativePath);
+                            if (OperatingSystem.IsAndroid())
+                            {
+                                IStorageFolder parent = await GetOrCreateAndroidFolderAsync(_exportFolder!, relativeDirectory, androidFolders!);
+                                await WriteAndroidExportFileAsync(parent, fileName, data);
+                            }
+                            else
+                            {
+                                string outputPath = Path.Combine(ExportDirectory, SanitizeRelativePath(relativePath));
+                                Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+                                await File.WriteAllBytesAsync(outputPath, data);
+                            }
+
+                            exportedFiles++;
+                            totalBytes += data.Length;
+                            wroteAny = true;
+                        }
+
+                        if (wroteAny)
+                        {
+                            exportedAssets++;
+                        }
+                        else
+                        {
+                            skipped++;
+                        }
+                    }
+                    else
+                    {
+                        // 只尝试可能的纹理资产；其他类型跳过，不打断批量导出。
+                        string guessedKind = EntryItem.GuessKind(entry);
+                        bool isLikelyTexture = guessedKind == "Texture";
+                        bool isRawImage = !entry.IsAssetPackage && guessedKind is "PNG" or "JPG" or "JPEG" or "BMP" or "TGA" or "WEBP";
+                        if (!isLikelyTexture && !isRawImage)
+                        {
+                            skipped++;
+                            continue;
+                        }
+
+                        PreviewExportDto export;
+                        await _gate.WaitAsync();
+                        try
+                        {
+                            export = await _session.ReadTypedPreviewExportAsync(entry.FullPath);
+                        }
+                        catch
+                        {
+                            skipped++;
+                            continue;
+                        }
+                        finally
+                        {
+                            _gate.Release();
+                        }
+
+                        if (!string.Equals(export.Kind, "texture", StringComparison.OrdinalIgnoreCase) || export.Files.Count == 0)
+                        {
+                            skipped++;
+                            continue;
+                        }
+
+                        string relativePath = GetFolderRelativePath(rootFolder, entry.FullPath);
+                        string relativeDirectory = GetParentFolder(relativePath);
+                        foreach (PreviewExportFileDto file in export.Files)
+                        {
+                            if (OperatingSystem.IsAndroid())
+                            {
+                                IStorageFolder parent = await GetOrCreateAndroidFolderAsync(_exportFolder!, relativeDirectory, androidFolders!);
+                                await WriteAndroidExportFileAsync(parent, SanitizeFileName(file.FileName), file.Data);
+                            }
+                            else
+                            {
+                                string outputDirectory = Path.Combine(ExportDirectory, SanitizeRelativePath(relativeDirectory));
+                                Directory.CreateDirectory(outputDirectory);
+                                string outputPath = Path.Combine(outputDirectory, SanitizeFileName(file.FileName));
+                                await File.WriteAllBytesAsync(outputPath, file.Data);
+                            }
+
+                            exportedFiles++;
+                            totalBytes += file.Data.Length;
+                        }
+
+                        exportedAssets++;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    failed++;
+                    AddLog($"文件夹导出跳过：{entry.FullPath}（{ex.Message}）");
+                }
+            }
+
+            StatusText = $"文件夹导出完成：{exportedAssets} 个资源 / {exportedFiles} 个文件，共 {FormatSize(totalBytes)}；跳过 {skipped}，失败 {failed}。";
+            AddLog($"文件夹导出完成（{kind}）：成功 {exportedAssets}，文件 {exportedFiles}，跳过 {skipped}，失败 {failed}");
+        });
+    }
+
+    private static string GetFolderRelativePath(string rootFolder, string pakPath)
+    {
+        string normalized = pakPath.Replace('\\', '/').TrimStart('/');
+        string root = rootFolder.Replace('\\', '/').TrimStart('/');
+        return string.IsNullOrEmpty(root) || !normalized.StartsWith(root, StringComparison.OrdinalIgnoreCase)
+            ? normalized
+            : normalized[root.Length..].TrimStart('/');
+    }
+
+    private static string GetParentFolder(string relativePath)
+    {
+        int index = relativePath.LastIndexOf('/');
+        return index <= 0 ? string.Empty : relativePath[..index];
+    }
+
+    private static string GetFileNameFromPakPath(string relativePath)
+    {
+        int index = relativePath.LastIndexOf('/');
+        return index < 0 ? relativePath : relativePath[(index + 1)..];
+    }
+
+    private static string SanitizeRelativePath(string relativePath)
+    {
+        string[] parts = relativePath.Replace('\\', '/')
+            .Split('/', StringSplitOptions.RemoveEmptyEntries)
+            .Select(SanitizeFileName)
+            .ToArray();
+        return Path.Combine(parts);
+    }
+
+    private static async Task<IStorageFolder> GetOrCreateAndroidFolderAsync(
+        IStorageFolder root,
+        string relativeDirectory,
+        IDictionary<string, IStorageFolder> cache)
+    {
+        if (string.IsNullOrWhiteSpace(relativeDirectory))
+        {
+            return root;
+        }
+
+        if (cache.TryGetValue(relativeDirectory, out IStorageFolder? cached))
+        {
+            return cached;
+        }
+
+        IStorageFolder current = root;
+        foreach (string part in relativeDirectory.Replace('\\', '/')
+                     .Split('/', StringSplitOptions.RemoveEmptyEntries)
+                     .Select(SanitizeFileName))
+        {
+            try
+            {
+                current = await current.CreateFolderAsync(part) ?? current;
+            }
+            catch
+            {
+                current = await current.GetFolderAsync(part) ?? current;
+            }
+        }
+
+        cache[relativeDirectory] = current;
+        return current;
+    }
+
+    private static async Task WriteAndroidExportFileAsync(IStorageFolder folder, string fileName, byte[] data)
+    {
+        IStorageFile output = await CreateExportFileWithUniqueNameAsync(folder, SanitizeFileName(fileName));
+        await using Stream stream = await output.OpenWriteAsync();
+        await stream.WriteAsync(data);
+    }
+
+    private async Task InvokeNativeShareAsync(IReadOnlyList<string> filePaths, string title)
+    {
+        if (NativeShareFilesAsync is null)
+        {
+            StatusText = "分享服务未就绪，请重新打开应用后重试。";
+            return;
+        }
+
+        await NativeShareFilesAsync(filePaths, title);
+        StatusText = $"已打开系统分享：{Path.GetFileName(filePaths.FirstOrDefault() ?? title)}";
+    }
+
+    private static string MakeUniqueFileName(string fileName, ISet<string> usedNames)
+    {
+        if (usedNames.Add(fileName))
+        {
+            return fileName;
+        }
+
+        string baseName = Path.GetFileNameWithoutExtension(fileName);
+        string extension = Path.GetExtension(fileName);
+        for (int i = 2; i < 10_000; i++)
+        {
+            string candidate = $"{baseName} ({i}){extension}";
+            if (usedNames.Add(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return $"{Guid.NewGuid():N}{extension}";
+    }
+
+    private static string CreateShareStagingDirectory()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "PrismShare", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        return directory;
+    }
+
+    private async Task<bool> EnsureAndroidExportFolderAsync()
+    {
+        if (_exportFolder is not null)
+        {
+            return true;
+        }
+
+        if (TopLevel?.StorageProvider is null)
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_exportDirectoryBookmark))
+        {
+            try
+            {
+                _exportFolder = await TopLevel.StorageProvider.OpenFolderBookmarkAsync(_exportDirectoryBookmark);
+                if (_exportFolder is not null)
+                {
+                    string? localPath = _exportFolder.TryGetLocalPath();
+                    ExportDirectory = string.IsNullOrWhiteSpace(localPath)
+                        ? _exportFolder.Name
+                        : localPath;
+                    return true;
+                }
+            }
+            catch
+            {
+                // 书签失效时按未选择处理，用户可以重新选择。
+            }
+
+            _exportDirectoryBookmark = string.Empty;
+            SaveSettings();
+        }
+
+        return false;
+    }
+
+    private async Task<int> WriteFilesToAndroidExportFolderAsync(IReadOnlyList<PreviewExportFileDto> files)
+    {
+        if (_exportFolder is null)
+        {
+            throw new InvalidOperationException("导出目录未就绪。");
+        }
+
+        int written = 0;
+        foreach (PreviewExportFileDto file in files)
+        {
+            IStorageFile output = await CreateExportFileWithUniqueNameAsync(_exportFolder, SanitizeFileName(file.FileName));
+            await using Stream stream = await output.OpenWriteAsync();
+            await stream.WriteAsync(file.Data);
+            written++;
+        }
+
+        return written;
+    }
+
+    private static async Task<IStorageFile> CreateExportFileWithUniqueNameAsync(IStorageFolder folder, string fileName)
+    {
+        string baseName = Path.GetFileNameWithoutExtension(fileName);
+        string extension = Path.GetExtension(fileName);
+        for (int i = 0; i < 100; i++)
+        {
+            string candidate = i == 0 ? fileName : $"{baseName} ({i}){extension}";
+            try
+            {
+                IStorageFile? file = await folder.CreateFileAsync(candidate);
+                if (file is not null)
+                {
+                    return file;
+                }
+            }
+            catch
+            {
+                // 名称已存在时尝试加序号；真正失败会继续尝试或最终抛出。
+            }
+        }
+
+        throw new InvalidOperationException($"无法在导出目录中创建文件：{fileName}");
     }
 
     // ============ 替换（Patch） ============
@@ -746,13 +1607,6 @@ public partial class MainViewModel : ViewModelBase
             Directory.CreateDirectory(inputDir);
 
             string baseName = Path.GetFileNameWithoutExtension(item.FullPath);
-            string? uassetPakPath = rawFiles.Keys.FirstOrDefault(k => k.EndsWith(".uasset", StringComparison.OrdinalIgnoreCase));
-            if (uassetPakPath is null)
-            {
-                throw new InvalidOperationException("该资源不是 .uasset 资产。");
-            }
-
-            string inputUassetPath = Path.Combine(inputDir, baseName + ".uasset");
             Dictionary<string, string> originalFiles = new(StringComparer.OrdinalIgnoreCase);
             foreach ((string pakPath, byte[] data) in rawFiles)
             {
@@ -761,28 +1615,75 @@ public partial class MainViewModel : ViewModelBase
                 originalFiles[pakPath] = localPath;
             }
 
-            // 3. 检查是否为纹理
-            TextureInspectionResult inspect = await new TextureReplacementService().InspectAsync(
-                inputUassetPath,
-                EngineVersion.VER_UE5_6,
-                NullIfWhiteSpace(UsmapPath));
-
-            // 4. 建 patch 项
-            var patch = new PatchItem(
-                kind: "texture",
-                sourcePath: item.FullPath,
-                name: baseName,
-                format: inspect.Format,
-                sizeLabel: $"{inspect.Width}×{inspect.Height}",
-                width: inspect.Width,
-                height: inspect.Height,
-                workDirectory: workDir,
-                inputUassetPath: inputUassetPath)
+            // 3. 本地化（locres）或纹理
+            PatchItem patch;
+            bool isLocres = originalPreview is { Kind: "locres" } || originalPreview?.Locres is not null;
+            if (isLocres)
             {
-                OriginalPreview = originalPreview is { Data: { Length: > 0 } previewData }
-                    ? DecodeImage(previewData, 640)
-                    : null,
-            };
+                LocresPreviewDto locres;
+                await _gate.WaitAsync();
+                try
+                {
+                    locres = await _session.ReadLocresPreviewAsync(item.FullPath);
+                }
+                finally
+                {
+                    _gate.Release();
+                }
+
+                patch = new PatchItem(
+                    kind: "locres",
+                    sourcePath: item.FullPath,
+                    name: baseName,
+                    format: locres.Version,
+                    sizeLabel: $"{locres.EntryCount:N0} 条",
+                    width: 0,
+                    height: 0,
+                    workDirectory: workDir,
+                    inputUassetPath: string.Empty);
+                foreach (LocresEntryDto entry in locres.Entries)
+                {
+                    patch.LocresEntries.Add(new LocresEntryVM(entry));
+                }
+
+                patch.ApplyLocresFilter();
+                StatusText = $"已加入本地化：{baseName}（{locres.EntryCount:N0} 条）";
+            }
+            else
+            {
+                // 纹理：需要 .uasset 关联文件
+                string? uassetPakPath = rawFiles.Keys.FirstOrDefault(k => k.EndsWith(".uasset", StringComparison.OrdinalIgnoreCase));
+                if (uassetPakPath is null)
+                {
+                    throw new InvalidOperationException("该资源不是 .uasset 资产。");
+                }
+
+                string inputUassetPath = Path.Combine(inputDir, baseName + ".uasset");
+
+                // 检查纹理格式
+                TextureInspectionResult inspect = await new TextureReplacementService().InspectAsync(
+                    inputUassetPath,
+                    EngineVersion.VER_UE5_6,
+                    NullIfWhiteSpace(UsmapPath));
+
+                patch = new PatchItem(
+                    kind: "texture",
+                    sourcePath: item.FullPath,
+                    name: baseName,
+                    format: inspect.Format,
+                    sizeLabel: $"{inspect.Width}×{inspect.Height}",
+                    width: inspect.Width,
+                    height: inspect.Height,
+                    workDirectory: workDir,
+                    inputUassetPath: inputUassetPath)
+                {
+                    OriginalPreview = originalPreview is { Data: { Length: > 0 } previewData }
+                        ? DecodeImage(previewData, 640)
+                        : null,
+                };
+                StatusText = $"已加入替换：{baseName}（{inspect.Format}）";
+            }
+
             foreach ((string pakPath, string localPath) in originalFiles)
             {
                 patch.OriginalFiles[pakPath] = localPath;
@@ -790,7 +1691,6 @@ public partial class MainViewModel : ViewModelBase
 
             PatchItems.Add(patch);
             SelectedPatchItem = patch;
-            StatusText = $"已加入替换：{baseName}（{inspect.Format}）";
             CurrentTabIndex = 2;
             NotifyPatchItemsState();
         });
@@ -805,8 +1705,13 @@ public partial class MainViewModel : ViewModelBase
             return;
         }
 
-        // 复用 PickFileAsync：Android 上会把 SAF 文件复制到私有目录
-        string? imagePath = await PickFileAsync("选择替换图片", ["*.png", "*.jpg", "*.jpeg", "*.bmp", "*.tga", "*.webp"]);
+        // 复用 PickFileAsync：Android 上会把 SAF 文件复制到私有目录。
+        // 支持 JPG/JPEG 等常见图片格式；Android 选择器同时给 MIME 过滤。
+        string? imagePath = await PickFileAsync(
+            "选择替换图片",
+            ["*.png", "*.jpg", "*.jpeg", "*.jpe", "*.jfif", "*.bmp", "*.tga", "*.webp", "*.gif", "*.tif", "*.tiff"],
+            replaceCachePath: null,
+            mimeTypes: ["image/png", "image/jpeg", "image/bmp", "image/webp", "image/gif", "image/tiff", "image/x-tga"]);
         if (string.IsNullOrEmpty(imagePath))
         {
             return;
@@ -902,6 +1807,43 @@ public partial class MainViewModel : ViewModelBase
         NotifyPatchItemsState();
     }
 
+    /// <summary>本地化条目修改后写回（失焦/回车触发），写出的 patched.locres 供构建补丁 Pak。</summary>
+    [RelayCommand]
+    private async Task UpdateLocresEntryAsync(PatchItem? patch)
+    {
+        if (patch is null || !patch.IsLocres || patch.OriginalFiles.Count == 0)
+        {
+            return;
+        }
+
+        await RunBusyAsync(async () =>
+        {
+            string originalPath = patch.OriginalFiles
+                .OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(p => p.Value)
+                .First();
+            string outputDir = Path.Combine(patch.WorkDirectory, "output");
+            Directory.CreateDirectory(outputDir);
+            string outputPath = Path.Combine(outputDir, Path.GetFileNameWithoutExtension(originalPath) + ".patched.locres");
+
+            byte[] originalBytes = await File.ReadAllBytesAsync(originalPath);
+            byte[] patchedBytes = LocresResourceCodec.ApplyTranslations(
+                originalBytes,
+                patch.LocresEntries.Select(e => e.ToDto()).ToList());
+            await File.WriteAllBytesAsync(outputPath, patchedBytes);
+
+            patch.PatchedFiles.Clear();
+            foreach ((string pakPath, string localPath) in patch.OriginalFiles)
+            {
+                patch.PatchedFiles[pakPath] = localPath;
+            }
+
+            patch.PatchedFiles[patch.SourcePath] = outputPath;
+            patch.Status = "已编辑";
+            StatusText = $"本地化已更新：{patch.Name}（{patch.LocresEntries.Count:N0} 条），可构建补丁 Pak。";
+        });
+    }
+
     [RelayCommand(CanExecute = nameof(CanBuildPatchPak))]
     private async Task BuildPatchPakAsync()
     {
@@ -950,7 +1892,7 @@ public partial class MainViewModel : ViewModelBase
 
             if (OperatingSystem.IsAndroid())
             {
-                // Android SAF：先打包到临时文件，再流式写入用户选择的位置
+                // Android SAF：先打包到临时文件，再流式写入用户选择的位置，随后直接打开系统分享。
                 string tempPakPath = Path.Combine(Path.GetTempPath(), $"patch_{Guid.NewGuid():N}.pak");
                 await Task.Run(() => ModifiedPakPackService.Pack(new ModifiedPakRequest(
                     files.Values.OrderBy(f => f.PakPath, StringComparer.OrdinalIgnoreCase).ToArray(),
@@ -958,18 +1900,25 @@ public partial class MainViewModel : ViewModelBase
                     UseCompression: UseOodleCompression,
                     Compression: PakCompression.Oodle)));
 
-                await using Stream src = File.OpenRead(tempPakPath);
-                await using Stream dst = await output.OpenWriteAsync();
-                await src.CopyToAsync(dst);
-                try
+                await using (Stream src = File.OpenRead(tempPakPath))
+                await using (Stream dst = await output.OpenWriteAsync())
                 {
-                    File.Delete(tempPakPath);
-                }
-                catch
-                {
+                    await src.CopyToAsync(dst);
                 }
 
                 StatusText = $"补丁 Pak 已保存：{output.Name}（{files.Count} 个文件）";
+                try
+                {
+                    await InvokeNativeShareAsync([tempPakPath], $"Prism 补丁 Pak：{output.Name}");
+                }
+                catch
+                {
+                    // 分享失败不影响已保存的文件。
+                }
+                finally
+                {
+                    TryDeleteFile(tempPakPath);
+                }
             }
             else
             {
@@ -980,6 +1929,7 @@ public partial class MainViewModel : ViewModelBase
                     Compression: PakCompression.Oodle)));
 
                 StatusText = $"补丁 Pak 已构建：{Path.GetFileName(outputPath)}（{files.Count} 个文件）";
+            AddLog($"构建补丁 Pak：{Path.GetFileName(outputPath)}（{files.Count} 个文件）");
             }
         });
     }
@@ -1007,9 +1957,13 @@ public partial class MainViewModel : ViewModelBase
             MergeStatus = $"主 Pak {inspection.BaseCount:N0} 项，合并 Pak {inspection.MergeCount:N0} 项，冲突 {inspection.ConflictCount:N0} 项";
             if (inspection.ConflictCount > 0)
             {
-                bool confirmed = await Views.ConfirmDialog.ShowAsync(
-                    TopLevel as Window ?? throw new InvalidOperationException("窗口未就绪"),
-                    $"发现 {inspection.ConflictCount} 个冲突。用合并 Pak 的文件替换？");
+                bool confirmed = OperatingSystem.IsAndroid()
+                    ? (NativeConfirmAsync is not null
+                        ? await NativeConfirmAsync("确认", $"发现 {inspection.ConflictCount} 个冲突。用合并 Pak 的文件替换？")
+                        : true)
+                    : await Views.ConfirmDialog.ShowAsync(
+                        TopLevel as Window ?? throw new InvalidOperationException("窗口未就绪"),
+                        $"发现 {inspection.ConflictCount} 个冲突。用合并 Pak 的文件替换？");
                 if (!confirmed)
                 {
                     MergeStatus = "已取消";
@@ -1023,19 +1977,26 @@ public partial class MainViewModel : ViewModelBase
             MergeBuildResponse result = await BuildMergeCoreAsync();
             if (OperatingSystem.IsAndroid() && _mergeOutputTarget is not null)
             {
-                await using Stream src = File.OpenRead(result.OutputPakPath);
-                await using Stream dst = await _mergeOutputTarget.OpenWriteAsync();
-                await src.CopyToAsync(dst);
-                try
+                await using (Stream src = File.OpenRead(result.OutputPakPath))
+                await using (Stream dst = await _mergeOutputTarget.OpenWriteAsync())
                 {
-                    File.Delete(result.OutputPakPath);
-                }
-                catch
-                {
+                    await src.CopyToAsync(dst);
                 }
 
                 MergeStatus = $"合并完成：{_mergeOutputTarget.Name}，{result.FileCount:N0} 个文件，冲突 {result.ConflictCount:N0}";
                 StatusText = $"合并完成：{_mergeOutputTarget.Name}";
+                try
+                {
+                    await InvokeNativeShareAsync([result.OutputPakPath], $"Prism 合并 Pak：{_mergeOutputTarget.Name}");
+                }
+                catch
+                {
+                    // 分享失败不影响已保存的文件。
+                }
+                finally
+                {
+                    TryDeleteFile(result.OutputPakPath);
+                }
             }
             else
             {
@@ -1135,13 +2096,17 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     public partial string TempDirectory { get; set; }
 
-    // ============ 列表缩略图（默认关闭，设置中开启） ============
+    [ObservableProperty]
+    public partial string LogText { get; set; } = "暂无日志";
+
+    // ============ 列表缩略图（本版本起默认开启，设置中可关闭） ============
 
     [ObservableProperty]
     public partial bool ShowThumbnails { get; set; }
 
     private CancellationTokenSource? _thumbCts;
     private readonly SemaphoreSlim _thumbGate = new(4, 4); // 并发解码上限
+    private bool _resumeThumbnailsAfterUserAction;
 
     partial void OnShowThumbnailsChanged(bool value)
     {
@@ -1157,19 +2122,54 @@ public partial class MainViewModel : ViewModelBase
         SaveSettings();
     }
 
-    /// <summary>为当前列表中的图片类条目生成缩略图（后台解码，UI 线程建图）。</summary>
-    private void StartThumbnails()
+    /// <summary>
+    /// 用户开始操作时先打断后台缩略图生成，把 Pak 读取优先级让给用户；
+    /// 操作结束后如果没有新的列表渲染，再继续补缩略图。
+    /// </summary>
+    private void PrioritizeUserAction()
     {
-        if (!ShowThumbnails || !IsPakOpen)
+        if (_thumbCts is null || _thumbCts.IsCancellationRequested)
         {
             return;
         }
 
+        _resumeThumbnailsAfterUserAction = true;
+        _thumbCts.Cancel();
+    }
+
+    private void ResumeThumbnailsAfterUserAction()
+    {
+        if (!_resumeThumbnailsAfterUserAction)
+        {
+            return;
+        }
+
+        _resumeThumbnailsAfterUserAction = false;
+        if (ShowThumbnails && IsBrowseTab && Entries.Any(item => item.IsImageKind && item.Thumbnail is null))
+        {
+            StartThumbnails();
+        }
+    }
+
+    /// <summary>为当前列表中尚未生成缩略图的图片类条目生成缩略图（后台解码，UI 线程建图）。</summary>
+    private void StartThumbnails()
+    {
+        if (!ShowThumbnails || !IsPakOpen || !IsBrowseTab)
+        {
+            return;
+        }
+
+        // 显式开始新一轮缩略图后，用户操作结束就不需要再次恢复，避免重复解码。
+        _resumeThumbnailsAfterUserAction = false;
         _thumbCts?.Cancel();
         _thumbCts?.Dispose();
         _thumbCts = new CancellationTokenSource();
         CancellationToken ct = _thumbCts.Token;
-        List<EntryItem> candidates = Entries.Where(e => e.IsImageKind).ToList();
+        int maxThumbnails = OperatingSystem.IsAndroid() ? 240 : 600;
+        List<EntryItem> candidates = Entries
+            .Where(e => e.IsImageKind && e.Thumbnail is null)
+            .Take(maxThumbnails)
+            .ToList();
         if (candidates.Count == 0)
         {
             return;
@@ -1223,6 +2223,7 @@ public partial class MainViewModel : ViewModelBase
 
     private void ClearThumbnails()
     {
+        _resumeThumbnailsAfterUserAction = false;
         _thumbCts?.Cancel();
         foreach (EntryItem item in Entries)
         {
@@ -1238,39 +2239,139 @@ public partial class MainViewModel : ViewModelBase
         AstcencStatus = runner?.HasAstcenc == true ? "已找到 astcenc" : "未找到 astcenc";
         TexconvStatus = runner?.HasTexconv == true ? "已找到 texconv" : "未找到 texconv";
         TempDirectory = Path.GetTempPath();
+        RefreshLog();
+        Services.AppLog.Add($"应用启动 v{VersionText}");
+    }
+
+    /// <summary>刷新日志预览文本（设置页展示）。</summary>
+    private void RefreshLog() => LogText = Services.AppLog.FullText;
+
+    /// <summary>记录一条日志并刷新预览。</summary>
+    private void AddLog(string line)
+    {
+        Services.AppLog.Add(line);
+        RefreshLog();
+    }
+
+    /// <summary>导出日志：桌面写文件，Android 走 SAF 保存流。</summary>
+    [RelayCommand]
+    private async Task ExportLogAsync()
+    {
+        TopLevel? top = TopLevel;
+        if (top is null)
+        {
+            return;
+        }
+
+        PrioritizeUserAction();
+        try
+        {
+            IStorageFile? file = await top.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = "导出日志",
+                SuggestedFileName = $"prism-log-{DateTime.Now:yyyyMMdd-HHmmss}.txt",
+                FileTypeChoices = [new FilePickerFileType("文本") { Patterns = ["*.txt"] }],
+            });
+            if (file is null)
+            {
+                return;
+            }
+
+            RefreshLog();
+            byte[] content = System.Text.Encoding.UTF8.GetBytes(LogText);
+            if (OperatingSystem.IsAndroid())
+            {
+                // 先写应用缓存，再流式写入用户选择的位置；保存完成后直接唤起系统分享。
+                string tempLogPath = Path.Combine(Path.GetTempPath(), $"prism-log-{Guid.NewGuid():N}.txt");
+                await File.WriteAllBytesAsync(tempLogPath, content);
+                try
+                {
+                    await using (Stream dst = await file.OpenWriteAsync())
+                    {
+                        await dst.WriteAsync(content);
+                    }
+
+                    AddLog($"日志已导出：{file.Name}");
+                    try
+                    {
+                        await InvokeNativeShareAsync([tempLogPath], $"Prism 日志：{file.Name}");
+                    }
+                    catch
+                    {
+                        // 分享失败不影响已导出的日志。
+                    }
+                }
+                finally
+                {
+                    TryDeleteFile(tempLogPath);
+                }
+            }
+            else if (file.TryGetLocalPath() is { } path)
+            {
+                await File.WriteAllBytesAsync(path, content);
+                AddLog($"日志已导出：{path}");
+            }
+
+            StatusText = $"日志已导出（{Services.AppLog.Count:N0} 行）。";
+        }
+        finally
+        {
+            ResumeThumbnailsAfterUserAction();
+        }
     }
 
     private IStorageFile? _mergeOutputTarget;
+
+    /// <summary>平台确认对话框委托：Android 壳注入原生 AlertDialog；桌面直接用 Window 弹窗。</summary>
+    public Func<string, string, Task<bool>>? NativeConfirmAsync { get; set; }
+
+    /// <summary>Android 系统分享委托：由 Android 壳复制文件并通过 FileProvider 打开分享面板。</summary>
+    public Func<IReadOnlyList<string>, string, Task>? NativeShareFilesAsync { get; set; }
+
+    /// <summary>Android 音频播放委托：由 Android 壳用 MediaPlayer 播放本地 WAV，第二个参数为起始秒数。</summary>
+    public Func<string, double, Task>? NativeAudioPlayAsync { get; set; }
+
+    /// <summary>Android 音频停止委托。</summary>
+    public Func<Task>? NativeAudioStopAsync { get; set; }
+
+    /// <summary>Android 音频进度定位委托（秒）。</summary>
+    public Func<double, Task>? NativeAudioSeekAsync { get; set; }
+
+    /// <summary>Android 音频暂停/继续委托（true=暂停，false=继续）。</summary>
+    public Func<bool, Task>? NativeAudioSetPausedAsync { get; set; }
 
     // ============ 文件选择 ============
 
     [RelayCommand]
     private async Task BrowsePakAsync()
     {
-        string? path = await PickFileAsync("选择 Pak 文件", ["*.pak"]);
+        string? path = await PickFileAsync("选择 Pak 文件", ["*.pak"], PakPath);
         if (path is not null)
         {
             PakPath = path;
+            StatusText = $"已选择 Pak：{Path.GetFileName(path)}";
         }
     }
 
     [RelayCommand]
     private async Task BrowseUsmapAsync()
     {
-        string? path = await PickFileAsync("选择 .usmap 映射文件", ["*.usmap"]);
+        string? path = await PickFileAsync("选择 .usmap 映射文件", ["*.usmap"], UsmapPath);
         if (path is not null)
         {
             UsmapPath = path;
+            StatusText = $"已选择 Usmap：{Path.GetFileName(path)}";
         }
     }
 
     [RelayCommand]
     private async Task BrowseMergePakAsync()
     {
-        string? path = await PickFileAsync("选择合并 Pak 文件", ["*.pak"]);
+        string? path = await PickFileAsync("选择合并 Pak 文件", ["*.pak"], MergePakPath);
         if (path is not null)
         {
             MergePakPath = path;
+            StatusText = $"已选择合并 Pak：{Path.GetFileName(path)}";
         }
     }
 
@@ -1314,13 +2415,61 @@ public partial class MainViewModel : ViewModelBase
             Title = "选择导出目录",
             AllowMultiple = false,
         });
-        if (folders.Count > 0 && folders[0].TryGetLocalPath() is { } dir)
+        if (folders.Count == 0)
         {
+            return;
+        }
+
+        IStorageFolder folder = folders[0];
+        if (OperatingSystem.IsAndroid())
+        {
+            // Android 优先保存 SAF 书签（持久化授权），不依赖“所有文件”权限。
+            _exportFolder = folder;
+            try
+            {
+                _exportDirectoryBookmark = folder.CanBookmark
+                    ? await folder.SaveBookmarkAsync() ?? string.Empty
+                    : string.Empty;
+            }
+            catch
+            {
+                _exportDirectoryBookmark = string.Empty;
+            }
+
+            ExportDirectory = folder.TryGetLocalPath() is { } localPath && !string.IsNullOrWhiteSpace(localPath)
+                ? localPath
+                : folder.Name;
+            SaveSettings();
+            StatusText = string.IsNullOrWhiteSpace(_exportDirectoryBookmark)
+                ? $"导出目录已选择（仅本次运行有效）：{ExportDirectory}"
+                : $"导出目录已保存：{ExportDirectory}";
+            return;
+        }
+
+        if (folder.TryGetLocalPath() is { } dir)
+        {
+            _exportFolder = null;
+            _exportDirectoryBookmark = string.Empty;
             ExportDirectory = dir;
         }
     }
 
-    private async Task<string?> PickFileAsync(string title, string[] patterns)
+    /// <summary>Android 启动后恢复上次选择的 SAF 导出目录（书签授权跨重启有效）。</summary>
+    public async Task RestoreAndroidExportFolderAsync()
+    {
+        if (!OperatingSystem.IsAndroid() || TopLevel?.StorageProvider is null)
+        {
+            return;
+        }
+
+        await EnsureAndroidExportFolderAsync();
+    }
+
+    private async Task<string?> PickFileAsync(
+        string title,
+        string[] patterns,
+        string? replaceCachePath = null,
+        IReadOnlyList<string>? mimeTypes = null)
     {
         TopLevel? top = TopLevel;
         if (top is null)
@@ -1332,7 +2481,7 @@ public partial class MainViewModel : ViewModelBase
         {
             Title = title,
             AllowMultiple = false,
-            FileTypeFilter = [new FilePickerFileType("文件") { Patterns = patterns }],
+            FileTypeFilter = [new FilePickerFileType("文件") { Patterns = patterns, MimeTypes = mimeTypes }],
         });
         if (files.Count == 0)
         {
@@ -1342,20 +2491,142 @@ public partial class MainViewModel : ViewModelBase
         IStorageFile file = files[0];
         if (OperatingSystem.IsAndroid())
         {
-            // SAF 返回 content:// URI，无本地路径：复制到应用私有目录
+            // SAF 返回 content:// URI，无本地路径：复制到应用私有目录。
+            // 文件名加短唯一后缀，避免不同来源同名文件互相覆盖；
+            // 更换选择后旧缓存立即删除，下次启动还会清理未引用文件。
             string destDir = Path.Combine(PrivateDataDir(), "picked");
             Directory.CreateDirectory(destDir);
-            string destPath = Path.Combine(destDir, SanitizeFileName(file.Name));
+            string stem = SanitizeFileName(Path.GetFileNameWithoutExtension(file.Name));
+            string extension = Path.GetExtension(file.Name);
+            if (string.IsNullOrWhiteSpace(stem))
+            {
+                stem = "picked";
+            }
+
+            string destPath = Path.Combine(destDir, $"{stem}.{Guid.NewGuid():N}{extension}");
             await using Stream src = await file.OpenReadAsync();
-            await using FileStream dst = File.Create(destPath);
-            await src.CopyToAsync(dst);
+            await using (FileStream dst = File.Create(destPath))
+            {
+                await src.CopyToAsync(dst);
+            }
+
+            DeleteReplacedAndroidPickedFile(replaceCachePath, destPath);
             return destPath;
         }
 
         return file.TryGetLocalPath();
     }
 
+    private static void DeleteReplacedAndroidPickedFile(string? oldPath, string newPath)
+    {
+        if (!OperatingSystem.IsAndroid() || string.IsNullOrWhiteSpace(oldPath))
+        {
+            return;
+        }
+
+        string pickedRoot = Path.GetFullPath(Path.Combine(PrivateDataDir(), "picked"));
+        string oldFullPath;
+        try
+        {
+            oldFullPath = Path.GetFullPath(oldPath);
+        }
+        catch
+        {
+            return;
+        }
+
+        if (!oldFullPath.StartsWith(pickedRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(oldFullPath, Path.GetFullPath(newPath), StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        TryDeleteFile(oldFullPath);
+    }
+
     // ============ 工具 ============
+
+    /// <summary>
+    /// Android 缓存管理：保留当前设置引用的 picked 文件，删除已更换/不再引用的缓存，
+    /// 并清理上次会话遗留的分享与替换临时目录。Windows 不复制 SAF 文件，无需清理。
+    /// </summary>
+    private void CleanupAndroidCaches()
+    {
+        if (!OperatingSystem.IsAndroid())
+        {
+            return;
+        }
+
+        var keep = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string? path in new[] { PakPath, UsmapPath, MergePakPath })
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                continue;
+            }
+
+            try
+            {
+                keep.Add(Path.GetFullPath(path));
+            }
+            catch
+            {
+                // 非法路径无法作为缓存保留项。
+            }
+        }
+
+        string pickedRoot = Path.Combine(PrivateDataDir(), "picked");
+        try
+        {
+            if (Directory.Exists(pickedRoot))
+            {
+                foreach (string file in Directory.EnumerateFiles(pickedRoot))
+                {
+                    string fullPath;
+                    try
+                    {
+                        fullPath = Path.GetFullPath(file);
+                    }
+                    catch
+                    {
+                        continue;
+                    }
+
+                    if (!keep.Contains(fullPath))
+                    {
+                        TryDeleteFile(fullPath);
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // 缓存清理失败不应阻塞启动。
+        }
+
+        // 清理上一次运行留下的临时产物（Android 的临时目录位于应用私有 cache 内）。
+        try
+        {
+            string tempRoot = Path.GetTempPath();
+            foreach (string name in Directory.Exists(tempRoot)
+                         ? Directory.EnumerateDirectories(tempRoot)
+                         : Array.Empty<string>())
+            {
+                string directoryName = Path.GetFileName(name);
+                if (directoryName.Equals("PrismShare", StringComparison.OrdinalIgnoreCase) ||
+                    directoryName.Equals("prism-desktop-patch", StringComparison.OrdinalIgnoreCase) ||
+                    directoryName.Equals("prism-desktop-audio", StringComparison.OrdinalIgnoreCase) ||
+                    directoryName.StartsWith("PrismDesktopMerge-", StringComparison.OrdinalIgnoreCase))
+                {
+                    TryDeleteDirectory(name);
+                }
+            }
+        }
+        catch
+        {
+            // 临时目录枚举失败时同样忽略。
+        }
+    }
 
     private void ClearPreview()
     {
@@ -1366,12 +2637,14 @@ public partial class MainViewModel : ViewModelBase
         PreviewDetails = [];
         SelectedPathText = string.Empty;
         HasPreview = false;
+        ModelPreview = null;
         PreviewEmptyText = "此文件无预览";
     }
 
     private async Task RunBusyAsync(Func<Task> action)
     {
         IsBusy = true;
+        PrioritizeUserAction();
         try
         {
             await action();
@@ -1379,10 +2652,12 @@ public partial class MainViewModel : ViewModelBase
         catch (Exception ex)
         {
             StatusText = $"错误：{ex.Message}";
+            AddLog($"错误：{ex.Message}");
         }
         finally
         {
             IsBusy = false;
+            ResumeThumbnailsAfterUserAction();
         }
     }
 
@@ -1400,6 +2675,8 @@ public partial class MainViewModel : ViewModelBase
 
     private static string? NullIfWhiteSpace(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
+    private static string FormatSize(long bytes) => EntryItem.FormatSize(bytes);
+
     /// <summary>应用私有数据目录（Android = FilesDir/Prism，桌面 = %LOCALAPPDATA%/Prism）。</summary>
     private static string PrivateDataDir() =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Prism");
@@ -1412,6 +2689,20 @@ public partial class MainViewModel : ViewModelBase
         }
 
         return fileName;
+    }
+
+    private static void TryDeleteFile(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch
+        {
+        }
     }
 
     private static void TryDeleteDirectory(string path)

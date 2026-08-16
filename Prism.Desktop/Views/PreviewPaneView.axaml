@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Prism.Desktop.ViewModels"
              xmlns:models="using:Prism.Desktop.Models"
+             xmlns:views="using:Prism.Desktop.Views"
              x:Class="Prism.Desktop.Views.PreviewPaneView"
              x:DataType="vm:MainViewModel">
 
@@ -11,11 +12,41 @@
                    FontWeight="SemiBold"
                    TextTrimming="CharacterEllipsis" />
 
-        <Border Classes="card" Padding="14">
+        <Border Classes="card" Padding="14" IsVisible="{Binding HasImagePreview}">
             <Image Source="{Binding PreviewImage}"
                    Stretch="Uniform"
                    MaxHeight="420"
                    HorizontalAlignment="Center" />
+        </Border>
+
+        <!-- 文本类预览（蓝图伪代码等） -->
+        <Border Classes="card" Padding="14" IsVisible="{Binding HasTextPreview}">
+            <TextBlock Text="{Binding PreviewText}"
+                       FontFamily="Consolas, Courier New"
+                       FontSize="11"
+                       TextWrapping="Wrap"
+                       MaxHeight="320" />
+        </Border>
+
+        <!-- 3D 模型线框预览：拖动旋转，双击复位，滚轮缩放 -->
+        <Border Classes="card"
+                Padding="0"
+                Height="280"
+                ClipToBounds="True"
+                IsVisible="{Binding HasModelPreview}">
+            <Panel>
+                <views:ModelWireframeView Model="{Binding ModelPreview}" />
+                <Border Background="#33000000"
+                        CornerRadius="0,0,8,8"
+                        Padding="8,4"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Bottom"
+                        IsHitTestVisible="False">
+                    <TextBlock Text="拖动旋转 · 滚轮缩放 · 双击复位"
+                               FontSize="10"
+                               Foreground="White" />
+                </Border>
+            </Panel>
         </Border>
 
         <TextBlock Text="{Binding PreviewEmptyText}"
@@ -23,24 +54,46 @@
                    Opacity="0.55"
                    IsVisible="{Binding HasPreview, Converter={x:Static BoolConverters.Not}}" />
 
-        <!-- 音频播放条 -->
+        <!-- 内置音频播放器：播放/停止 + Android 进度条拖动定位 -->
         <Border Classes="card"
                 Padding="12,10"
                 IsVisible="{Binding HasAudioPreview}">
-            <DockPanel>
-                <TextBlock Text="🔊"
-                           FontSize="16"
-                           VerticalAlignment="Center"
-                           Margin="0,0,10,0" />
-                <Button DockPanel.Dock="Right"
-                        Content="{Binding AudioButtonText}"
-                        Command="{Binding ToggleAudioPlaybackCommand}"
-                        Classes="accent"
-                        MinWidth="70" />
-                <TextBlock Text="{Binding AudioStatus}"
-                           FontSize="12"
-                           VerticalAlignment="Center" />
-            </DockPanel>
+            <Grid RowDefinitions="Auto,Auto" RowSpacing="6">
+                <DockPanel Grid.Row="0">
+                    <TextBlock Text="🔊"
+                               FontSize="16"
+                               VerticalAlignment="Center"
+                               Margin="0,0,10,0" />
+                    <Button DockPanel.Dock="Right"
+                            Content="{Binding AudioButtonText}"
+                            Command="{Binding ToggleAudioPlaybackCommand}"
+                            Classes="accent"
+                            MinWidth="70" />
+                    <TextBlock Text="{Binding AudioStatus}"
+                               FontSize="12"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" />
+                </DockPanel>
+
+                <Grid Grid.Row="1"
+                      ColumnDefinitions="*,Auto"
+                      ColumnSpacing="10"
+                      IsVisible="{Binding IsAndroid}">
+                    <Slider Grid.Column="0"
+                            Minimum="0"
+                            Maximum="{Binding AudioDuration}"
+                            Value="{Binding AudioPosition, Mode=TwoWay}"
+                            IsEnabled="{Binding CanSeekAudio}"
+                            VerticalAlignment="Center"
+                            PointerPressed="OnAudioSliderPressed"
+                            PointerReleased="OnAudioSliderReleased" />
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding AudioTimeText}"
+                               FontSize="10"
+                               Opacity="0.55"
+                               VerticalAlignment="Center" />
+                </Grid>
+            </Grid>
         </Border>
 
         <ItemsControl ItemsSource="{Binding PreviewDetails}"
@@ -69,22 +122,42 @@
             </ItemsControl.ItemTemplate>
         </ItemsControl>
 
-        <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding HasPreview}">
-            <Button Content="导出原始"
-                    Command="{Binding ExportRawCommand}"
-                    Classes="ghost" />
-            <Button Content="导出预览"
-                    Command="{Binding ExportPreviewCommand}"
-                    Classes="ghost" />
+        <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8" IsVisible="{Binding HasPreview}">
             <Button Content="加入替换"
                     Command="{Binding AddSelectedToPatchCommand}"
                     Classes="accent" />
-        </StackPanel>
+            <Button Content="更多" Classes="ghost">
+                <Button.Flyout>
+                    <MenuFlyout>
+                        <MenuItem Header="导出原始" Command="{Binding ExportRawCommand}" />
+                        <MenuItem Header="导出预览" Command="{Binding ExportPreviewCommand}" />
+                        <MenuItem Header="分享原始"
+                                  Command="{Binding ShareRawCommand}"
+                                  IsVisible="{Binding IsAndroid}" />
+                        <MenuItem Header="分享预览"
+                                  Command="{Binding SharePreviewCommand}"
+                                  IsVisible="{Binding IsAndroid}" />
+                    </MenuFlyout>
+                </Button.Flyout>
+            </Button>
+        </WrapPanel>
 
-        <TextBlock Text="{Binding SelectedPathText}"
-                   FontSize="11"
-                   Opacity="0.5"
-                   TextWrapping="Wrap"
-                   IsVisible="{Binding HasPreview}" />
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" IsVisible="{Binding HasPreview}">
+            <TextBlock Grid.Column="0"
+                       Text="{Binding SelectedPathText}"
+                       FontSize="11"
+                       Opacity="0.5"
+                       VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis"
+                       Background="Transparent"
+                       InputElement.IsHoldingEnabled="True"
+                       Holding="OnSelectedPathHolding"
+                       ToolTip.Tip="长按复制路径" />
+            <TextBlock Grid.Column="1"
+                       Text="长按复制"
+                       FontSize="10"
+                       Opacity="0.35"
+                       VerticalAlignment="Center" />
+        </Grid>
     </StackPanel>
 </UserControl>

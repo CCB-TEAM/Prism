@@ -6,8 +6,8 @@
 
     <ScrollViewer>
         <StackPanel MaxWidth="520"
-                    HorizontalAlignment="Center"
-                    Margin="0,32"
+                    HorizontalAlignment="Stretch"
+                    Margin="16,20"
                     Spacing="24">
             <StackPanel Orientation="Horizontal" Spacing="12">
                 <Button Content="←"
@@ -21,70 +21,78 @@
 
             <Border Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
                     CornerRadius="12"
-                    Padding="24">
+                    Padding="18">
                 <StackPanel Spacing="16">
                     <StackPanel Spacing="6">
                         <TextBlock Text="主 Pak" FontSize="12" FontWeight="SemiBold" />
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBlock Text="{Binding PakPath}"
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <TextBlock Grid.Column="0"
+                                       Text="{Binding PakPath}"
                                        FontSize="12"
                                        Opacity="0.7"
                                        VerticalAlignment="Center"
-                                       MaxWidth="280"
-                                       TextTrimming="CharacterEllipsis" />
-                            <Button Content="选择主 Pak"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip.Tip="{Binding PakPath}" />
+                            <Button Grid.Column="1"
+                                    Content="选择主 Pak"
                                     Command="{Binding BrowsePakCommand}" />
-                        </StackPanel>
+                        </Grid>
                     </StackPanel>
 
                     <StackPanel Spacing="6">
                         <TextBlock Text="合并 Pak" FontSize="12" FontWeight="SemiBold" />
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBlock Text="{Binding MergePakPath}"
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <TextBlock Grid.Column="0"
+                                       Text="{Binding MergePakPath}"
                                        FontSize="12"
                                        Opacity="0.7"
                                        VerticalAlignment="Center"
-                                       MaxWidth="280"
-                                       TextTrimming="CharacterEllipsis" />
-                            <Button Content="选择合并 Pak"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip.Tip="{Binding MergePakPath}" />
+                            <Button Grid.Column="1"
+                                    Content="选择合并 Pak"
                                     Command="{Binding BrowseMergePakCommand}" />
-                        </StackPanel>
+                        </Grid>
                     </StackPanel>
 
                     <StackPanel Spacing="6">
                         <TextBlock Text="输出 Pak" FontSize="12" FontWeight="SemiBold" />
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBlock Text="{Binding MergeOutputPath}"
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <TextBlock Grid.Column="0"
+                                       Text="{Binding MergeOutputPath}"
                                        FontSize="12"
                                        Opacity="0.7"
                                        VerticalAlignment="Center"
-                                       MaxWidth="280"
-                                       TextTrimming="CharacterEllipsis" />
-                            <Button Content="选择输出位置"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip.Tip="{Binding MergeOutputPath}" />
+                            <Button Grid.Column="1"
+                                    Content="选择输出位置"
                                     Command="{Binding BrowseMergeOutputCommand}" />
-                        </StackPanel>
+                        </Grid>
                     </StackPanel>
 
                     <StackPanel Spacing="6">
                         <TextBlock Text="AES 密钥" FontSize="12" FontWeight="SemiBold" />
                         <TextBox Text="{Binding AesKey}"
-                                 PlaceholderText="如需解密请填写"
-                                 Width="280"
-                                 HorizontalAlignment="Left" />
+                                 PlaceholderText="如需解密请填写" />
                     </StackPanel>
 
                     <CheckBox Content="替换前询问"
                               IsChecked="{Binding AskBeforeReplace}" />
 
-                    <StackPanel Orientation="Horizontal" Spacing="12">
-                        <Button Content="执行合并"
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                        <Button Grid.Column="0"
+                                Content="执行合并"
                                 Command="{Binding MergePakCommand}"
-                                MinWidth="120" />
-                        <TextBlock Text="{Binding MergeStatus}"
+                                MinWidth="110" />
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding MergeStatus}"
                                    FontSize="11"
                                    Opacity="0.7"
-                                   VerticalAlignment="Center" />
-                    </StackPanel>
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip.Tip="{Binding MergeStatus}" />
+                    </Grid>
                 </StackPanel>
             </Border>
         </StackPanel>

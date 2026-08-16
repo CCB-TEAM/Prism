@@ -34,8 +34,8 @@ public sealed class UAssetCliRunner
             Path.Combine(baseDir, "UAssetCLI", "UAssetCLI.exe"),
             Path.Combine(baseDir, "UAssetCLI", "UAssetCLI.dll"),
             // 开发布局：prism/UAssetCLI/bin/{Debug,Release}/net10.0
-            Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "UAssetCLI", "bin", "Debug", "net10.0", "UAssetCLI.exe")),
-            Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "UAssetCLI", "bin", "Release", "net10.0", "UAssetCLI.exe")),
+            Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "UAssetCLI", "bin", "Debug", "net10.0", "UAssetCLI.exe")),
+            Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "UAssetCLI", "bin", "Release", "net10.0", "UAssetCLI.exe")),
         ];
 
         string? cli = cliCandidates.FirstOrDefault(File.Exists);
@@ -47,7 +47,7 @@ public sealed class UAssetCliRunner
         string[] encoderCandidates =
         [
             Path.Combine(baseDir, "tools"),
-            Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "tools")),
+            Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "UAssetTextureWeb", "tools")),
         ];
 
         string? Find(string fileName) => encoderCandidates.Select(p => Path.Combine(p, fileName)).FirstOrDefault(File.Exists);

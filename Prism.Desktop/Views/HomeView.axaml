@@ -4,79 +4,159 @@
              x:Class="Prism.Desktop.Views.HomeView"
              x:DataType="vm:MainViewModel">
 
-    <StackPanel HorizontalAlignment="Center"
-                VerticalAlignment="Center"
-                Spacing="52">
-        <StackPanel Spacing="8">
-            <TextBlock Text="Prism"
-                       FontSize="52"
-                       FontWeight="SemiBold"
-                       HorizontalAlignment="Center"
-                       Foreground="{DynamicResource PrimaryBrush}" />
-            <TextBlock Text="Pak 资产管理工具"
-                       FontSize="14"
+    <UserControl.Styles>
+        <!-- 三个入口（解包 / 合并 / 设置）统一尺寸，避免手机上设置按钮过小点不到 -->
+        <Style Selector="Button.home-entry">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.home-entry.wide">
+            <Setter Property="Padding" Value="18,22" />
+        </Style>
+        <Style Selector="Button.home-entry.narrow">
+            <Setter Property="Padding" Value="16,12" />
+            <Setter Property="MinHeight" Value="84" />
+        </Style>
+    </UserControl.Styles>
+
+    <ScrollViewer>
+        <StackPanel HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Margin="24,36"
+                    Spacing="36">
+            <StackPanel Spacing="8">
+                <TextBlock Text="Prism"
+                           FontSize="44"
+                           FontWeight="SemiBold"
+                           HorizontalAlignment="Center"
+                           Foreground="{DynamicResource PrimaryBrush}" />
+                <TextBlock Text="Pak 资产管理工具"
+                           FontSize="14"
+                           Opacity="0.6"
+                           HorizontalAlignment="Center" />
+            </StackPanel>
+
+            <!-- 宽屏：三个等宽卡片并排 -->
+            <Grid x:Name="WideCards"
+                  ColumnDefinitions="*,*,*"
+                  ColumnSpacing="14"
+                  MaxWidth="820"
+                  IsVisible="{Binding IsCompact, Converter={x:Static BoolConverters.Not}}">
+                <Button Grid.Column="0"
+                        Command="{Binding GoWorkspaceCommand}"
+                        Classes="card home-entry wide">
+                    <StackPanel Spacing="10" HorizontalAlignment="Center">
+                        <TextBlock Text="📦" FontSize="30" HorizontalAlignment="Center" />
+                        <TextBlock Text="解包 &amp; 模组"
+                                   FontSize="15"
+                                   FontWeight="SemiBold"
+                                   HorizontalAlignment="Center"
+                                   TextWrapping="Wrap" />
+                        <TextBlock Text="浏览 Pak 内容，导出资源，创建替换模组"
+                                   FontSize="11"
+                                   Opacity="0.6"
+                                   HorizontalAlignment="Center"
+                                   TextAlignment="Center"
+                                   TextWrapping="Wrap"
+                                   TextTrimming="CharacterEllipsis"
+                                   MaxLines="2" />
+                    </StackPanel>
+                </Button>
+                <Button Grid.Column="1"
+                        Command="{Binding GoMergeCommand}"
+                        Classes="card home-entry wide">
+                    <StackPanel Spacing="10" HorizontalAlignment="Center">
+                        <TextBlock Text="🔗" FontSize="30" HorizontalAlignment="Center" />
+                        <TextBlock Text="Pak 合并"
+                                   FontSize="15"
+                                   FontWeight="SemiBold"
+                                   HorizontalAlignment="Center"
+                                   TextWrapping="Wrap" />
+                        <TextBlock Text="合并多个 Pak 文件，管理依赖与冲突"
+                                   FontSize="11"
+                                   Opacity="0.6"
+                                   HorizontalAlignment="Center"
+                                   TextAlignment="Center"
+                                   TextWrapping="Wrap"
+                                   TextTrimming="CharacterEllipsis"
+                                   MaxLines="2" />
+                    </StackPanel>
+                </Button>
+                <Button Grid.Column="2"
+                        Command="{Binding GoSettingsCommand}"
+                        Classes="card home-entry wide">
+                    <StackPanel Spacing="10" HorizontalAlignment="Center">
+                        <TextBlock Text="⚙" FontSize="30" HorizontalAlignment="Center" />
+                        <TextBlock Text="设置"
+                                   FontSize="15"
+                                   FontWeight="SemiBold"
+                                   HorizontalAlignment="Center"
+                                   TextWrapping="Wrap" />
+                        <TextBlock Text="路径、缓存与工具选项"
+                                   FontSize="11"
+                                   Opacity="0.6"
+                                   HorizontalAlignment="Center"
+                                   TextAlignment="Center"
+                                   TextWrapping="Wrap"
+                                   TextTrimming="CharacterEllipsis"
+                                   MaxLines="2" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+
+            <!-- 窄屏：三个等宽等高入口上下排列 -->
+            <StackPanel x:Name="NarrowCards"
+                        MaxWidth="420"
+                        Spacing="12"
+                        IsVisible="{Binding IsCompact}">
+                <Button Command="{Binding GoWorkspaceCommand}" Classes="card home-entry narrow">
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                        <TextBlock Text="📦" FontSize="26" VerticalAlignment="Center" />
+                        <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                            <TextBlock Text="解包 &amp; 模组" FontSize="15" FontWeight="SemiBold" />
+                            <TextBlock Text="浏览 Pak 内容，导出资源，创建替换模组"
+                                       FontSize="11"
+                                       Opacity="0.6"
+                                       TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Grid>
+                </Button>
+                <Button Command="{Binding GoMergeCommand}" Classes="card home-entry narrow">
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                        <TextBlock Text="🔗" FontSize="26" VerticalAlignment="Center" />
+                        <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                            <TextBlock Text="Pak 合并" FontSize="15" FontWeight="SemiBold" />
+                            <TextBlock Text="合并多个 Pak 文件，管理依赖与冲突"
+                                       FontSize="11"
+                                       Opacity="0.6"
+                                       TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Grid>
+                </Button>
+                <Button Command="{Binding GoSettingsCommand}" Classes="card home-entry narrow">
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                        <TextBlock Text="⚙" FontSize="26" VerticalAlignment="Center" />
+                        <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                            <TextBlock Text="设置" FontSize="15" FontWeight="SemiBold" />
+                            <TextBlock Text="路径、缓存与工具选项"
+                                       FontSize="11"
+                                       Opacity="0.6"
+                                       TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Grid>
+                </Button>
+            </StackPanel>
+
+            <TextBlock Text="{Binding StatusText}"
+                       FontSize="12"
                        Opacity="0.6"
-                       HorizontalAlignment="Center" />
+                       HorizontalAlignment="Center"
+                       MaxWidth="520"
+                       TextAlignment="Center"
+                       TextTrimming="CharacterEllipsis"
+                       MaxLines="2"
+                       ToolTip.Tip="{Binding StatusText}" />
         </StackPanel>
-
-        <Grid ColumnDefinitions="*,*"
-              ColumnSpacing="24"
-              MaxWidth="520"
-              HorizontalAlignment="Center">
-            <Button Command="{Binding GoWorkspaceCommand}"
-                    Classes="card"
-                    Padding="28,32"
-                    HorizontalContentAlignment="Stretch">
-                <StackPanel Spacing="12" HorizontalAlignment="Center">
-                    <TextBlock Text="📦"
-                               FontSize="34"
-                               HorizontalAlignment="Center" />
-                    <TextBlock Text="解包 &amp; 模组"
-                               FontSize="16"
-                               FontWeight="SemiBold"
-                               HorizontalAlignment="Center" />
-                    <TextBlock Text="浏览 Pak 内容，导出资源，创建替换模组"
-                               FontSize="11"
-                               Opacity="0.6"
-                               HorizontalAlignment="Center"
-                               MaxWidth="190"
-                               TextAlignment="Center"
-                               TextWrapping="Wrap" />
-                </StackPanel>
-            </Button>
-            <Button Grid.Column="1"
-                    Command="{Binding GoMergeCommand}"
-                    Classes="card"
-                    Padding="28,32"
-                    HorizontalContentAlignment="Stretch">
-                <StackPanel Spacing="12" HorizontalAlignment="Center">
-                    <TextBlock Text="🔗"
-                               FontSize="34"
-                               HorizontalAlignment="Center" />
-                    <TextBlock Text="Pak 合并"
-                               FontSize="16"
-                               FontWeight="SemiBold"
-                               HorizontalAlignment="Center" />
-                    <TextBlock Text="合并多个 Pak 文件，管理依赖与冲突"
-                               FontSize="11"
-                               Opacity="0.6"
-                               HorizontalAlignment="Center"
-                               MaxWidth="190"
-                               TextAlignment="Center"
-                               TextWrapping="Wrap" />
-                </StackPanel>
-            </Button>
-        </Grid>
-
-        <TextBlock Text="{Binding StatusText}"
-                   FontSize="12"
-                   Opacity="0.6"
-                   HorizontalAlignment="Center" />
-
-        <!-- 设置入口 -->
-        <Button Content="⚙ 设置"
-                Command="{Binding GoSettingsCommand}"
-                Classes="ghost"
-                HorizontalAlignment="Center" />
-    </StackPanel>
+    </ScrollViewer>
 </UserControl>

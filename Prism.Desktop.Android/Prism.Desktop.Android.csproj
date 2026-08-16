@@ -14,6 +14,8 @@
     <PublishTrimmed Condition="'$(Configuration)' == 'Release'">false</PublishTrimmed>
     <RunAOTCompilation Condition="'$(Configuration)' == 'Release'">false</RunAOTCompilation>
     <AndroidEnableProguard Condition="'$(Configuration)' == 'Release'">false</AndroidEnableProguard>
+    <!-- Release 回退传统 JNI 注册：marshal methods 表会导致 n_onCreate UnsatisfiedLinkError -->
+    <AndroidEnableMarshalMethods Condition="'$(Configuration)' == 'Release'">false</AndroidEnableMarshalMethods>
   </PropertyGroup>
 
   <ItemGroup>

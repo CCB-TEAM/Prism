@@ -6,8 +6,8 @@
 
     <ScrollViewer>
         <StackPanel MaxWidth="620"
-                    HorizontalAlignment="Center"
-                    Margin="0,28"
+                    HorizontalAlignment="Stretch"
+                    Margin="16,20"
                     Spacing="20">
             <StackPanel Orientation="Horizontal" Spacing="12">
                 <Button Content="←"
@@ -25,7 +25,7 @@
             <Border Classes="card" Padding="22">
                 <StackPanel Spacing="14">
                     <TextBlock Text="通用" FontSize="12" FontWeight="SemiBold" Opacity="0.6" />
-                    <CheckBox Content="显示纹理缩略图（生成预览较耗性能，默认关闭）"
+                    <CheckBox Content="显示纹理缩略图（默认开启，可在低配设备上关闭）"
                               IsChecked="{Binding ShowThumbnails}" />
                     <CheckBox Content="替换时使用 Oodle 压缩"
                               IsChecked="{Binding UseOodleCompression}" />
@@ -40,31 +40,55 @@
                     <TextBlock Text="路径" FontSize="12" FontWeight="SemiBold" Opacity="0.6" />
                     <StackPanel Spacing="6">
                         <TextBlock Text="Pak 文件" FontSize="11" Opacity="0.55" />
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBox Text="{Binding PakPath}" Width="380" />
-                            <Button Content="浏览"
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <TextBox Grid.Column="0"
+                                     Text="{Binding PakPath}"
+                                     ToolTip.Tip="{Binding PakPath}" />
+                            <Button Grid.Column="1"
+                                    Content="浏览"
                                     Command="{Binding BrowsePakCommand}"
                                     Classes="ghost" />
-                        </StackPanel>
+                        </Grid>
                     </StackPanel>
                     <StackPanel Spacing="6">
                         <TextBlock Text="Usmap 映射" FontSize="11" Opacity="0.55" />
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBox Text="{Binding UsmapPath}" Width="380" />
-                            <Button Content="浏览"
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <TextBox Grid.Column="0"
+                                     Text="{Binding UsmapPath}"
+                                     ToolTip.Tip="{Binding UsmapPath}" />
+                            <Button Grid.Column="1"
+                                    Content="浏览"
                                     Command="{Binding BrowseUsmapCommand}"
                                     Classes="ghost" />
-                        </StackPanel>
+                        </Grid>
                     </StackPanel>
                     <StackPanel Spacing="6">
                         <TextBlock Text="导出目录" FontSize="11" Opacity="0.55" />
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBox Text="{Binding ExportDirectory}" Width="380" />
-                            <Button Content="浏览"
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <TextBox Grid.Column="0"
+                                     Text="{Binding ExportDirectory}"
+                                     ToolTip.Tip="{Binding ExportDirectory}" />
+                            <Button Grid.Column="1"
+                                    Content="浏览"
                                     Command="{Binding BrowseExportDirCommand}"
                                     Classes="ghost" />
-                        </StackPanel>
+                        </Grid>
+                        <TextBlock Text="Android 使用系统目录授权保存，不会申请“所有文件”权限。"
+                                   FontSize="10"
+                                   Opacity="0.5"
+                                   IsVisible="{Binding IsAndroid}" />
                     </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- 缓存（仅 Android 显示说明，桌面直接使用原路径） -->
+            <Border Classes="card" Padding="22" IsVisible="{Binding IsAndroid}">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="缓存" FontSize="12" FontWeight="SemiBold" Opacity="0.6" />
+                    <TextBlock Text="通过系统文件选择器选择的 Pak / Usmap / 合并 Pak 会复制到应用私有缓存。保持不变时下次启动继续使用；更换为新文件后，旧缓存会立即删除，未引用的临时缓存也会在启动时自动清理。"
+                               FontSize="10"
+                               Opacity="0.5"
+                               TextWrapping="Wrap" />
                 </StackPanel>
             </Border>
 
@@ -74,21 +98,27 @@
                     <TextBlock Text="合并" FontSize="12" FontWeight="SemiBold" Opacity="0.6" />
                     <StackPanel Spacing="6">
                         <TextBlock Text="合并 Pak" FontSize="11" Opacity="0.55" />
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBox Text="{Binding MergePakPath}" Width="380" />
-                            <Button Content="浏览"
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <TextBox Grid.Column="0"
+                                     Text="{Binding MergePakPath}"
+                                     ToolTip.Tip="{Binding MergePakPath}" />
+                            <Button Grid.Column="1"
+                                    Content="浏览"
                                     Command="{Binding BrowseMergePakCommand}"
                                     Classes="ghost" />
-                        </StackPanel>
+                        </Grid>
                     </StackPanel>
                     <StackPanel Spacing="6">
                         <TextBlock Text="合并输出" FontSize="11" Opacity="0.55" />
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBox Text="{Binding MergeOutputPath}" Width="380" />
-                            <Button Content="浏览"
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <TextBox Grid.Column="0"
+                                     Text="{Binding MergeOutputPath}"
+                                     ToolTip.Tip="{Binding MergeOutputPath}" />
+                            <Button Grid.Column="1"
+                                    Content="浏览"
                                     Command="{Binding BrowseMergeOutputCommand}"
                                     Classes="ghost" />
-                        </StackPanel>
+                        </Grid>
                     </StackPanel>
                 </StackPanel>
             </Border>
@@ -98,9 +128,7 @@
                 <StackPanel Spacing="8">
                     <TextBlock Text="AES 密钥" FontSize="12" FontWeight="SemiBold" Opacity="0.6" />
                     <TextBox Text="{Binding AesKey}"
-                             PlaceholderText="如需解密请填写"
-                             Width="380"
-                             HorizontalAlignment="Left" />
+                             PlaceholderText="如需解密请填写" />
                     <TextBlock Text="注意：AES 密钥会明文保存在本地配置文件（Prism.Desktop.settings.json）中。"
                                FontSize="10"
                                Opacity="0.5"
@@ -123,6 +151,30 @@
                         <TextBlock Text="临时目录" FontSize="11" Opacity="0.55" VerticalAlignment="Center" />
                         <TextBlock Text="{Binding TempDirectory}" FontSize="12" TextWrapping="Wrap" />
                     </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- 日志 -->
+            <Border Classes="card" Padding="22">
+                <StackPanel Spacing="10">
+                    <DockPanel>
+                        <TextBlock Text="日志" FontSize="12" FontWeight="SemiBold" Opacity="0.6" VerticalAlignment="Center" />
+                        <Button DockPanel.Dock="Right"
+                                Content="导出日志"
+                                Command="{Binding ExportLogCommand}"
+                                Classes="ghost" />
+                    </DockPanel>
+                    <Border Background="{DynamicResource SurfaceBrush}"
+                            CornerRadius="8"
+                            Padding="10"
+                            MaxHeight="260">
+                        <ScrollViewer>
+                            <TextBlock Text="{Binding LogText}"
+                                       FontFamily="Consolas, Courier New"
+                                       FontSize="11"
+                                       TextWrapping="Wrap" />
+                        </ScrollViewer>
+                    </Border>
                 </StackPanel>
             </Border>
         </StackPanel>
