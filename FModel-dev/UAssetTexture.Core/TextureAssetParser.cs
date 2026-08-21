@@ -7,7 +7,8 @@ namespace UAssetTexture.Core;
 
 public static class TextureAssetParser
 {
-    private const int MaxTextureDimension = 32768;
+    public const int MaxTextureDimension = 32768;
+    public const long MaxTexturePixels = 268_435_456;
     private const uint BulkDataPayloadAtEndOfFile = 1u << 0;
     private const uint BulkDataForceInlinePayload = 1u << 6;
     private const uint BulkDataPayloadInSeparateFile = 1u << 8;
@@ -179,7 +180,8 @@ public static class TextureAssetParser
             var width = BitConverter.ToInt32(exportData, offset);
             var height = BitConverter.ToInt32(exportData, offset + 4);
             var depth = BitConverter.ToInt32(exportData, offset + 8);
-            if (depth != 1 || !IsSaneDimension(width) || !IsSaneDimension(height))
+
+            if (depth != 1 || !IsSaneTextureSize(width, height))
                 continue;
 
             if (seen.Add((width, height)))
@@ -210,6 +212,13 @@ public static class TextureAssetParser
     private static bool IsSaneDimension(int value)
     {
         return value > 0 && value <= MaxTextureDimension;
+    }
+
+    private static bool IsSaneTextureSize(int width, int height)
+    {
+        return IsSaneDimension(width) &&
+               IsSaneDimension(height) &&
+               (long)width * height <= MaxTexturePixels;
     }
 
     private static IEnumerable<TextureMip> BuildMipChain(int width, int height, TextureFormatInfo format)

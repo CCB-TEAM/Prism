@@ -15,4 +15,15 @@
   <ItemGroup>
     <ProjectReference Include="..\Prism.Desktop\Prism.Desktop.csproj" />
   </ItemGroup>
+
+  <!-- 复制 UAssetCLI AOT 发布输出 -->
+  <Target Name="CopyUAssetCli" AfterTargets="Publish">
+    <ItemGroup>
+      <_CliFiles Include="..\..\UAssetCLI\bin\Release\net10.0\win-x64\publish\**\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_CliFiles)"
+          DestinationFiles="@(_CliFiles->'$(PublishDir)UAssetCLI\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
 </Project>

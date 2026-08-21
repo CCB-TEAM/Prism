@@ -9,4 +9,8 @@
     <ProjectReference Include="..\UAssetAPI-master\UAssetAPI\UAssetAPI.csproj" />
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
   </ItemGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <TrimMode>partial</TrimMode>
+  </PropertyGroup>
 </Project>

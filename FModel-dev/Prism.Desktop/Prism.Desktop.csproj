@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
@@ -14,15 +14,7 @@
     <ProjectReference Include="..\UAssetTexture.Core\UAssetTexture.Core.csproj" />
   </ItemGroup>
 
-  <!-- 复制 UAssetCLI 输出与编码器到输出目录（运行与发布自包含） -->
-  <Target Name="CopyUAssetCliOutput" AfterTargets="Build">
-    <ItemGroup>
-      <UAssetCliOutput Include="..\..\UAssetCLI\bin\$(Configuration)\net10.0\**\*.*" />
-    </ItemGroup>
-    <Copy SourceFiles="@(UAssetCliOutput)"
-          DestinationFiles="@(UAssetCliOutput->'$(OutDir)UAssetCLI\%(RecursiveDir)%(Filename)%(Extension)')"
-          SkipUnchangedFiles="true" />
-  </Target>
+  <!-- 复制编码器工具 -->
   <Target Name="CopyEncoderTools" AfterTargets="Build">
     <ItemGroup>
       <EncoderTools Include="..\..\UAssetTextureWeb\tools\*.exe" />
@@ -41,5 +33,6 @@
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
     </PackageReference>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
   </ItemGroup>
 </Project>

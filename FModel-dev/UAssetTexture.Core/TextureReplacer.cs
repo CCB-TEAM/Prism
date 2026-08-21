@@ -1,7 +1,40 @@
 namespace UAssetTexture.Core;
 
-internal static class TextureReplacer
+public static class TextureReplacer
 {
+    public static void ExtractMipPayloads(TextureAssetInfo info, string outputDirectory)
+    {
+        string fullOutputDirectory = Path.GetFullPath(outputDirectory);
+        Directory.CreateDirectory(fullOutputDirectory);
+
+        int ubulkOffset = 0;
+        for (int i = 0; i < info.ExternalMipCount; i++)
+        {
+            TextureMip mip = info.Mips[i];
+            byte[] payload = new byte[mip.ByteLength];
+            Buffer.BlockCopy(info.UbulkData, ubulkOffset, payload, 0, payload.Length);
+            File.WriteAllBytes(Path.Combine(fullOutputDirectory, $"mip{i}.bin"), payload);
+            ubulkOffset += payload.Length;
+        }
+
+        if (info.InlineMips.Count > 0)
+        {
+            int firstStart = info.InlineMarkerOffsets[0] - info.InlineMips[0].ByteLength;
+            byte[] firstPayload = new byte[info.InlineMips[0].ByteLength];
+            Buffer.BlockCopy(info.ExportData, firstStart, firstPayload, 0, firstPayload.Length);
+            File.WriteAllBytes(Path.Combine(fullOutputDirectory, $"mip{info.InlineMips[0].Index}.bin"), firstPayload);
+
+            for (int i = 1; i < info.InlineMips.Count; i++)
+            {
+                TextureMip mip = info.InlineMips[i];
+                int start = info.InlineMarkerOffsets[i - 1] + 16;
+                byte[] payload = new byte[mip.ByteLength];
+                Buffer.BlockCopy(info.ExportData, start, payload, 0, payload.Length);
+                File.WriteAllBytes(Path.Combine(fullOutputDirectory, $"mip{mip.Index}.bin"), payload);
+            }
+        }
+    }
+
     public static void WriteReplacement(TextureAssetInfo info, byte[][] mipPayloads, string outputAssetPath)
     {
         if (mipPayloads.Length != info.Mips.Count)

@@ -3,7 +3,7 @@ using SixLabors.ImageSharp.PixelFormats;
 
 namespace UAssetTexture.Core;
 
-internal static class Bc1Encoder
+public static class Bc1Encoder
 {
     public static byte[] Encode(Image<Rgba32> image)
     {

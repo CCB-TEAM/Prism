@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.Intrinsics.X86;
 
 namespace Prism.Desktop.Services;
 
@@ -33,9 +34,13 @@ public sealed class UAssetCliRunner
         [
             Path.Combine(baseDir, "UAssetCLI", "UAssetCLI.exe"),
             Path.Combine(baseDir, "UAssetCLI", "UAssetCLI.dll"),
-            // 开发布局：prism/UAssetCLI/bin/{Debug,Release}/net10.0
+            Path.Combine(baseDir, "UAssetCLI", "win-x64", "UAssetCLI.exe"),
+            Path.Combine(baseDir, "UAssetCLI", "win-x64", "UAssetCLI.dll"),
+            // 开发布局：prism/UAssetCLI/bin/{Debug,Release}/net10.0[/win-x64]
             Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "UAssetCLI", "bin", "Debug", "net10.0", "UAssetCLI.exe")),
+            Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "UAssetCLI", "bin", "Debug", "net10.0", "win-x64", "UAssetCLI.exe")),
             Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "UAssetCLI", "bin", "Release", "net10.0", "UAssetCLI.exe")),
+            Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "UAssetCLI", "bin", "Release", "net10.0", "win-x64", "UAssetCLI.exe")),
         ];
 
         string? cli = cliCandidates.FirstOrDefault(File.Exists);
@@ -52,9 +57,26 @@ public sealed class UAssetCliRunner
 
         string? Find(string fileName) => encoderCandidates.Select(p => Path.Combine(p, fileName)).FirstOrDefault(File.Exists);
 
-        string? astcenc = Find("astcenc-avx2.exe")
-                       ?? Find("astcenc-sse4.1.exe")
-                       ?? Find("astcenc-sse2.exe");
+        string? astcenc;
+        if (Avx2.IsSupported)
+        {
+            astcenc = Find("astcenc-avx2.exe")
+                   ?? Find("astcenc-sse4.1.exe")
+                   ?? Find("astcenc-sse2.exe");
+        }
+        else if (Sse41.IsSupported)
+        {
+            astcenc = Find("astcenc-sse4.1.exe")
+                   ?? Find("astcenc-sse2.exe")
+                   ?? Find("astcenc-avx2.exe");
+        }
+        else
+        {
+            astcenc = Find("astcenc-sse2.exe")
+                   ?? Find("astcenc-sse4.1.exe")
+                   ?? Find("astcenc-avx2.exe");
+        }
+
         string? texconv = Find("texconv.exe");
 
         return new UAssetCliRunner(cli, astcenc, texconv);

@@ -20,6 +20,8 @@ public sealed record TextureFormatInfo(string Name, int BlockWidth, int BlockHei
 
     public bool RequiresNativeBlockEncoder => IsAstc || IsDxt5 || IsBc7;
 
+    public bool RequiresTexconv => IsDxt5 || IsBc7;
+
     public string AstcBlockSize
     {
         get
