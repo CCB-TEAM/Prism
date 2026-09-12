@@ -90,7 +90,7 @@ public sealed class PakArchiveSession : IDisposable
 
         stepClock.Restart();
         if (!string.IsNullOrWhiteSpace(options.UsmapPath))
-            provider.MappingsContainer = new FileUsmapTypeMappingsProvider(options.UsmapPath);
+            provider.MappingsContainer = MappingsLoader.Create(options.UsmapPath, comparer);
         AddTiming(timings, "LoadUsmap", stepClock);
 
         stepClock.Restart();
@@ -120,10 +120,13 @@ public sealed class PakArchiveSession : IDisposable
             timings);
     }
 
+    /// <summary>
+    /// 热加载映射文件（.usmap / .jmap 按扩展名自动识别）。
+    /// </summary>
     public Task LoadUsmapAsync(string usmapPath, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        Provider.MappingsContainer = new FileUsmapTypeMappingsProvider(usmapPath);
+        Provider.MappingsContainer = MappingsLoader.Create(usmapPath);
         return Task.CompletedTask;
     }
 
@@ -307,6 +310,56 @@ public sealed class PakArchiveSession : IDisposable
         return copied;
     }
 
+    /// <summary>
+    /// 只把<b>指定资产</b>的三件套（<c>.uasset/.uexp/.ubulk</c>）解到磁盘，返回每个
+    /// Pak 内路径对应的磁盘路径。
+    ///
+    /// 与 <see cref="CopyAllRawFilesAsync"/> 的区别：后者会把整个 Pak（可能数 GB、
+    /// 数万文件）全量解出来，而本方法只取需要的几个文件 —— 转换时我们要的只是
+    /// 主 Pak 里那个作为"模板"的同名资产。
+    ///
+    /// 缺少的兄弟文件（例如 mip 全部内联时没有 .ubulk）会被跳过，不报错。
+    /// </summary>
+    public async Task<IReadOnlyDictionary<string, string>> ExtractAssetsAsync(
+        IEnumerable<string> assetPaths,
+        string outputDirectory,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        Directory.CreateDirectory(outputDirectory);
+
+        var provider = Provider;
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var assetPath in assetPaths)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (string.IsNullOrWhiteSpace(assetPath))
+                continue;
+
+            var normalized = assetPath.Replace('\\', '/').TrimStart('/');
+            var stem = normalized.SubstringBeforeLast('.');
+            var hasExtension = stem.Length != normalized.Length;
+
+            // 依次尝试资产本体与它的两个兄弟文件。
+            foreach (var candidate in hasExtension
+                         ? new[] { normalized, stem + ".uexp", stem + ".ubulk" }
+                         : new[] { normalized })
+            {
+                if (!provider.TryGetGameFile(candidate, out var file))
+                    continue;
+
+                var outputPath = BuildOutputPath(outputDirectory, file.Path);
+                Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+                var data = await file.ReadAsync().ConfigureAwait(false);
+                await File.WriteAllBytesAsync(outputPath, data, cancellationToken).ConfigureAwait(false);
+                result[file.Path.TrimStart('/')] = outputPath;
+            }
+        }
+
+        return result;
+    }
+
     public Task<IReadOnlySet<string>> ListRawFilePathsAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -338,7 +391,7 @@ public sealed class PakArchiveSession : IDisposable
             }
             catch (Exception ex) when (IsMissingMappingsError(ex))
             {
-                throw new InvalidOperationException("This asset uses unversioned properties. Import the matching .usmap mapping file, then preview it again.", ex);
+                throw new InvalidOperationException("This asset uses unversioned properties. Import the matching mapping file (.usmap or .jmap), then preview it again.", ex);
             }
 
             var deferredBlueprints = new List<UObject>();
@@ -355,7 +408,7 @@ public sealed class PakArchiveSession : IDisposable
                 }
                 catch (Exception ex) when (IsMissingMappingsError(ex))
                 {
-                    throw new InvalidOperationException("This asset uses unversioned properties. Import the matching .usmap mapping file, then preview it again.", ex);
+                    throw new InvalidOperationException("This asset uses unversioned properties. Import the matching mapping file (.usmap or .jmap), then preview it again.", ex);
                 }
                 catch (Exception ex)
                 {
@@ -458,7 +511,7 @@ public sealed class PakArchiveSession : IDisposable
             }
             catch (Exception ex) when (IsMissingMappingsError(ex))
             {
-                throw new InvalidOperationException("This audio asset uses unversioned properties. Import the matching .usmap mapping file, then try again.", ex);
+                throw new InvalidOperationException("This audio asset uses unversioned properties. Import the matching mapping file (.usmap or .jmap), then try again.", ex);
             }
 
             foreach (var export in package.ExportsLazy)
@@ -471,7 +524,7 @@ public sealed class PakArchiveSession : IDisposable
                 }
                 catch (Exception ex) when (IsMissingMappingsError(ex))
                 {
-                    throw new InvalidOperationException("This audio asset uses unversioned properties. Import the matching .usmap mapping file, then try again.", ex);
+                    throw new InvalidOperationException("This audio asset uses unversioned properties. Import the matching mapping file (.usmap or .jmap), then try again.", ex);
                 }
                 catch
                 {
@@ -2252,7 +2305,6 @@ public sealed class PakArchiveSession : IDisposable
             var provider = Provider;
             var fixedPath = provider.FixPath(assetPath);
             LogDecode($"Preview requested: asset={assetPath}, fixed={fixedPath}, maxMipSize={maxMipSize}, platform={provider.Versions.Platform}");
-
             try
             {
                 if (!TryResolveGameFile(provider, fixedPath, out var gameFile))
@@ -2297,7 +2349,7 @@ public sealed class PakArchiveSession : IDisposable
                     catch (Exception ex) when (IsMissingMappingsError(ex))
                     {
                         LogDecode($"Export #{exportIndex} failed due to missing mappings: {ex.Message}");
-                        throw new InvalidOperationException("This asset uses unversioned properties. Import the matching .usmap mapping file, then open or preview it again.", ex);
+                        throw new InvalidOperationException("This asset uses unversioned properties. Import the matching mapping file (.usmap or .jmap), then open or preview it again.", ex);
                     }
                     catch (Exception ex)
                     {
@@ -2344,8 +2396,84 @@ public sealed class PakArchiveSession : IDisposable
             catch (Exception ex) when (IsMissingMappingsError(ex))
             {
                 LogDecode($"Preview failed due to missing mappings: {ex.Message}");
-                throw new InvalidOperationException("This asset uses unversioned properties. Import the matching .usmap mapping file, then open or preview it again.", ex);
+                throw new InvalidOperationException("This asset uses unversioned properties. Import the matching mapping file (.usmap or .jmap), then open or preview it again.", ex);
             }
+        }, cancellationToken);
+    }
+
+    /// <summary>
+    /// 解码纹理的<b>最大 mip</b> 为 PNG，供 Pak 转换复用其像素数据。
+    ///
+    /// 与 <see cref="TryReadTexturePreviewAsync"/> 的区别：预览会限制到
+    /// <c>maxMipSize</c>（默认 1024）以省内存，而转换必须拿原始分辨率，
+    /// 否则重新编码后纹理会被缩小。用 <c>int.MaxValue</c> 取第一个 mip。
+    /// </summary>
+    public Task<TexturePreviewDto?> TryReadFullTextureAsync(string assetPath, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.Run(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var provider = Provider;
+            var fixedPath = provider.FixPath(assetPath);
+
+            if (!TryResolveGameFile(provider, fixedPath, out var gameFile))
+            {
+                LogDecode($"Full texture read: file not found for {fixedPath}");
+                return null;
+            }
+
+            IPackage package;
+            try
+            {
+                package = provider.LoadPackage(gameFile);
+            }
+            catch (Exception ex)
+            {
+                LogDecode($"Full texture read: package load failed for {fixedPath}: {ex.GetType().Name}: {ex.Message}");
+                throw;
+            }
+
+            foreach (var export in package.ExportsLazy)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                UTexture? texture;
+                try
+                {
+                    texture = export.Value as UTexture;
+                }
+                catch (Exception ex) when (IsMissingMappingsError(ex))
+                {
+                    throw new InvalidOperationException("This asset uses unversioned properties. Import the matching mapping file (.usmap or .jmap), then try again.", ex);
+                }
+                catch (Exception ex)
+                {
+                    LogDecode($"Full texture read: export skipped in {fixedPath}: {ex.GetType().Name}: {ex.Message}");
+                    continue;
+                }
+
+                if (texture is null)
+                    continue;
+
+                // int.MaxValue => GetMipIndexByMaxSize 命中 mip 0（最大尺寸）。
+                if (!TryEncodeTexturePreview(texture, int.MaxValue, provider.Versions.Platform, out var preview, out var error))
+                {
+                    LogDecode($"Full texture read: decode failed for {fixedPath}: {error?.Message ?? "no bitmap"}");
+                    return null;
+                }
+
+                return new TexturePreviewDto(
+                    fixedPath,
+                    preview.Name,
+                    preview.Width,
+                    preview.Height,
+                    preview.PngData,
+                    texture.Format.ToString());
+            }
+
+            LogDecode($"Full texture read: no UTexture export in {fixedPath}");
+            return null;
         }, cancellationToken);
     }
 
@@ -2753,6 +2881,117 @@ public sealed class PakArchiveSession : IDisposable
         return normalized.EndsWith('/') ? normalized : normalized + "/";
     }
 
+    /// <summary>
+    /// 把用户输入解析为 Pak 内的一个位置（供"搜索框直接输入路径"使用）。
+    ///
+    /// 输入既可以是目录也可以是文件：
+    /// - 命中目录 → <see cref="BrowsePathResolution.Folder"/> 为该目录，调用方直接浏览它；
+    /// - 命中文件 → 返回其所在目录与文件名，调用方可定位到该条目；
+    /// - 都不命中 → 返回 null，调用方应回退为普通搜索。
+    ///
+    /// 只做"存在性"判定，不做模糊匹配：这样输入搜索词时不会误跳转到某个目录。
+    /// </summary>
+    public Task<BrowsePathResolution?> TryResolveBrowsePathAsync(string? input, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (string.IsNullOrWhiteSpace(input))
+            return Task.FromResult<BrowsePathResolution?>(null);
+
+        var raw = input.Trim().Replace('\\', '/');
+        // 支持粘贴带引号的路径。
+        raw = raw.Trim('"', '\'');
+        var folderKey = NormalizeFolder(raw);
+        var provider = Provider;
+
+        // 1) 目录命中
+        if (folderKey.Length == 0)
+        {
+            // 单独输入 "/" 视为回到根目录。
+            return Task.FromResult<BrowsePathResolution?>(
+                raw is "/" or "\\"
+                    ? new BrowsePathResolution(string.Empty, null, true)
+                    : null);
+        }
+
+        if (FolderExists(folderKey))
+            return Task.FromResult<BrowsePathResolution?>(new BrowsePathResolution(folderKey, null, true));
+
+        // 2) 文件命中（含扩展名或完整路径的 Pak 内文件）
+        var fileKey = raw.TrimEnd('/');
+        if (fileKey.Length > 0 && provider.TryGetGameFile(provider.FixPath(fileKey), out var gameFile))
+        {
+            var parent = GetParentFolder(gameFile.Path);
+            var fileName = gameFile.Path[(gameFile.Path.LastIndexOf('/') + 1)..];
+            return Task.FromResult<BrowsePathResolution?>(
+                new BrowsePathResolution(parent, fileName, false));
+        }
+
+        // 3) 输入是"已有目录 + 尾段"时，若该已有目录存在也认作目录。
+        //
+        // 只在最后一段不含 '.' 时启用：形如 "A/B/SomeFolder"（可能是用户漏了扩展名或
+        // 想进父目录）会命中；而 "Kards/NoSuchFolder" 这种用户其实想搜索的输入，
+        // 只要它不含点也仍会命中父目录 —— 因此额外要求最后一段是"路径样"的
+        // （全为大写/数字/下划线，或长度很短的中文目录名），避免把搜索词当路径。
+        var trimmed = fileKey.TrimEnd('/');
+        var lastSlash = trimmed.LastIndexOf('/');
+        if (lastSlash > 0)
+        {
+            string candidateFolder = trimmed[..(lastSlash + 1)];
+            string lastSegment = trimmed[(lastSlash + 1)..];
+            if (LooksLikeFolderName(lastSegment) && FolderExists(candidateFolder))
+            {
+                return Task.FromResult<BrowsePathResolution?>(new BrowsePathResolution(candidateFolder, null, true));
+            }
+        }
+
+        return Task.FromResult<BrowsePathResolution?>(null);
+    }
+
+    /// <summary>
+    /// 尾段是否像目录名：不含扩展名分隔点，且不是纯搜索关键词的形态。
+    ///
+    /// 判据是"看起来像 UE 资源目录"——UE 目录名惯例是 PascalCase 或含下划线，
+    /// 而用户搜的关键词（如 "cromwell"、"button"）多为全小写单词。
+    /// 这条启发式只在"父目录存在"时才会被用到，所以保守一点没问题：
+    /// 判错最多是回退成搜索，不会跳错目录。
+    /// </summary>
+    private static bool LooksLikeFolderName(string segment)
+    {
+        if (segment.Length == 0 || segment.Contains('.'))
+            return false;
+
+        // PascalCase：含大写字母（UE 目录几乎都是）
+        foreach (var ch in segment)
+        {
+            if (char.IsUpper(ch))
+                return true;
+        }
+
+        // 含下划线/短横线也视为结构化命名
+        return segment.Contains('_') || segment.Contains('-');
+    }
+
+    /// <summary>目录是否存在于当前 Pak（目录索引或条目索引命中均可）。</summary>
+    private bool FolderExists(string folderKey)
+    {
+        var provider = Provider;
+        lock (_cacheLock)
+        {
+            if (_directoryIndex?.ContainsKey(folderKey) == true)
+                return true;
+        }
+
+        // 尚未构建目录索引时，退化为扫描文件路径前缀。
+        var prefix = folderKey;
+        foreach (var file in provider.Files.Values)
+        {
+            if (file.Path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
     private static string NormalizeAesKey(string key)
     {
         var trimmed = key.Trim();
@@ -2828,7 +3067,7 @@ public sealed class PakArchiveSession : IDisposable
         }
         catch (Exception ex) when (IsMissingMappingsError(ex))
         {
-            throw new InvalidOperationException("This texture requires the matching .usmap mapping file.", ex);
+            throw new InvalidOperationException("This texture requires the matching mapping file (.usmap or .jmap).", ex);
         }
         catch (Exception ex)
         {

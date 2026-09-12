@@ -1,17 +1,10 @@
-using System.ComponentModel;
-using Avalonia;
-using Avalonia.Animation;
-using Avalonia.Animation.Easings;
 using Avalonia.Controls;
-using Avalonia.Media;
 using Prism.Desktop.ViewModels;
 
 namespace Prism.Desktop.Views;
 
 public partial class MainView : UserControl
 {
-    private MainViewModel? _vm;
-
     public MainView()
     {
         InitializeComponent();
@@ -34,61 +27,10 @@ public partial class MainView : UserControl
                 vm.WindowWidth = e.NewSize.Width;
             }
         };
-        DataContextChanged += (_, _) =>
-        {
-            if (_vm is not null)
-            {
-                _vm.PropertyChanged -= OnVmPropertyChanged;
-            }
-
-            _vm = DataContext as MainViewModel;
-            if (_vm is not null)
-            {
-                _vm.PropertyChanged += OnVmPropertyChanged;
-                AnimateViewIn(HomeViewControl);
-            }
-        };
     }
 
-    private void OnVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (_vm is null || e.PropertyName != nameof(MainViewModel.CurrentView))
-        {
-            return;
-        }
-
-        // 参照 Web 版 .view.slide-in：60px 位移 + 透明度，0.28s
-        AnimateViewIn(_vm.CurrentView switch
-        {
-            "Workspace" => WorkspaceViewControl,
-            "Merge" => MergeViewControl,
-            "Settings" => SettingsViewControl,
-            _ => HomeViewControl,
-        });
-    }
-
-    private void AnimateViewIn(Control view)
-    {
-        var transition = new Transitions
-        {
-            new DoubleTransition
-            {
-                Property = Visual.OpacityProperty,
-                Duration = TimeSpan.FromMilliseconds(280),
-                Easing = new CubicEaseOut(),
-            },
-            new DoubleTransition
-            {
-                Property = TranslateTransform.XProperty,
-                Duration = TimeSpan.FromMilliseconds(280),
-                Easing = new CubicEaseOut(),
-            },
-        };
-
-        view.RenderTransform = new TranslateTransform(60, 0);
-        view.Opacity = 0;
-        view.Transitions = transition;
-        view.Opacity = 1;
-        ((TranslateTransform)view.RenderTransform).X = 0;
-    }
+    // 页面切换动画由 XAML 里的 ViewTransitionHost 统一处理：
+    // 它按 IsVisible 变化驱动，覆盖全部页面（含后加的 Pak 转换页），
+    // 并支持通过 IsAnimationsEnabled 关闭（低配设备）。
+    // 这里不再用代码后置的 Transitions —— 两套机制同时作用于同一元素会互相覆盖。
 }

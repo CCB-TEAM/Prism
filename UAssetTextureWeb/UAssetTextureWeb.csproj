@@ -13,7 +13,8 @@
 
   <Target Name="CopyUAssetCliOutput" AfterTargets="Build">
     <ItemGroup>
-      <UAssetCliOutput Include="..\UAssetCLI\bin\$(Configuration)\net10.0\**\*.*" />
+      <UAssetCliOutput Include="..\UAssetCLI\bin\$(Configuration)\net10.0\*.*" />
+        <UAssetCliOutput Include="..\UAssetCLI\bin\$(Configuration)\net10.0\win-x64\**\*.*" />
     </ItemGroup>
     <Copy SourceFiles="@(UAssetCliOutput)"
           DestinationFiles="@(UAssetCliOutput->'$(OutDir)UAssetCLI\%(RecursiveDir)%(Filename)%(Extension)')"

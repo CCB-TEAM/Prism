@@ -17,9 +17,9 @@ function setMessage(element, text, kind) {
 
 // 从路径中提取 astcenc 变体名，例如 "astcenc-avx2" -> "avx2"
 function extractVariant(path) {
-    if (!path) return "avx2";
+    if (!path) return "auto";
     const match = path.match(/astcenc-(avx2|sse4\.1|sse2)/i);
-    return match ? match[1].toLowerCase() : "avx2";
+    return match ? match[1].toLowerCase() : "auto";
 }
 
 async function loadSettings() {

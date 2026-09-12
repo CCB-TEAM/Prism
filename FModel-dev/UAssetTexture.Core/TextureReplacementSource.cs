@@ -16,7 +16,33 @@ internal static class TextureReplacementSource
         CancellationToken cancellationToken)
     {
         using var source = await LoadSourceImageAsync(imagePath, width, height, cancellationToken).ConfigureAwait(false);
+        return EncodeMips(source, format, mips, options, cancellationToken);
+    }
 
+    /// <summary>
+    /// 从内存中的图片字节（PNG/JPG/...）编码各 mip。
+    /// 供 Pak 转换使用：像素来自解包结果，不需要落盘再读回。
+    /// </summary>
+    public static async Task<byte[][]> LoadAndEncodeImageAsync(
+        byte[] imageData,
+        TextureFormatInfo format,
+        int width,
+        int height,
+        IReadOnlyList<TextureMip> mips,
+        TextureCodecOptions options,
+        CancellationToken cancellationToken)
+    {
+        using var source = await LoadSourceImageAsync(imageData, width, height, cancellationToken).ConfigureAwait(false);
+        return EncodeMips(source, format, mips, options, cancellationToken);
+    }
+
+    private static byte[][] EncodeMips(
+        Image<Rgba32> source,
+        TextureFormatInfo format,
+        IReadOnlyList<TextureMip> mips,
+        TextureCodecOptions options,
+        CancellationToken cancellationToken)
+    {
         var result = new byte[mips.Count][];
         for (var i = 0; i < mips.Count; i++)
         {
@@ -58,17 +84,31 @@ internal static class TextureReplacementSource
         ValidateTextureSize(width, height);
 
         var source = await Image.LoadAsync<Rgba32>(Path.GetFullPath(imagePath), cancellationToken).ConfigureAwait(false);
-        if (source.Width != width || source.Height != height)
-        {
-            source.Mutate(ctx => ctx.Resize(new ResizeOptions
-            {
-                Size = new Size(width, height),
-                Mode = ResizeMode.Stretch,
-                Sampler = KnownResamplers.Lanczos3,
-            }));
-        }
-
+        ResizeToTarget(source, width, height);
         return source;
+    }
+
+    private static async Task<Image<Rgba32>> LoadSourceImageAsync(byte[] imageData, int width, int height, CancellationToken cancellationToken)
+    {
+        ValidateTextureSize(width, height);
+
+        using var stream = new MemoryStream(imageData, writable: false);
+        var source = await Image.LoadAsync<Rgba32>(stream, cancellationToken).ConfigureAwait(false);
+        ResizeToTarget(source, width, height);
+        return source;
+    }
+
+    private static void ResizeToTarget(Image<Rgba32> source, int width, int height)
+    {
+        if (source.Width == width && source.Height == height)
+            return;
+
+        source.Mutate(ctx => ctx.Resize(new ResizeOptions
+        {
+            Size = new Size(width, height),
+            Mode = ResizeMode.Stretch,
+            Sampler = KnownResamplers.Lanczos3,
+        }));
     }
 
     private static Image<Rgba32> CreateMipImage(Image<Rgba32> source, TextureMip mip)

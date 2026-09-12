@@ -208,17 +208,19 @@ public class MainActivity : Activity
             {
                 var oldUsmapPath = _usmapPath;
                 var newUsmapDisplayName = GetDisplayName(data.Data, "Mapping.usmap");
-                var newUsmapPath = await CopyDocumentToCacheAsync(data.Data, ".usmap", "Importing usmap");
+                // 保留原始扩展名：.usmap / .jmap / .usmap.gz / .jmap.gz。
+                // CUE4Parse 与 UAssetAPI 都按扩展名选择解析器，统一改写成 .usmap 会让 jmap 解析失败。
+                var newUsmapPath = await CopyDocumentToCacheAsync(data.Data, ResolveMappingExtension(newUsmapDisplayName), "Importing mapping");
                 _usmapDisplayName = newUsmapDisplayName;
                 _usmapPath = newUsmapPath;
                 if (_session?.IsOpen == true)
                 {
                     await _session.LoadUsmapAsync(_usmapPath);
-                    SetStatus("已选择并加载 Usmap。 ");
+                    SetStatus($"已选择并加载 {PakTool.Core.MappingsLoader.DescribeFormat(_usmapPath)} 映射。 ");
                 }
                 else
                 {
-                    SetStatus("已选择 Usmap。 ");
+                    SetStatus("已选择映射文件。 ");
                 }
 
                 DeleteCachedImport(oldUsmapPath);
@@ -2779,6 +2781,27 @@ public class MainActivity : Activity
         return directory;
     }
 
+    /// <summary>
+    /// 从文件名推断映射文件扩展名，保留 .jmap / .usmap 及 .gz 复合后缀。
+    /// 识别不出时回退 .usmap，避免产生无扩展名缓存文件。
+    /// </summary>
+    private static string ResolveMappingExtension(string? fileName)
+    {
+        if (!string.IsNullOrWhiteSpace(fileName))
+        {
+            var name = fileName.Trim();
+            foreach (var candidate in PakTool.Core.MappingsLoader.Patterns)
+            {
+                // "*.jmap.gz" -> ".jmap.gz"
+                var suffix = candidate[1..];
+                if (name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                    return suffix;
+            }
+        }
+
+        return ".usmap";
+    }
+
     private void CloseCurrentArchive()
     {
         _indexCancellation?.Cancel();
@@ -2821,7 +2844,9 @@ public class MainActivity : Activity
         var files = includeLegacyRootFiles
             ? System.IO.Directory.EnumerateFiles(directory, "*.*", SearchOption.TopDirectoryOnly)
                 .Where(path => path.EndsWith(".pak", StringComparison.OrdinalIgnoreCase) ||
-                               path.EndsWith(".usmap", StringComparison.OrdinalIgnoreCase))
+                               path.EndsWith(".usmap", StringComparison.OrdinalIgnoreCase) ||
+                               path.EndsWith(".jmap", StringComparison.OrdinalIgnoreCase) ||
+                               path.EndsWith(".gz", StringComparison.OrdinalIgnoreCase))
             : System.IO.Directory.EnumerateFiles(directory, "*.*", SearchOption.TopDirectoryOnly);
 
         foreach (var file in files)
@@ -6142,7 +6167,7 @@ public class MainActivity : Activity
       <div class="chosen">
         <div class="chip"><strong>Pak</strong><span id="pakName">No pak selected</span></div>
         <div class="chip"><strong>Merge</strong><span id="mergePakNameInline">No merge pak</span></div>
-        <div class="chip"><strong>Usmap</strong><span id="usmapName">No usmap</span></div>
+        <div class="chip"><strong>Mapping</strong><span id="usmapName">No mapping</span></div>
       </div>
 
       <input id="aesKey" autocomplete="off" spellcheck="false" placeholder="AES key, optional" />
@@ -6150,7 +6175,7 @@ public class MainActivity : Activity
       <div class="grid">
         <button class="button secondary" onclick="native('pickPak')">Pak</button>
         <button class="button secondary" onclick="native('pickMergePak')">Merge Pak</button>
-        <button class="button secondary" onclick="native('pickUsmap')">Usmap</button>
+        <button class="button secondary" onclick="native('pickUsmap')">Mapping</button>
         <button class="button accent" onclick="openPak()">Open</button>
         <label class="compression-toggle"><input id="mergeAskInline" type="checkbox" /> Ask</label>
         <button id="mergePakButtonInline" class="button accent" onclick="mergePakInline()" disabled>Merge</button>

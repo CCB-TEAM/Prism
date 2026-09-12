@@ -56,7 +56,8 @@
               <label>
                 <span>编码器版本</span>
                 <select name="astcVariant" id="astcVariant">
-                  <option value="avx2">astcenc-avx2（推荐，最快）</option>
+                    <option value="auto">自动（按当前 CPU 选择，推荐）</option>
+                  <option value="avx2">astcenc-avx2（最快，需要 AVX2）</option>
                   <option value="sse4.1">astcenc-sse4.1（兼容性较好）</option>
                   <option value="sse2">astcenc-sse2（最大兼容性）</option>
                 </select>

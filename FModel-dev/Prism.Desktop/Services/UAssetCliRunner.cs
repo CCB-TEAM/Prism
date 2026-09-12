@@ -26,10 +26,27 @@ public sealed class UAssetCliRunner
 
     public bool HasTexconv => _texconvPath is not null;
 
+    /// <summary>
+    /// 缓存探测结果。<see cref="TryCreate"/> 会做若干次 <c>File.Exists</c>，
+    /// 而 UI 绑定属性（如转换页的可用性提示）每次求值都会调用，缓存避免重复 IO。
+    /// </summary>
+    private static UAssetCliRunner? _cached;
+    private static int _cacheInitialized;
+
+    public static UAssetCliRunner? CreateCached()
+    {
+        if (Volatile.Read(ref _cacheInitialized) == 0)
+        {
+            _cached = TryCreate();
+            Volatile.Write(ref _cacheInitialized, 1);
+        }
+
+        return _cached;
+    }
+
     /// <summary>探测本机 UAssetCLI 与编码器，找不到返回 null。</summary>
     public static UAssetCliRunner? TryCreate()
-    {
-        string baseDir = AppContext.BaseDirectory;
+    {        string baseDir = AppContext.BaseDirectory;
         string[] cliCandidates =
         [
             Path.Combine(baseDir, "UAssetCLI", "UAssetCLI.exe"),

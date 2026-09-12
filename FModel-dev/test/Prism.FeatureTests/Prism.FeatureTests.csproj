@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Prism.FeatureTests</AssemblyName>
+    <RootNamespace>Prism.FeatureTests</RootNamespace>
+    <!-- 控制台测试程序：直接 dotnet run 即可，失败时返回非零退出码。
+         不用 xunit：这里需要真实文件系统、真实 Pak 打包与 headless UI，
+         自建迷你断言器比引入测试框架更直接，也便于阅读输出。 -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\PakTool.Core\PakTool.Core.csproj" />
+    <ProjectReference Include="..\..\UAssetTexture.Core\UAssetTexture.Core.csproj" />
+    <ProjectReference Include="..\..\UAssetAPI-master\UAssetAPI\UAssetAPI.csproj" />
+    <ProjectReference Include="..\..\Prism.Desktop\Prism.Desktop.csproj" />
+    <!-- UI 验证：headless 后端可在无显示器环境实例化窗口，且不残留原生事件循环。 -->
+    <PackageReference Include="Avalonia.Headless" Version="12.1.1" />
+  </ItemGroup>
+</Project>

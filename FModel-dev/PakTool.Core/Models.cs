@@ -3,6 +3,7 @@ namespace PakTool.Core;
 public sealed record PakOpenOptions(
     IReadOnlyList<string> PakPaths,
     string? AesKeyHex = null,
+    // 映射文件路径：支持 .usmap 与 .jmap（含 .gz，按扩展名自动识别解析器）。
     string? UsmapPath = null,
     string Game = "GAME_UE5_6",
     bool CaseInsensitivePaths = true,
@@ -176,6 +177,14 @@ public sealed record PakRawFileCopy(
     string PakPath,
     string DiskPath,
     long Size);
+
+/// <summary>
+/// 「搜索框输入路径」的解析结果：命中目录或文件时返回，未命中返回 null。
+/// </summary>
+public sealed record BrowsePathResolution(
+    string Folder,
+    string? FileName,
+    bool IsFolder);
 
 public sealed record PakRawFileCopyProgress(
     int Completed,

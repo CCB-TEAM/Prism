@@ -1,14 +1,37 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Prism.Desktop.ViewModels"
+             xmlns:models="using:Prism.Desktop.Models"
              x:Class="Prism.Desktop.Views.MergeView"
              x:DataType="vm:MainViewModel">
 
+    <UserControl.Styles>
+        <!-- 合并列表项：拖动中半透明，落点高亮 -->
+        <Style Selector="Border.merge-row">
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+        </Style>
+        <Style Selector="Border.merge-row.base">
+            <Setter Property="Background" Value="{DynamicResource PrimaryWashBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource PrimaryLightBrush}" />
+        </Style>
+        <Style Selector="Border.merge-row.dragging">
+            <Setter Property="Opacity" Value="0.45" />
+        </Style>
+        <Style Selector="Border.merge-row.droptarget">
+            <Setter Property="BorderBrush" Value="{DynamicResource PrimaryBrush}" />
+            <Setter Property="BorderThickness" Value="2" />
+        </Style>
+    </UserControl.Styles>
+
     <ScrollViewer>
-        <StackPanel MaxWidth="520"
+        <StackPanel MaxWidth="560"
                     HorizontalAlignment="Stretch"
                     Margin="16,20"
-                    Spacing="24">
+                    Spacing="20">
             <StackPanel Orientation="Horizontal" Spacing="12">
                 <Button Content="←"
                         FontSize="16"
@@ -19,42 +42,113 @@
                            VerticalAlignment="Center" />
             </StackPanel>
 
-            <Border Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
-                    CornerRadius="12"
-                    Padding="18">
-                <StackPanel Spacing="16">
-                    <StackPanel Spacing="6">
-                        <TextBlock Text="主 Pak" FontSize="12" FontWeight="SemiBold" />
-                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                            <TextBlock Grid.Column="0"
-                                       Text="{Binding PakPath}"
-                                       FontSize="12"
-                                       Opacity="0.7"
-                                       VerticalAlignment="Center"
-                                       TextTrimming="CharacterEllipsis"
-                                       ToolTip.Tip="{Binding PakPath}" />
-                            <Button Grid.Column="1"
-                                    Content="选择主 Pak"
-                                    Command="{Binding BrowsePakCommand}" />
-                        </Grid>
-                    </StackPanel>
+            <!-- ═══ 输入列表 ═══ -->
+            <Border Classes="card" Padding="18">
+                <StackPanel Spacing="14">
+                    <DockPanel>
+                        <TextBlock Text="待合并的 Pak" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <Button DockPanel.Dock="Right"
+                                Content="清空"
+                                Command="{Binding ClearMergePaksCommand}"
+                                Classes="ghost"
+                                FontSize="11" />
+                    </DockPanel>
 
-                    <StackPanel Spacing="6">
-                        <TextBlock Text="合并 Pak" FontSize="12" FontWeight="SemiBold" />
-                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                            <TextBlock Grid.Column="0"
-                                       Text="{Binding MergePakPath}"
-                                       FontSize="12"
-                                       Opacity="0.7"
-                                       VerticalAlignment="Center"
-                                       TextTrimming="CharacterEllipsis"
-                                       ToolTip.Tip="{Binding MergePakPath}" />
-                            <Button Grid.Column="1"
-                                    Content="选择合并 Pak"
-                                    Command="{Binding BrowseMergePakCommand}" />
-                        </Grid>
-                    </StackPanel>
+                    <TextBlock Text="列表顺序即覆盖优先级：越靠下优先级越高，路径冲突时覆盖上面的。第一项是主 Pak（基底）。"
+                               FontSize="10"
+                               Opacity="0.55"
+                               TextWrapping="Wrap" />
 
+                    <!-- 空状态 -->
+                    <TextBlock Text="还没有加入任何 Pak。点下面的「添加 Pak」可一次选择多个。"
+                               FontSize="11"
+                               Opacity="0.5"
+                               TextWrapping="Wrap"
+                               IsVisible="{Binding HasNoMergePaks}" />
+
+                    <!--
+                        拖动排序：使用指针事件（跨平台一致）。
+                        - 桌面/鼠标：按住 GripArea 直接拖动
+                        - Android/触摸：先长按 GripArea 激活，再拖动，避免和滚动冲突
+                        逻辑在 MergeView.axaml.cs
+                    -->
+                    <ItemsControl ItemsSource="{Binding MergePaks}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="models:MergePakItem">
+                                <Border Classes="merge-row"
+                                        Classes.base="{Binding IsBase}"
+                                        Classes.dragging="{Binding IsDragging}"
+                                        Classes.droptarget="{Binding IsDropTarget}"
+                                        Margin="0,0,0,6">
+                                    <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="10">
+                                        <!-- 拖动把手 -->
+                                        <Border Grid.Column="0"
+                                                Name="GripArea"
+                                                Background="Transparent"
+                                                Padding="4,6"
+                                                Cursor="SizeAll"
+                                                IsVisible="{Binding CanDrag}"
+                                                PointerPressed="OnMergeGripPressed"
+                                                PointerMoved="OnMergeGripMoved"
+                                                PointerReleased="OnMergeGripReleased"
+                                                PointerCaptureLost="OnMergeGripCaptureLost"
+                                                ToolTip.Tip="拖动调整覆盖顺序（手机上先长按）">
+                                            <TextBlock Text="⠿" FontSize="15" Opacity="0.55" VerticalAlignment="Center" />
+                                        </Border>
+
+                                        <!-- 优先级序号 -->
+                                        <Border Grid.Column="1"
+                                                Background="{DynamicResource PrimaryWashBrush}"
+                                                CornerRadius="6"
+                                                MinWidth="26"
+                                                Padding="6,2"
+                                                VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding OrderLabel}"
+                                                       FontSize="11"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource PrimaryBrush}"
+                                                       HorizontalAlignment="Center" />
+                                        </Border>
+
+                                        <!-- 文件名 + 文件数 -->
+                                        <StackPanel Grid.Column="2" Spacing="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding DisplayName}"
+                                                       FontSize="12"
+                                                       FontWeight="SemiBold"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip.Tip="{Binding Path}" />
+                                            <TextBlock Text="{Binding Detail}"
+                                                       FontSize="10"
+                                                       Opacity="0.5"
+                                                       TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
+
+                                        <!-- 移除（主 Pak 不显示） -->
+                                        <Button Grid.Column="3"
+                                                Content="✕"
+                                                Command="{Binding $parent[UserControl].DataContext.RemoveMergePakCommand}"
+                                                CommandParameter="{Binding}"
+                                                Classes="ghost"
+                                                FontSize="12"
+                                                IsVisible="{Binding CanRemove}"
+                                                ToolTip.Tip="移除这一项" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <Button Content="＋ 添加 Pak（可多选）"
+                            Command="{Binding BrowseMergePakCommand}"
+                            Classes="accent"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Center" />
+                </StackPanel>
+            </Border>
+
+            <!-- ═══ 输出与执行 ═══ -->
+            <Border Classes="card" Padding="18">
+                <StackPanel Spacing="14">
                     <StackPanel Spacing="6">
                         <TextBlock Text="输出 Pak" FontSize="12" FontWeight="SemiBold" />
                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
@@ -77,22 +171,30 @@
                                  PlaceholderText="如需解密请填写" />
                     </StackPanel>
 
-                    <CheckBox Content="替换前询问"
+                    <CheckBox Content="合并前询问路径冲突"
                               IsChecked="{Binding AskBeforeReplace}" />
 
                     <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
                         <Button Grid.Column="0"
                                 Content="执行合并"
                                 Command="{Binding MergePakCommand}"
+                                Classes="primary"
                                 MinWidth="110" />
                         <TextBlock Grid.Column="1"
                                    Text="{Binding MergeStatus}"
                                    FontSize="11"
                                    Opacity="0.7"
                                    VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis"
+                                   TextWrapping="Wrap"
                                    ToolTip.Tip="{Binding MergeStatus}" />
                     </Grid>
+
+                    <!-- 输入摘要 -->
+                    <TextBlock Text="{Binding MergeInputSummary}"
+                               FontSize="10"
+                               Opacity="0.5"
+                               TextWrapping="Wrap"
+                               IsVisible="{Binding HasMergePaks}" />
                 </StackPanel>
             </Border>
         </StackPanel>

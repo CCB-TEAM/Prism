@@ -1,0 +1,223 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Prism.Desktop.ViewModels"
+             xmlns:models="using:Prism.Desktop.ViewModels"
+             x:Class="Prism.Desktop.Views.ConvertView"
+             x:DataType="vm:MainViewModel">
+
+    <DockPanel>
+        <!-- 顶栏 -->
+        <Border DockPanel.Dock="Top" Padding="12,10">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <Button Grid.Column="0"
+                        Content="←"
+                        FontSize="16"
+                        Foreground="{DynamicResource TextMutedBrush}"
+                        Background="Transparent"
+                        Command="{Binding GoHomeCommand}"
+                        Margin="0,0,12,0" />
+                <TextBlock Grid.Column="1"
+                           Text="Pak 转换"
+                           FontSize="15"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" />
+                <TextBlock Grid.Column="2"
+                           Text="{Binding ConvertStatus}"
+                           FontSize="11"
+                           Opacity="0.65"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           MaxWidth="{Binding TopStatusMaxWidth}"
+                           ToolTip.Tip="{Binding ConvertStatus}" />
+            </Grid>
+        </Border>
+
+        <ProgressBar DockPanel.Dock="Top"
+                     Height="3"
+                     IsIndeterminate="True"
+                     IsVisible="{Binding IsBusy}" />
+
+        <ScrollViewer>
+            <StackPanel MaxWidth="620"
+                        HorizontalAlignment="Stretch"
+                        Margin="16,18"
+                        Spacing="16">
+
+                <TextBlock Text="把「待转换 Pak」里的纹理像素，按路径替换进主 Pak 的同名资产，并重新编码成主 Pak 的纹理格式，最后合成一个新 Pak。适用于「另一个平台有同路径贴图，想搬到本平台」的场景。"
+                           FontSize="11"
+                           Opacity="0.6"
+                           TextWrapping="Wrap" />
+
+                <!-- ═══ 输入 ═══ -->
+                <Border Classes="card" Padding="18">
+                    <StackPanel Spacing="14">
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="主 Pak（基底）" FontSize="11" Opacity="0.55" FontWeight="SemiBold" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                <TextBlock Grid.Column="0"
+                                           Text="{Binding PakPath}"
+                                           FontSize="12"
+                                           Opacity="0.8"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"
+                                           ToolTip.Tip="{Binding PakPath}" />
+                                <Button Grid.Column="1"
+                                        Content="选择主 Pak"
+                                        Command="{Binding BrowsePakCommand}"
+                                        Classes="ghost" />
+                            </Grid>
+                            <TextBlock Text="未选择主 Pak，请先选择后再回到本页。"
+                                       FontSize="10"
+                                       Foreground="{DynamicResource DangerBrush}"
+                                       IsVisible="{Binding IsPakPathEmpty}" />
+                        </StackPanel>
+
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="待转换 Pak（提供新贴图）" FontSize="11" Opacity="0.55" FontWeight="SemiBold" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                <TextBlock Grid.Column="0"
+                                           Text="{Binding ConvertSourcePath}"
+                                           FontSize="12"
+                                           Opacity="0.8"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"
+                                           ToolTip.Tip="{Binding ConvertSourcePath}" />
+                                <Button Grid.Column="1"
+                                        Content="选择待转换 Pak"
+                                        Command="{Binding BrowseConvertSourceCommand}"
+                                        Classes="ghost" />
+                            </Grid>
+                        </StackPanel>
+
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="转换输出" FontSize="11" Opacity="0.55" FontWeight="SemiBold" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                <TextBlock Grid.Column="0"
+                                           Text="{Binding ConvertOutputPath}"
+                                           FontSize="12"
+                                           Opacity="0.8"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"
+                                           ToolTip.Tip="{Binding ConvertOutputPath}" />
+                                <Button Grid.Column="1"
+                                        Content="选择输出位置"
+                                        Command="{Binding BrowseConvertOutputCommand}"
+                                        Classes="ghost" />
+                            </Grid>
+                        </StackPanel>
+
+                        <CheckBox Content="输出完整整包（默认只输出被替换的文件）"
+                                  IsChecked="{Binding ConvertMergeAll}" />
+                        <TextBlock Text="默认：输出 Pak 里只装本次改动过的 .uasset/.uexp/.ubulk，游戏会把它叠加在原 Pak 之上 —— 体积≈改动量（例如 7 GB 主 Pak + 1 张贴图 → 约 700 KB）。勾选后：连主 Pak 的其他文件一起打包，输出≈主 Pak 大小。"
+                                   FontSize="10"
+                                   Opacity="0.5"
+                                   TextWrapping="Wrap" />
+
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="AES 密钥 / 映射文件" FontSize="11" Opacity="0.55" FontWeight="SemiBold" />
+                            <TextBlock Text="沿用「解包 &amp; 模组」页中已填写的设置，仅加密 Pak 需要密钥。"
+                                       FontSize="10"
+                                       Opacity="0.5" />
+                            <TextBlock Text="{Binding AesKeySummary}"
+                                       FontSize="11"
+                                       Opacity="0.7"
+                                       TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding MappingSummary}"
+                                       FontSize="11"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip.Tip="{Binding UsmapPath}" />
+                            <!-- 跨格式重编码要解出源纹理像素，这一步需要映射文件才能反序列化 UTexture。
+                                 缺映射时该项会被跳过，所以这里必须显式提醒。 -->
+                            <TextBlock Text="⚠ 两侧格式不同时需要映射文件才能解出源纹理像素（未版本化资产）。缺失时该纹理会被跳过。"
+                                       FontSize="10"
+                                       Foreground="{DynamicResource DangerBrush}"
+                                       TextWrapping="Wrap"
+                                       IsVisible="{Binding NeedsMappingsForConversion}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- ═══ 执行 ═══ -->
+                <Border Classes="card" Padding="18">
+                    <StackPanel Spacing="12">
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                            <Button Grid.Column="0"
+                                    Content="开始转换"
+                                    Command="{Binding ConvertPakCommand}"
+                                    Classes="primary"
+                                    MinWidth="110" />
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding ConvertStatus}"
+                                       FontSize="11"
+                                       Opacity="0.7"
+                                       VerticalAlignment="Center"
+                                       TextWrapping="Wrap" />
+                        </Grid>
+
+                        <TextBlock Text="{Binding ConvertServiceStatus}"
+                                   FontSize="10"
+                                   Opacity="0.55"
+                                   TextWrapping="Wrap" />
+
+                        <!-- 结果明细 -->
+                        <StackPanel Spacing="6" IsVisible="{Binding HasConvertRows}">
+                            <DockPanel>
+                                <TextBlock Text="转换明细" FontSize="11" FontWeight="SemiBold" Opacity="0.6"
+                                           VerticalAlignment="Center" />
+                                <Button DockPanel.Dock="Right"
+                                        Content="清空"
+                                        Command="{Binding ClearConvertRowsCommand}"
+                                        Classes="ghost"
+                                        FontSize="10" />
+                            </DockPanel>
+                            <ListBox ItemsSource="{Binding ConvertRows}"
+                                     MaxHeight="260"
+                                     Background="{DynamicResource SurfaceBrush}">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="models:PakConversionRow">
+                                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" Margin="0,1">
+                                            <Border Grid.Column="0"
+                                                    Background="{DynamicResource PrimaryWashBrush}"
+                                                    CornerRadius="5"
+                                                    Padding="6,1"
+                                                    VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding StatusText}" FontSize="10"
+                                                           Foreground="{DynamicResource PrimaryBrush}" />
+                                            </Border>
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{Binding PakPath}"
+                                                       FontSize="11"
+                                                       VerticalAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip.Tip="{Binding PakPath}" />
+                                            <TextBlock Grid.Column="2"
+                                                       Text="{Binding Message}"
+                                                       FontSize="10"
+                                                       Opacity="0.55"
+                                                       VerticalAlignment="Center"
+                                                       IsVisible="{Binding HasMessage}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip.Tip="{Binding Message}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- 平台差异说明 -->
+                <Border Classes="card" Padding="16">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="平台差异" FontSize="11" FontWeight="SemiBold" Opacity="0.6" />
+                        <TextBlock Text="{Binding ConvertPlatformNote}"
+                                   FontSize="10"
+                                   Opacity="0.55"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>

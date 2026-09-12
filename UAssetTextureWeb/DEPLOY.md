@@ -33,7 +33,7 @@ UAssetTextureWeb/App_Data/server-settings.json
   "url": "http://0.0.0.0:5299",
   "uAssetCliPath": "D:\\site\\UAssetCLI\\UAssetCLI.dll",
   "bc7EncoderPath": "C:\\Tools\\texconv.exe",
-  "astcEncoderPath": "C:\\Tools\\astcenc-avx2.exe",
+  "astcEncoderPath": "C:\\Tools\\astcenc-sse2.exe",
   "maxParallelJobs": 2
 }
 ```
@@ -46,7 +46,7 @@ UAssetTextureWeb/App_Data/server-settings.json
 dotnet run --project UAssetTextureWeb -- `
   --Server:Url "http://0.0.0.0:5299" `
   --Encoders:BC7 "C:\Tools\texconv.exe" `
-  --Encoders:ASTC "C:\Tools\astcenc-avx2.exe" `
+  --Encoders:ASTC "C:\Tools\astcenc-sse2.exe" `
   --UAssetCli:Path "D:\site\UAssetCLI\UAssetCLI.dll" `
   --Jobs:MaxParallel 2
 ```
@@ -56,7 +56,7 @@ dotnet run --project UAssetTextureWeb -- `
 ```powershell
 $env:Server__Url = "http://0.0.0.0:5299"
 $env:Encoders__BC7 = "C:\Tools\texconv.exe"
-$env:Encoders__ASTC = "C:\Tools\astcenc-avx2.exe"
+$env:Encoders__ASTC = "C:\Tools\astcenc-sse2.exe"
 $env:UAssetCli__Path = "D:\site\UAssetCLI\UAssetCLI.dll"
 $env:Jobs__MaxParallel = "2"
 dotnet UAssetTextureWeb.dll
@@ -66,7 +66,7 @@ dotnet UAssetTextureWeb.dll
 
 ```powershell
 $env:BC7_ENCODER_PATH = "C:\Tools\texconv.exe"
-$env:ASTC_ENCODER_PATH = "C:\Tools\astcenc-avx2.exe"
+$env:ASTC_ENCODER_PATH = "C:\Tools\astcenc-sse2.exe"
 ```
 
 ## 非交互部署

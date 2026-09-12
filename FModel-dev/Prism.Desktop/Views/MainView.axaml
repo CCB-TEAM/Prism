@@ -5,10 +5,47 @@
              x:Class="Prism.Desktop.Views.MainView"
              x:DataType="vm:MainViewModel">
 
+    <!--
+        每个页面套一层 ViewTransitionHost：切换时做淡入 + 轻微上移。
+        用 Host 而不是 Transitions 的原因见 ViewTransitionHost 的注释
+        （页面切换是 IsVisible 显隐，Transitions 对布局移除不产生视觉效果）。
+        IsAnimationEnabled 绑定设置项，供低配设备或偏好静态界面的用户关闭。
+    -->
     <Panel>
-        <views:HomeView x:Name="HomeViewControl" IsVisible="{Binding IsHomeVisible}" />
-        <views:WorkspaceView x:Name="WorkspaceViewControl" DataContext="{Binding}" IsVisible="{Binding IsWorkspaceVisible}" />
-        <views:MergeView x:Name="MergeViewControl" IsVisible="{Binding IsMergeVisible}" />
-        <views:SettingsView x:Name="SettingsViewControl" IsVisible="{Binding IsSettingsVisible}" />
+        <views:ViewTransitionHost IsVisible="{Binding IsHomeVisible}"
+                                  IsAnimationEnabled="{Binding IsAnimationsEnabled}"
+                                  OffsetY="0"
+                                  StartScale="0.985"
+                                  Duration="0:0:0.20">
+            <views:HomeView x:Name="HomeViewControl" />
+        </views:ViewTransitionHost>
+
+        <views:ViewTransitionHost IsVisible="{Binding IsWorkspaceVisible}"
+                                  IsAnimationEnabled="{Binding IsAnimationsEnabled}"
+                                  OffsetY="6"
+                                  Duration="0:0:0.18">
+            <views:WorkspaceView x:Name="WorkspaceViewControl" DataContext="{Binding}" />
+        </views:ViewTransitionHost>
+
+        <views:ViewTransitionHost IsVisible="{Binding IsMergeVisible}"
+                                  IsAnimationEnabled="{Binding IsAnimationsEnabled}"
+                                  OffsetY="10"
+                                  Duration="0:0:0.18">
+            <views:MergeView x:Name="MergeViewControl" />
+        </views:ViewTransitionHost>
+
+        <views:ViewTransitionHost IsVisible="{Binding IsConvertVisible}"
+                                  IsAnimationEnabled="{Binding IsAnimationsEnabled}"
+                                  OffsetY="10"
+                                  Duration="0:0:0.18">
+            <views:ConvertView x:Name="ConvertViewControl" />
+        </views:ViewTransitionHost>
+
+        <views:ViewTransitionHost IsVisible="{Binding IsSettingsVisible}"
+                                  IsAnimationEnabled="{Binding IsAnimationsEnabled}"
+                                  OffsetY="10"
+                                  Duration="0:0:0.18">
+            <views:SettingsView x:Name="SettingsViewControl" />
+        </views:ViewTransitionHost>
     </Panel>
 </UserControl>

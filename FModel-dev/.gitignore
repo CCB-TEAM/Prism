@@ -390,7 +390,12 @@ binka_decoder-main/
 binkaenc-main/
 native/
 nihav-master-320ede8/
-test/
+# test/ 放的是样本资产（体积大、来源为游戏数据），不入库；
+# 但 test/Prism.FeatureTests 是仓库自带的集成测试工程，需要跟踪。
+test/*
+!test/Prism.FeatureTests/
+test/Prism.FeatureTests/bin/
+test/Prism.FeatureTests/obj/
 
 # Vendored UAssetAPI extras not needed by the Prism build
 UAssetAPI-master/.editorconfig

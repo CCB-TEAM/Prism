@@ -67,7 +67,7 @@
                                 IsVisible="{Binding IsBrowseTab}">
                         <TextBox Text="{Binding SearchQuery}"
                                  Width="170"
-                                 PlaceholderText="搜索..."
+                                 PlaceholderText="{Binding SearchPlaceholder}"
                                  FontSize="12"
                                  KeyDown="OnSearchKeyDown" />
                         <Button Content="搜索"
@@ -97,7 +97,7 @@
                           IsVisible="{Binding IsBrowseTab}">
                         <TextBox Grid.Column="0"
                                  Text="{Binding SearchQuery}"
-                                 PlaceholderText="搜索..."
+                                 PlaceholderText="{Binding SearchPlaceholder}"
                                  FontSize="12"
                                  KeyDown="OnSearchKeyDown" />
                         <Button Grid.Column="1"
@@ -134,7 +134,7 @@
                                 </Grid>
                             </StackPanel>
                             <StackPanel Spacing="6">
-                                <TextBlock Text="USMAP 映射" FontSize="11" Opacity="0.55" FontWeight="SemiBold" />
+                                <TextBlock Text="映射文件（usmap / jmap）" FontSize="11" Opacity="0.55" FontWeight="SemiBold" />
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                                     <TextBlock Grid.Column="0"
                                                Text="{Binding UsmapPath}"
@@ -144,7 +144,7 @@
                                                TextTrimming="CharacterEllipsis"
                                                ToolTip.Tip="{Binding UsmapPath}" />
                                     <Button Grid.Column="1"
-                                            Content="选择 Usmap"
+                                            Content="选择映射"
                                             Command="{Binding BrowseUsmapCommand}"
                                             Classes="ghost" />
                                 </Grid>
@@ -353,7 +353,13 @@
                                                         Classes="ghost"
                                                         FontSize="11" />
                                             </StackPanel>
-                                            <TextBlock Text="修改文本后按回车或失焦自动写回，然后构建补丁 Pak。"
+                                            <Button Content="导出 JSON"
+                                                    Command="{Binding $parent[UserControl].DataContext.ExportPatchLocresJsonCommand}"
+                                                    CommandParameter="{Binding SelectedPatchItem}"
+                                                    Classes="ghost"
+                                                    FontSize="11"
+                                                    HorizontalAlignment="Left" />
+                                            <TextBlock Text="修改文本后按回车或失焦自动写回，然后构建补丁 Pak。「导出 JSON」保存当前编辑结果。"
                                                        FontSize="10"
                                                        Opacity="0.5" />
                                             <ListBox ItemsSource="{Binding SelectedPatchItem.FilteredLocresEntries}"
@@ -526,7 +532,13 @@
                                                         Classes="ghost"
                                                         FontSize="11" />
                                             </StackPanel>
-                                            <TextBlock Text="修改文本后按回车或失焦自动写回，然后构建补丁 Pak。"
+                                            <Button Content="导出 JSON"
+                                                    Command="{Binding $parent[UserControl].DataContext.ExportPatchLocresJsonCommand}"
+                                                    CommandParameter="{Binding SelectedPatchItem}"
+                                                    Classes="ghost"
+                                                    FontSize="11"
+                                                    HorizontalAlignment="Left" />
+                                            <TextBlock Text="修改文本后按回车或失焦自动写回，然后构建补丁 Pak。「导出 JSON」保存当前编辑结果。"
                                                        FontSize="10"
                                                        Opacity="0.5" />
                                             <ListBox ItemsSource="{Binding SelectedPatchItem.FilteredLocresEntries}"

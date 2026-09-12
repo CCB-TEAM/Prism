@@ -4,35 +4,68 @@ public static class TextureReplacer
 {
     public static void ExtractMipPayloads(TextureAssetInfo info, string outputDirectory)
     {
-        string fullOutputDirectory = Path.GetFullPath(outputDirectory);
-        Directory.CreateDirectory(fullOutputDirectory);
-
-        int ubulkOffset = 0;
-        for (int i = 0; i < info.ExternalMipCount; i++)
+        foreach ((int index, byte[] payload) in ExtractMipPayloads(info))
         {
-            TextureMip mip = info.Mips[i];
-            byte[] payload = new byte[mip.ByteLength];
-            Buffer.BlockCopy(info.UbulkData, ubulkOffset, payload, 0, payload.Length);
-            File.WriteAllBytes(Path.Combine(fullOutputDirectory, $"mip{i}.bin"), payload);
-            ubulkOffset += payload.Length;
+            File.WriteAllBytes(Path.Combine(Path.GetFullPath(outputDirectory), $"mip{index}.bin"), payload);
         }
+    }
 
-        if (info.InlineMips.Count > 0)
+    /// <summary>
+    /// 以内存形式取出各 mip 的<b>已压缩</b>载荷（不解码像素）。
+    ///
+    /// mip 数据可能分布在三个位置：.ubulk 文件、.uexp 内联、或导出数据尾部。
+    /// 这里按 <see cref="TextureAssetInfo.MipPlacements"/> 逐个取出原始字节，
+    /// 供"格式相同则直接搬运"的快速路径使用（无需映射文件、不损失画质）。
+    ///
+    /// 返回值按 mip 的 <c>Index</c> 升序排列。
+    /// </summary>
+    public static IReadOnlyList<(int Index, byte[] Payload)> ExtractMipPayloads(TextureAssetInfo info)
+    {
+        var result = new List<(int Index, byte[] Payload)>(info.Mips.Count);
+
+        foreach (TextureMipPlacement placement in info.MipPlacements.OrderBy(p => p.Index))
         {
-            int firstStart = info.InlineMarkerOffsets[0] - info.InlineMips[0].ByteLength;
-            byte[] firstPayload = new byte[info.InlineMips[0].ByteLength];
-            Buffer.BlockCopy(info.ExportData, firstStart, firstPayload, 0, firstPayload.Length);
-            File.WriteAllBytes(Path.Combine(fullOutputDirectory, $"mip{info.InlineMips[0].Index}.bin"), firstPayload);
-
-            for (int i = 1; i < info.InlineMips.Count; i++)
+            byte[] source = placement.Storage switch
             {
-                TextureMip mip = info.InlineMips[i];
-                int start = info.InlineMarkerOffsets[i - 1] + 16;
-                byte[] payload = new byte[mip.ByteLength];
-                Buffer.BlockCopy(info.ExportData, start, payload, 0, payload.Length);
-                File.WriteAllBytes(Path.Combine(fullOutputDirectory, $"mip{mip.Index}.bin"), payload);
+                TextureMipStorage.Ubulk => info.UbulkData,
+                TextureMipStorage.UexpInline => info.ExportData,
+                _ => info.UexpFooter,
+            };
+
+            if (placement.Offset < 0 || placement.Offset + placement.ByteLength > source.Length)
+            {
+                throw new InvalidOperationException(
+                    $"Mip {placement.Index} 的位置超出范围（offset={placement.Offset}, length={placement.ByteLength}, " +
+                    $"来源={placement.Storage}，可用 {source.Length} 字节）。");
             }
+
+            byte[] payload = new byte[placement.ByteLength];
+            Buffer.BlockCopy(source, placement.Offset, payload, 0, payload.Length);
+            result.Add((placement.Index, payload));
         }
+
+        return result;
+    }
+
+    /// <summary>
+    /// 检查两套纹理布局的 mip 结构是否兼容：格式、尺寸、mip 数量与各 mip 字节长度全部一致。
+    /// 兼容时可以直接搬运压缩载荷（快速路径），不需要解码/重编码。
+    /// </summary>
+    public static bool IsLayoutCompatible(TextureAssetInfo source, TextureAssetInfo target)
+    {
+        if (!string.Equals(source.Format.Name, target.Format.Name, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (source.Mips.Count != target.Mips.Count)
+            return false;
+
+        for (int i = 0; i < source.Mips.Count; i++)
+        {
+            if (source.Mips[i].ByteLength != target.Mips[i].ByteLength)
+                return false;
+        }
+
+        return true;
     }
 
     public static void WriteReplacement(TextureAssetInfo info, byte[][] mipPayloads, string outputAssetPath)

@@ -144,7 +144,7 @@ static async Task InspectLooseTextureAsync(string uassetPath, string game, strin
     };
 
     if (!string.IsNullOrWhiteSpace(usmapPath))
-        provider.MappingsContainer = new FileUsmapTypeMappingsProvider(usmapPath);
+        provider.MappingsContainer = PakTool.Core.MappingsLoader.Create(usmapPath);
 
     provider.Initialize();
 

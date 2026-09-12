@@ -38,12 +38,16 @@ public partial class MainViewModel : ViewModelBase
         ShowThumbnails = _settings.ShowThumbnails;
         UseOodleCompression = _settings.UseOodleCompression;
         AskBeforeReplace = _settings.AskBeforeReplace;
+        IsAnimationsEnabled = _settings.IsAnimationsEnabled;
         ExportDirectory = _settings.ExportDirectory;
         _exportDirectoryBookmark = _settings.ExportDirectoryBookmark;
         PakPath = _settings.PakPath;
         UsmapPath = _settings.UsmapPath;
-        MergePakPath = _settings.MergePakPath;
         MergeOutputPath = _settings.MergeOutputPath;
+        RestoreMergePaks(_settings.MergePakPaths);
+        ConvertSourcePath = _settings.ConvertSourcePath;
+        ConvertMergeAll = _settings.ConvertMergeAll;
+        ConvertOutputPath = _settings.ConvertOutputPath;
         AesKey = _settings.AesKey;
         InitializeSettings();
         _loaded = true;
@@ -114,6 +118,8 @@ public partial class MainViewModel : ViewModelBase
 
     public bool IsMergeVisible => CurrentView == "Merge";
 
+    public bool IsConvertVisible => CurrentView == "Convert";
+
     public bool IsSettingsVisible => CurrentView == "Settings";
 
     partial void OnCurrentViewChanged(string value)
@@ -121,6 +127,7 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsHomeVisible));
         OnPropertyChanged(nameof(IsWorkspaceVisible));
         OnPropertyChanged(nameof(IsMergeVisible));
+        OnPropertyChanged(nameof(IsConvertVisible));
         OnPropertyChanged(nameof(IsSettingsVisible));
     }
 
@@ -130,8 +137,22 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand]
     private void GoWorkspace() => CurrentView = "Workspace";
 
+    /// <summary>
+    /// 主页「搜索 &amp; 导出」入口：直接进入工作区的浏览标签。
+    /// 与「解包 &amp; 模组」区分开——那个停在配置/浏览的默认标签，这个直达搜索。
+    /// </summary>
+    [RelayCommand]
+    private void GoBrowse()
+    {
+        CurrentTabIndex = 1;
+        CurrentView = "Workspace";
+    }
+
     [RelayCommand]
     private void GoMerge() => CurrentView = "Merge";
+
+    [RelayCommand]
+    private void GoConvert() => CurrentView = "Convert";
 
     [RelayCommand]
     private void GoSettings() => CurrentView = "Settings";
@@ -195,6 +216,44 @@ public partial class MainViewModel : ViewModelBase
 
     [ObservableProperty]
     public partial string SearchQuery { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 搜索框提示语：输入看起来像 Pak 内路径时切换文案，
+    /// 让"可以直接输入路径跳转"这一能力可被发现。
+    /// </summary>
+    public string SearchPlaceholder => LooksLikePackagePath(SearchQuery)
+        ? "按回车跳转到该路径"
+        : "搜索关键词，或直接输入 Pak 内路径（如 Game/Content/UI）";
+
+    partial void OnSearchQueryChanged(string value) => OnPropertyChanged(nameof(SearchPlaceholder));
+
+    /// <summary>
+    /// 判断输入是否"像" Pak 内路径：含路径分隔符，或带已知资源扩展名。
+    /// 仅用于提示文案，不影响实际解析（解析以存在性为准）。
+    /// </summary>
+    private static bool LooksLikePackagePath(string? query)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return false;
+        }
+
+        string trimmed = query.Trim();
+        if (trimmed.Contains('/') || trimmed.Contains('\\'))
+        {
+            return true;
+        }
+
+        string extension = Path.GetExtension(trimmed);
+        return extension.Length > 1 && KnownPackageExtensions.Contains(extension);
+    }
+
+    private static readonly HashSet<string> KnownPackageExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".uasset", ".uexp", ".ubulk", ".umap", ".locres", ".pak", ".ini",
+        ".png", ".jpg", ".jpeg", ".tga", ".bmp", ".wav", ".ogg", ".bnk", ".binka",
+        ".json", ".csv", ".ttf", ".otf", ".fbx", ".psk", ".usmap", ".jmap",
+    };
 
     [ObservableProperty]
     public partial string StatusText { get; set; } = "就绪";
@@ -561,14 +620,16 @@ public partial class MainViewModel : ViewModelBase
         AddSelectedToPatchCommand.NotifyCanExecuteChanged();
         ExportFolderRawCommand.NotifyCanExecuteChanged();
         ExportFolderImagesCommand.NotifyCanExecuteChanged();
+        ConvertPakCommand.NotifyCanExecuteChanged();
+        // 转换页把主 Pak 当作基底显示，需要跟着刷新。
+        OnPropertyChanged(nameof(IsPakPathEmpty));
         SaveSettings();
     }
 
-    partial void OnUsmapPathChanged(string value) => SaveSettings();
-
-    partial void OnMergePakPathChanged(string value)
+    partial void OnUsmapPathChanged(string value)
     {
-        MergePakCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(MappingSummary));
+        OnPropertyChanged(nameof(NeedsMappingsForConversion));
         SaveSettings();
     }
 
@@ -578,7 +639,20 @@ public partial class MainViewModel : ViewModelBase
         SaveSettings();
     }
 
-    partial void OnAesKeyChanged(string value) => SaveSettings();
+    partial void OnSelectedMergePakChanged(MergePakItem? value) => SaveSettings();
+
+    /// <summary>
+    /// 合并输入列表的持久化形式：每行一个路径，保留顺序即保留优先级。
+    /// （Android 上的 SAF 缓存路径跨重启仍有效，故可安全落盘。）
+    /// </summary>
+    private void PersistMergePakPaths() =>
+        _settings.MergePakPaths = MergePaks.Select(p => p.Path).ToList();
+
+    partial void OnAesKeyChanged(string value)
+    {
+        OnPropertyChanged(nameof(AesKeySummary));
+        SaveSettings();
+    }
 
     public void SaveWindowState()
     {
@@ -619,13 +693,18 @@ public partial class MainViewModel : ViewModelBase
         _settings.ThumbnailDefaultApplied = true;
         _settings.UseOodleCompression = UseOodleCompression;
         _settings.AskBeforeReplace = AskBeforeReplace;
+        _settings.IsAnimationsEnabled = IsAnimationsEnabled;
         _settings.ExportDirectory = ExportDirectory;
         _settings.ExportDirectoryBookmark = OperatingSystem.IsAndroid() ? _exportDirectoryBookmark : string.Empty;
         _settings.PakPath = PakPath;
         _settings.UsmapPath = UsmapPath;
-        _settings.MergePakPath = MergePakPath;
+        PersistMergePakPaths();
         // Android 上输出目标是 SAF 会话句柄，不持久化（重启后需重新选择）
         _settings.MergeOutputPath = OperatingSystem.IsAndroid() ? string.Empty : MergeOutputPath;
+        _settings.ConvertSourcePath = ConvertSourcePath;
+        _settings.ConvertMergeAll = ConvertMergeAll;
+        // 同 MergeOutputPath：Android 上是 SAF 会话句柄，重启后需重新选择。
+        _settings.ConvertOutputPath = OperatingSystem.IsAndroid() ? string.Empty : ConvertOutputPath;
         _settings.AesKey = AesKey;
         AppSettingsStore.Save(_settings);
     }
@@ -636,8 +715,14 @@ public partial class MainViewModel : ViewModelBase
 
     // ============ 合并页 ============
 
+    /// <summary>
+    /// 待合并的 Pak 列表。<b>顺序即覆盖优先级</b>：越靠后优先级越高，
+    /// 路径冲突时后面的会覆盖前面的。
+    /// </summary>
+    public ObservableCollection<MergePakItem> MergePaks { get; } = [];
+
     [ObservableProperty]
-    public partial string MergePakPath { get; set; } = string.Empty;
+    public partial MergePakItem? SelectedMergePak { get; set; }
 
     [ObservableProperty]
     public partial string MergeOutputPath { get; set; } = string.Empty;
@@ -648,7 +733,134 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     public partial string MergeStatus { get; set; } = "就绪";
 
-    public bool CanMergePak => IsPakOpen && MergePakPath.Length > 0 && MergeOutputPath.Length > 0;
+    /// <summary>合并列表是否为空（驱动空状态提示）。</summary>
+    public bool HasNoMergePaks => MergePaks.Count == 0;
+
+    public bool HasMergePaks => MergePaks.Count > 0;
+
+    /// <summary>合并页脚摘要：输入个数与覆盖顺序说明。</summary>
+    public string MergeInputSummary => MergePaks.Count == 0
+        ? string.Empty
+        : $"{MergePaks.Count} 个输入 · 覆盖顺序：{string.Join(" → ", MergePaks.Select(p => p.OrderLabel))}" +
+          "（数字越大越优先）";
+
+    /// <summary>列表变化时刷新与合并相关的派生属性。</summary>
+    private void NotifyMergeListChanged()
+    {
+        OnPropertyChanged(nameof(HasNoMergePaks));
+        OnPropertyChanged(nameof(HasMergePaks));
+        OnPropertyChanged(nameof(MergeInputSummary));
+        MergePakCommand.NotifyCanExecuteChanged();
+    }
+
+    public bool CanMergePak => MergePaks.Count >= 1 && HasMergeOutput;
+
+    /// <summary>输出目标是否就绪（Android 上是 SAF 句柄，Windows 上是路径）。</summary>
+    private bool HasMergeOutput => OperatingSystem.IsAndroid()
+        ? _mergeOutputTarget is not null
+        : MergeOutputPath.Length > 0;
+
+    // ============ Pak 转换（主 Pak + 待转换 Pak） ============
+
+    /// <summary>待转换的 Pak（提供新贴图）。</summary>
+    [ObservableProperty]
+    public partial string ConvertSourcePath { get; set; } = string.Empty;
+
+    /// <summary>转换输出路径（Android 上仅用于显示，实际写 SAF 句柄）。</summary>
+    [ObservableProperty]
+    public partial string ConvertOutputPath { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string ConvertStatus { get; set; } = "就绪";
+
+    /// <summary>已转换纹理的明细（失败项会列出原因）。</summary>
+    public ObservableCollection<PakConversionRow> ConvertRows { get; } = [];
+
+    /// <summary>true = 也把源 Pak 中主 Pak 没有的文件一并并入。</summary>
+    [ObservableProperty]
+    public partial bool ConvertMergeAll { get; set; }
+
+    public bool CanConvertPak => IsPakOpen
+        && ConvertSourcePath.Length > 0
+        && HasConvertOutput
+        && !IsBusy;
+
+    private bool HasConvertOutput => OperatingSystem.IsAndroid()
+        ? _convertOutputTarget is not null
+        : ConvertOutputPath.Length > 0;
+
+    private IStorageFile? _convertOutputTarget;
+
+    /// <summary>转换页是否尚未选择主 Pak（用于红色提示）。</summary>
+    public bool IsPakPathEmpty => string.IsNullOrWhiteSpace(PakPath);
+
+    public bool HasConvertRows => ConvertRows.Count > 0;
+
+    /// <summary>AES 密钥摘要（不回显密钥本身，只说明是否已填写）。</summary>
+    public string AesKeySummary => string.IsNullOrWhiteSpace(AesKey) ? "AES：未填写" : "AES：已填写";
+
+    /// <summary>映射文件摘要（含 usmap / jmap 格式标注）。</summary>
+    public string MappingSummary => string.IsNullOrWhiteSpace(UsmapPath)
+        ? "映射文件：未选择"
+        : $"映射：{PakTool.Core.MappingsLoader.DescribeFormat(UsmapPath)}";
+
+    /// <summary>
+    /// 是否需要提醒用户补映射文件：跨格式重编码要解出源纹理像素，
+    /// 未版本化资产必须有映射。未选映射时在转换页给出显式警告。
+    /// </summary>
+    public bool NeedsMappingsForConversion => string.IsNullOrWhiteSpace(UsmapPath);
+
+    /// <summary>本平台的编码路径说明。</summary>
+    public string ConvertPlatformNote => OperatingSystem.IsAndroid()
+        ? "Android：源纹理像素在应用进程内重新编码（libprism_codecs），无需外部工具。"
+        : "Windows：源纹理像素交由 UAssetCLI 重新编码；ASTC 需要 astcenc、BC7/DXT5 需要 texconv，"
+          + "可在设置页确认这些工具的探测状态。";
+
+    /// <summary>转换前置条件与工作方式说明。</summary>
+    public string ConvertServiceStatus
+    {
+        get
+        {
+            if (OperatingSystem.IsAndroid())
+            {
+                return "工作方式：解出待转换 Pak 的纹理像素 → 按主 Pak 资产的格式重新编码写回 → 打包。"
+                     + "两侧格式相同时自动改为无损字节搬运（更快且不损失画质）。";
+            }
+
+            Services.UAssetCliRunner? runner = Services.UAssetCliRunner.CreateCached();
+            if (runner is null)
+            {
+                return "⚠ 未找到 UAssetCLI，桌面端无法重新编码纹理。"
+                     + "请先执行 dotnet build UAssetCLI（详见 README）。";
+            }
+
+            return $"工作方式：解像素 → 按主 Pak 格式重编码 → 写回 → 打包。"
+                 + $"编码器：UAssetCLI 可用 · astcenc {(runner.HasAstcenc ? "可用" : "缺失")}"
+                 + $" · texconv {(runner.HasTexconv ? "可用" : "缺失")}（DXT1 由内置编码器处理）。";
+        }
+    }
+
+    [RelayCommand]
+    private void ClearConvertRows()
+    {
+        ConvertRows.Clear();
+        OnPropertyChanged(nameof(HasConvertRows));
+        ConvertStatus = "就绪";
+    }
+
+    partial void OnConvertSourcePathChanged(string value)
+    {
+        ConvertPakCommand.NotifyCanExecuteChanged();
+        SaveSettings();
+    }
+
+    partial void OnConvertOutputPathChanged(string value)
+    {
+        ConvertPakCommand.NotifyCanExecuteChanged();
+        SaveSettings();
+    }
+
+    partial void OnConvertMergeAllChanged(bool value) => SaveSettings();
 
     // ============ 打开 ============
 
@@ -694,13 +906,22 @@ public partial class MainViewModel : ViewModelBase
         PrioritizeUserAction();
         try
         {
-            await NavigateToAsync(ParentOf(CurrentFolder));
+            // 通过搜索框跳转进来时，"返回上一级"回到跳转前所在的目录，
+            // 而不是机械地取路径的父目录 —— 那通常不是用户想回去的地方。
+            string target = _returnFolder ?? ParentOf(CurrentFolder);
+            _returnFolder = null;
+            await NavigateToAsync(target);
         }
         finally
         {
             ResumeThumbnailsAfterUserAction();
         }
     }
+
+    /// <summary>
+    /// 由搜索/路径跳转设置的"返回目标"。非空时 <see cref="UpAsync"/> 优先回到它。
+    /// </summary>
+    private string? _returnFolder;
 
     /// <summary>双击目录项进入，双击文件项预览。</summary>
     [RelayCommand]
@@ -717,6 +938,8 @@ public partial class MainViewModel : ViewModelBase
         {
             if (item.IsDirectory)
             {
+                // 用户主动进入子目录：这是一次新的浏览，清掉上一次搜索遗留的返回目标，
+                // 否则之后按"返回"会跳回更早的位置而不是上一级。
                 await NavigateToAsync(item.FullPath);
             }
             else
@@ -744,13 +967,39 @@ public partial class MainViewModel : ViewModelBase
             return;
         }
 
+        string query = SearchQuery.Trim();
+
         await RunBusyAsync(async () =>
         {
+            // 先尝试把输入当作 Pak 内路径。命中则直接跳转（并清空搜索框），
+            // 否则回退为普通关键词搜索 —— 这样两种用法共用同一个输入框。
+            BrowsePathResolution? resolved = null;
+            await _gate.WaitAsync();
+            try
+            {
+                resolved = await _session.TryResolveBrowsePathAsync(query);
+            }
+            catch (Exception ex)
+            {
+                // 路径解析失败不应阻塞搜索，记录后继续。
+                Services.AppLog.Exception(ex, $"路径解析失败：{query}", "浏览", LogLevel.Debug);
+            }
+            finally
+            {
+                _gate.Release();
+            }
+
+            if (resolved is not null)
+            {
+                await NavigateFromSearchAsync(resolved);
+                return;
+            }
+
             IReadOnlyList<ArchiveEntryDto> results;
             await _gate.WaitAsync();
             try
             {
-                results = await _session.SearchAsync(SearchQuery.Trim(), 500);
+                results = await _session.SearchAsync(query, 500);
             }
             finally
             {
@@ -758,20 +1007,61 @@ public partial class MainViewModel : ViewModelBase
             }
 
             Entries = new ObservableCollection<EntryItem>(results.Select(EntryItem.Create));
-            CurrentPathText = $"搜索：{SearchQuery.Trim()}";
+            CurrentPathText = $"搜索：{query}";
             StatusText = $"搜索命中 {results.Count:N0} 项。";
-            AddLog($"搜索“{SearchQuery.Trim()}”命中 {results.Count:N0} 项");
+            AddLog($"搜索“{query}”命中 {results.Count:N0} 项");
             ClearPreview();
             StartThumbnails();
         });
     }
 
-    private async Task NavigateToAsync(string folder)
+    /// <summary>
+    /// 依据路径解析结果跳转：目录直接进入；文件进入其所在目录并选中该文件。
+    /// 跳转后清空搜索框，并记住"上一级"应回到输入路径之前的目录。
+    /// </summary>
+    private async Task NavigateFromSearchAsync(BrowsePathResolution resolved)
+    {
+        string from = CurrentFolder;
+        string target = resolved.Folder;
+
+        await NavigateToAsync(target, returnTo: from);
+
+        string? selectedName = resolved.FileName;
+        if (selectedName is not null)
+        {
+            EntryItem? match = Entries.FirstOrDefault(e =>
+                !e.IsDirectory && string.Equals(e.Name, selectedName, StringComparison.OrdinalIgnoreCase));
+            if (match is not null)
+            {
+                SelectedItem = match;
+            }
+        }
+
+        // 清空搜索框：这样"搜索 → 跳转 → 再输入"不会残留上一次的词。
+        SearchQuery = string.Empty;
+
+        StatusText = selectedName is null
+            ? $"已跳转到 /{target}"
+            : $"已定位到 {selectedName}";
+        AddLog($"路径跳转：{CurrentPathText}（输入 {target.TrimEnd('/')}）");
+    }
+
+    /// <summary>
+    /// 导航到指定目录。
+    /// </summary>
+    /// <param name="folder">目标目录（Pak 内路径，空串表示根）。</param>
+    /// <param name="returnTo">
+    /// 「返回上一级」的目标。仅在<b>紧接的下一次</b>返回时生效，用后即清。
+    /// 搜索/路径跳转会传入跳转前所在目录，让返回键回到用户原本的位置；
+    /// 其余导航不传，返回键按常规取其父目录。
+    /// </param>
+    private async Task NavigateToAsync(string folder, string? returnTo = null)
     {
         IReadOnlyList<ArchiveEntryDto> entries = await ListFolderAsync(folder);
         Entries = new ObservableCollection<EntryItem>(entries.Select(EntryItem.Create));
         CurrentFolder = folder;
         CurrentPathText = "/" + folder;
+        _returnFolder = returnTo;
         ClearPreview();
         StartThumbnails();
     }
@@ -874,9 +1164,152 @@ public partial class MainViewModel : ViewModelBase
 
             PreviewDetails = new ObservableCollection<DetailItem>(details);
             SelectedPathText = item.FullPath;
+            _selectedLocresPath = preview.Locres is not null ? item.FullPath : null;
+            HasLocresPreview = _selectedLocresPath is not null;
             HasPreview = true;
             StatusText = preview.Title;
         });
+    }
+
+    private string? _selectedLocresPath;
+
+    /// <summary>当前预览是否为 locres（决定是否显示「导出 JSON」入口）。</summary>
+    [ObservableProperty]
+    public partial bool HasLocresPreview { get; set; }
+
+    /// <summary>
+    /// 把当前预览的 locres 导出为 JSON。
+    /// 桌面直接写文件；Android 走 SAF 保存流并唤起系统分享。
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(HasLocresPreview))]
+    private async Task ExportLocresJsonAsync()
+    {
+        string? path = _selectedLocresPath;
+        if (path is null)
+        {
+            return;
+        }
+
+        await RunBusyAsync(async () =>
+        {
+            byte[] locresData;
+            await _gate.WaitAsync();
+            try
+            {
+                locresData = await _session.ReadFileAsync(path);
+            }
+            finally
+            {
+                _gate.Release();
+            }
+
+            await WriteLocresJsonAsync(locresData, Path.GetFileNameWithoutExtension(path));
+        });
+    }
+
+    /// <summary>
+    /// 把替换任务中的 locres 导出为 JSON（读原始文件，含尚未写回的编辑内容）。
+    /// </summary>
+    [RelayCommand]
+    private async Task ExportPatchLocresJsonAsync(PatchItem? patch)
+    {
+        if (patch is null || !patch.IsLocres)
+        {
+            return;
+        }
+
+        string? originalPath = patch.OriginalFiles
+            .OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(p => p.Value)
+            .FirstOrDefault();
+        if (originalPath is null || !File.Exists(originalPath))
+        {
+            StatusText = "找不到本地化原始文件，无法导出。";
+            return;
+        }
+
+        await RunBusyAsync(async () =>
+        {
+            byte[] locresData = await File.ReadAllBytesAsync(originalPath);
+
+            // 优先导出当前编辑结果：条目已被改写但尚未写回磁盘时，直接序列化编辑态。
+            if (patch.LocresEntries.Count > 0)
+            {
+                locresData = PakTool.Core.LocresResourceCodec.ApplyTranslations(
+                    locresData,
+                    patch.LocresEntries.Select(e => e.ToDto()).ToList());
+            }
+
+            await WriteLocresJsonAsync(locresData, Path.GetFileNameWithoutExtension(originalPath));
+        });
+    }
+
+    /// <summary>
+    /// 公共落盘逻辑：桌面写导出目录，Android 走 SAF 保存 + 系统分享。
+    /// </summary>
+    private async Task WriteLocresJsonAsync(byte[] locresData, string baseName)
+    {
+        byte[] json = PakTool.Core.LocresJsonExporter.ToJsonBytes(locresData);
+        string suggested = SanitizeFileName(baseName) + ".json";
+
+        if (OperatingSystem.IsAndroid())
+        {
+            TopLevel? top = TopLevel;
+            if (top is null)
+            {
+                return;
+            }
+
+            IStorageFile? target = await top.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = "导出本地化 JSON",
+                SuggestedFileName = suggested,
+                FileTypeChoices = [new FilePickerFileType("JSON") { Patterns = ["*.json"] }],
+            });
+            if (target is null)
+            {
+                return;
+            }
+
+            // 先落缓存再流入 SAF，随后分享（与补丁 Pak 的保存流程一致）。
+            string tempPath = Path.Combine(Path.GetTempPath(), $"prism-locres-{Guid.NewGuid():N}.json");
+            await File.WriteAllBytesAsync(tempPath, json);
+            try
+            {
+                await using (Stream dst = await target.OpenWriteAsync())
+                {
+                    await dst.WriteAsync(json);
+                }
+
+                AddLog($"本地化 JSON 已导出：{target.Name}（{json.Length:N0} 字节）");
+                StatusText = $"本地化 JSON 已导出：{target.Name}";
+                try
+                {
+                    await InvokeNativeShareAsync([tempPath], $"Prism 本地化 JSON：{target.Name}");
+                }
+                catch
+                {
+                    // 分享失败不影响已保存的文件。
+                }
+            }
+            finally
+            {
+                TryDeleteFile(tempPath);
+            }
+
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(ExportDirectory))
+        {
+            StatusText = "请先在设置中选择导出目录。";
+            return;
+        }
+
+        string outputPath = Path.Combine(ExportDirectory, suggested);
+        await File.WriteAllBytesAsync(outputPath, json);
+        AddLog($"本地化 JSON 已导出：{outputPath}（{json.Length:N0} 字节）");
+        StatusText = $"本地化 JSON 已导出：{suggested}";
     }
 
     private async Task<AudioPayloadDto> ReadAudioPayloadAsync(string path)
@@ -1951,24 +2384,30 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanMergePak))]
     private async Task MergePakAsync()
     {
-        if (AskBeforeReplace)
+        if (MergePaks.Count == 0)
         {
-            MergeInspectionResponse inspection = await InspectMergeCoreAsync();
-            MergeStatus = $"主 Pak {inspection.BaseCount:N0} 项，合并 Pak {inspection.MergeCount:N0} 项，冲突 {inspection.ConflictCount:N0} 项";
-            if (inspection.ConflictCount > 0)
+            return;
+        }
+
+        // 先把每个 Pak 的文件数与相互冲突统计出来，让用户看到"覆盖了什么"。
+        MergeInspectionResponse inspection = await InspectMergeCoreAsync();
+        MergeStatus = inspection.Summary;
+
+        if (AskBeforeReplace && inspection.ConflictCount > 0)
+        {
+            string question = $"共发现 {inspection.ConflictCount:N0} 个路径冲突。" +
+                              "冲突路径将由列表中靠后的 Pak 覆盖靠前的（主 Pak 优先级最低）。是否继续？";
+            bool confirmed = OperatingSystem.IsAndroid()
+                ? (NativeConfirmAsync is not null
+                    ? await NativeConfirmAsync("确认合并", question)
+                    : true)
+                : await Views.ConfirmDialog.ShowAsync(
+                    TopLevel as Window ?? throw new InvalidOperationException("窗口未就绪"),
+                    question);
+            if (!confirmed)
             {
-                bool confirmed = OperatingSystem.IsAndroid()
-                    ? (NativeConfirmAsync is not null
-                        ? await NativeConfirmAsync("确认", $"发现 {inspection.ConflictCount} 个冲突。用合并 Pak 的文件替换？")
-                        : true)
-                    : await Views.ConfirmDialog.ShowAsync(
-                        TopLevel as Window ?? throw new InvalidOperationException("窗口未就绪"),
-                        $"发现 {inspection.ConflictCount} 个冲突。用合并 Pak 的文件替换？");
-                if (!confirmed)
-                {
-                    MergeStatus = "已取消";
-                    return;
-                }
+                MergeStatus = "已取消";
+                return;
             }
         }
 
@@ -2003,62 +2442,107 @@ public partial class MainViewModel : ViewModelBase
                 MergeStatus = $"合并完成：{result.FileCount:N0} 个文件，冲突 {result.ConflictCount:N0}，替换 {result.ReplacedCount:N0}";
                 StatusText = $"合并完成：{Path.GetFileName(result.OutputPakPath)}";
             }
+
+            AddLog($"合并 Pak：{MergePaks.Count} 个输入 → {Path.GetFileName(result.OutputPakPath)}，" +
+                   $"{result.FileCount:N0} 个文件，冲突 {result.ConflictCount:N0}，覆盖 {result.ReplacedCount:N0}");
         });
     }
 
+    /// <summary>
+    /// 统计参与合并的 Pak 的文件数与路径冲突数。
+    /// 冲突定义：某个路径在多个 Pak 中都存在（即会被优先级更高的覆盖）。
+    /// </summary>
     private async Task<MergeInspectionResponse> InspectMergeCoreAsync()
     {
-        using var baseSession = new PakArchiveSession();
-        using var mergeSession = new PakArchiveSession();
-        string? aes = NullIfWhiteSpace(AesKey);
-        string? usmap = NullIfWhiteSpace(UsmapPath);
-        await baseSession.OpenAsync(new PakOpenOptions([PakPath], aes, usmap));
-        await mergeSession.OpenAsync(new PakOpenOptions([MergePakPath], aes, usmap));
+        if (MergePaks.Count == 0)
+        {
+            return MergeInspectionResponse.Empty;
+        }
 
-        IReadOnlySet<string> baseFiles = await baseSession.ListRawFilePathsAsync();
-        IReadOnlySet<string> mergeFiles = await mergeSession.ListRawFilePathsAsync();
-        string[] conflicts = mergeFiles.Where(baseFiles.Contains).Order(StringComparer.OrdinalIgnoreCase).ToArray();
-        return new MergeInspectionResponse(baseFiles.Count, mergeFiles.Count, conflicts.Length, conflicts.Take(500).ToArray());
+        string? aes = NullIfWhiteSpace(AesKey);
+        string? mappings = NullIfWhiteSpace(UsmapPath);
+
+        // path → 出现过该路径的输入序号集合
+        Dictionary<string, List<int>> owners = new(StringComparer.OrdinalIgnoreCase);
+        List<int> perPakCounts = [];
+
+        for (int index = 0; index < MergePaks.Count; index++)
+        {
+            MergePakItem item = MergePaks[index];
+            using var session = new PakArchiveSession();
+            await session.OpenAsync(new PakOpenOptions([item.Path], aes, mappings));
+
+            IReadOnlySet<string> paths = await session.ListRawFilePathsAsync();
+            perPakCounts.Add(paths.Count);
+            item.Detail = $"{paths.Count:N0} 个文件";
+
+            foreach (string path in paths)
+            {
+                if (!owners.TryGetValue(path, out List<int>? list))
+                {
+                    owners[path] = list = [];
+                }
+
+                list.Add(index);
+            }
+        }
+
+        string[] conflicts = owners
+            .Where(pair => pair.Value.Count > 1)
+            .Select(pair => pair.Key)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        int baseCount = perPakCounts.Count > 0 ? perPakCounts[0] : 0;
+        return new MergeInspectionResponse(
+            baseCount,
+            perPakCounts.Sum(),
+            perPakCounts,
+            conflicts.Length,
+            conflicts.Take(500).ToArray());
     }
 
+    /// <summary>
+    /// 按列表顺序合并：列表越靠后优先级越高，路径冲突时覆盖前面的。
+    /// 主 Pak 是列表第一项，优先级最低。
+    /// </summary>
     private async Task<MergeBuildResponse> BuildMergeCoreAsync()
     {
         string tempRoot = Path.Combine(Path.GetTempPath(), "PrismDesktopMerge-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempRoot);
         try
         {
-            using var baseSession = new PakArchiveSession();
-            using var mergeSession = new PakArchiveSession();
             string? aes = NullIfWhiteSpace(AesKey);
-            string? usmap = NullIfWhiteSpace(UsmapPath);
-            await baseSession.OpenAsync(new PakOpenOptions([PakPath], aes, usmap));
-            await mergeSession.OpenAsync(new PakOpenOptions([MergePakPath], aes, usmap));
+            string? mappings = NullIfWhiteSpace(UsmapPath);
 
-            IReadOnlyList<PakRawFileCopy> baseFiles = await baseSession.CopyAllRawFilesAsync(Path.Combine(tempRoot, "base"));
-            IReadOnlyList<PakRawFileCopy> mergeFiles = await mergeSession.CopyAllRawFilesAsync(Path.Combine(tempRoot, "merge"));
-
-            Dictionary<string, ModifiedPakFile> mapped = baseFiles.ToDictionary(
-                x => x.PakPath,
-                x => new ModifiedPakFile(x.DiskPath, x.PakPath),
-                StringComparer.OrdinalIgnoreCase);
-
+            Dictionary<string, ModifiedPakFile> merged = new(StringComparer.OrdinalIgnoreCase);
             int conflicts = 0;
             int replaced = 0;
-            foreach (PakRawFileCopy file in mergeFiles)
+
+            // 顺序遍历：后写的覆盖先写的，天然实现"越靠后优先级越高"。
+            for (int index = 0; index < MergePaks.Count; index++)
             {
-                bool hasConflict = mapped.ContainsKey(file.PakPath);
-                if (hasConflict)
+                MergePakItem item = MergePaks[index];
+                string slot = Path.Combine(tempRoot, $"in{index:D3}");
+
+                using var session = new PakArchiveSession();
+                await session.OpenAsync(new PakOpenOptions([item.Path], aes, mappings));
+                IReadOnlyList<PakRawFileCopy> files = await session.CopyAllRawFilesAsync(slot);
+
+                foreach (PakRawFileCopy file in files)
                 {
-                    conflicts++;
-                    if (!AskBeforeReplace)
+                    if (merged.ContainsKey(file.PakPath))
                     {
-                        continue;
+                        // 只有非主 Pak 的覆盖才计入"替换"（主 Pak 自身不可能重复）。
+                        conflicts++;
+                        if (index > 0)
+                        {
+                            replaced++;
+                        }
                     }
 
-                    replaced++;
+                    merged[file.PakPath] = new ModifiedPakFile(file.DiskPath, file.PakPath);
                 }
-
-                mapped[file.PakPath] = new ModifiedPakFile(file.DiskPath, file.PakPath);
             }
 
             string packTarget = OperatingSystem.IsAndroid()
@@ -2066,17 +2550,349 @@ public partial class MainViewModel : ViewModelBase
                 : MergeOutputPath;
 
             await Task.Run(() => ModifiedPakPackService.Pack(new ModifiedPakRequest(
-                mapped.Values.OrderBy(x => x.PakPath, StringComparer.OrdinalIgnoreCase).ToArray(),
+                merged.Values.OrderBy(x => x.PakPath, StringComparer.OrdinalIgnoreCase).ToArray(),
                 packTarget,
                 UseCompression: UseOodleCompression,
                 Compression: PakCompression.Oodle)));
 
-            return new MergeBuildResponse(packTarget, mapped.Count, conflicts, replaced);
+            return new MergeBuildResponse(packTarget, merged.Count, conflicts, replaced);
         }
         finally
         {
             TryDeleteDirectory(tempRoot);
         }
+    }
+
+    // ============ Pak 转换 ============
+
+    /// <summary>
+    /// 双端 Pak 转换：把待转换 Pak 里的纹理，按主 Pak 的纹理格式重新编码后替换进去，
+    /// 再合成一个新的 Pak。
+    ///
+    /// 平台差异：
+    /// - Android 走进程内 <c>libprism_codecs</c> 编码；
+    /// - Windows 走 UAssetCLI + astcenc/texconv（由注入的委托调用）。
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanConvertPak))]
+    private async Task ConvertPakAsync()
+    {
+        if (!IsPakOpen || string.IsNullOrWhiteSpace(ConvertSourcePath))
+        {
+            return;
+        }
+
+        string targetPak = PakPath;
+        string sourcePak = ConvertSourcePath;
+        bool mergeAll = ConvertMergeAll;
+        string? aes = NullIfWhiteSpace(AesKey);
+        string? mappings = NullIfWhiteSpace(UsmapPath);
+        bool useOodle = UseOodleCompression;
+
+        // Android 先打包到临时文件，再流入 SAF 句柄并分享（与补丁 Pak 一致）。
+        bool android = OperatingSystem.IsAndroid();
+        string outputPath = android
+            ? Path.Combine(Path.GetTempPath(), $"converted_{Guid.NewGuid():N}.pak")
+            : ConvertOutputPath;
+
+        await RunBusyAsync(async () =>
+        {
+            ConvertRows.Clear();
+            OnPropertyChanged(nameof(HasConvertRows));
+            ConvertStatus = "准备中…";
+
+            // 转换 = 解出源纹理像素，按主 Pak 资产的格式重新编码写回。
+            // 同格式时服务内部会走无损字节搬运的快路径。
+            var service = new UAssetTexture.Core.PakConversionService();
+
+            if (!android)
+            {
+                // 桌面：把"编码成目标格式并写回资产"交给 UAssetCLI。
+                // 目标格式由主 Pak 资产自身决定（模板 uasset 里已声明），
+                // 所以这里不传 --expected-format，让 CLI 从资产里读。
+                Services.UAssetCliRunner? runner = Services.UAssetCliRunner.CreateCached();
+                if (runner is null)
+                {
+                    ConvertStatus = "未找到 UAssetCLI，无法重新编码纹理。请先构建 UAssetCLI（见 README）。";
+                    StatusText = ConvertStatus;
+                    return;
+                }
+
+                service.EncodeIntoAssetAsync = async (templateAsset, pngPath, outputAsset, ct) =>
+                {
+                    UAssetCliRunner.CliResult cliResult = await runner.ReplaceTextureAsync(
+                        templateAsset,
+                        pngPath,
+                        outputAsset,
+                        format: string.Empty,
+                        engine: "VER_UE5_6",
+                        astcQuality: "fast",
+                        ct).ConfigureAwait(false);
+
+                    return cliResult.ExitCode == 0 ? null : cliResult.CombinedOutput;
+                };
+            }
+
+            var progress = new Progress<PakConversionProgress>(p =>
+            {
+                ConvertStatus = p.Total > 1
+                    ? $"[{p.Completed}/{p.Total}] {Path.GetFileName(p.CurrentItem)}"
+                    : p.CurrentItem;
+            });
+
+            UAssetTexture.Core.PakConversionResult result = await service.ConvertAsync(
+                new UAssetTexture.Core.PakConversionOptions(
+                    sourcePak,
+                    targetPak,
+                    outputPath,
+                    aes,
+                    mappings,
+                    // 默认只输出改动过的资产（模组 Pak 的用法）；勾选后输出完整整包。
+                    mergeAll
+                        ? UAssetTexture.Core.PakConversionMode.MergeAll
+                        : UAssetTexture.Core.PakConversionMode.ReplacedOnly,
+                    useOodle,
+                    EngineVersion.VER_UE5_6),
+                progress).ConfigureAwait(false);
+
+            UAssetTexture.Core.PakConversionCounts counts = result.Counts;
+            foreach (UAssetTexture.Core.PakConversionItemResult item in result.Items)
+            {
+                ConvertRows.Add(new PakConversionRow(item.PakPath, DescribeConversionStatus(item.Status), item.Message));
+            }
+
+            OnPropertyChanged(nameof(HasConvertRows));
+
+            ConvertStatus =
+                $"完成：替换 {counts.Replaced:N0}，主 Pak 缺失 {counts.MissingInTarget:N0}，" +
+                $"跳过 {counts.Skipped:N0}，失败 {counts.Failed:N0}";
+
+            AddLog(
+                $"Pak 转换：{Path.GetFileName(sourcePak)} → {Path.GetFileName(targetPak)}，" +
+                $"候选纹理 {counts.TextureCandidates:N0}，替换 {counts.Replaced:N0}，" +
+                $"缺失 {counts.MissingInTarget:N0}，跳过 {counts.Skipped:N0}，失败 {counts.Failed:N0}，" +
+                $"输出文件 {counts.TotalFiles:N0}",
+                "转换");
+
+            if (!android)
+            {
+                StatusText = $"Pak 转换完成：{Path.GetFileName(outputPath)}（替换 {counts.Replaced:N0} 张纹理）";
+                return;
+            }
+
+            if (_convertOutputTarget is null)
+            {
+                StatusText = "转换完成，但输出位置未就绪。";
+                return;
+            }
+
+            await using (Stream src = File.OpenRead(outputPath))
+            await using (Stream dst = await _convertOutputTarget.OpenWriteAsync())
+            {
+                await src.CopyToAsync(dst);
+            }
+
+            StatusText = $"Pak 转换完成：{_convertOutputTarget.Name}（替换 {counts.Replaced:N0} 张纹理）";
+            try
+            {
+                await InvokeNativeShareAsync([outputPath], $"Prism 转换 Pak：{_convertOutputTarget.Name}");
+            }
+            catch
+            {
+                // 分享失败不影响已保存的文件。
+            }
+            finally
+            {
+                TryDeleteFile(outputPath);
+            }
+        });
+    }
+
+    private static string DescribeConversionStatus(UAssetTexture.Core.PakConversionItemStatus status) => status switch
+    {
+        UAssetTexture.Core.PakConversionItemStatus.Replaced => "已替换",
+        UAssetTexture.Core.PakConversionItemStatus.MissingInTarget => "主 Pak 无此项",
+        UAssetTexture.Core.PakConversionItemStatus.Skipped => "跳过",
+        _ => "失败",
+    };
+
+    [RelayCommand]
+    private async Task BrowseConvertSourceAsync()
+    {
+        string? path = await PickFileAsync("选择待转换的 Pak", ["*.pak"], ConvertSourcePath);
+        if (path is not null)
+        {
+            ConvertSourcePath = path;
+            StatusText = $"待转换 Pak：{Path.GetFileName(path)}";
+        }
+    }
+
+    [RelayCommand]
+    private async Task BrowseConvertOutputAsync()
+    {
+        TopLevel? top = TopLevel;
+        if (top is null)
+        {
+            return;
+        }
+
+        IStorageFile? file = await top.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "选择转换输出 Pak 路径",
+            SuggestedFileName = $"converted_{DateTime.Now:yyyyMMdd_HHmmss}.pak",
+            FileTypeChoices = [new FilePickerFileType("Pak 文件") { Patterns = ["*.pak"] }],
+        });
+        if (file is null)
+        {
+            return;
+        }
+
+        _convertOutputTarget = file;
+        ConvertOutputPath = OperatingSystem.IsAndroid()
+            ? file.Name
+            : file.TryGetLocalPath() ?? file.Name;
+    }
+
+    // ---------- 合并列表维护 ----------
+    [RelayCommand]
+    private void RemoveMergePak(MergePakItem? item)
+    {
+        if (item is null || item.IsBase)
+        {
+            return;
+        }
+
+        MergePaks.Remove(item);
+        if (ReferenceEquals(SelectedMergePak, item))
+        {
+            SelectedMergePak = null;
+        }
+
+        RenumberMergePaks();
+        NotifyMergeListChanged();
+        SaveSettings();
+        MergeStatus = MergePaks.Count == 0 ? "就绪" : $"已移除 {item.DisplayName}，当前 {MergePaks.Count} 个输入";
+    }
+
+    [RelayCommand]
+    private void ClearMergePaks()
+    {
+        // 保留主 Pak（列表首项），清空其余。
+        while (MergePaks.Count > 1)
+        {
+            MergePaks.RemoveAt(MergePaks.Count - 1);
+        }
+
+        // 若首项不是主 Pak（例如用户只添加了普通 Pak），一并清掉。
+        if (MergePaks.Count == 1 && !MergePaks[0].IsBase)
+        {
+            MergePaks.Clear();
+        }
+
+        RenumberMergePaks();
+        NotifyMergeListChanged();
+        SaveSettings();
+        MergeStatus = "就绪";
+    }
+
+    /// <summary>
+    /// 把 <paramref name="source"/> 移动到 <paramref name="targetIndex"/>（拖动排序）。
+    /// 主 Pak 不参与移动，也不会被挤到其他位置。
+    /// </summary>
+    public void MoveMergePak(MergePakItem source, int targetIndex)
+    {
+        int from = MergePaks.IndexOf(source);
+        if (from < 0 || source.IsBase)
+        {
+            return;
+        }
+
+        // 主 Pak 固定在 0，其他项只能在 [1, Count-1] 之间移动。
+        int to = Math.Clamp(targetIndex, 1, MergePaks.Count - 1);
+        if (to == from)
+        {
+            return;
+        }
+
+        MergePaks.Move(from, to);
+        RenumberMergePaks();
+        NotifyMergeListChanged();
+        SaveSettings();
+        MergeStatus = $"已调整覆盖顺序（{MergePaks.Count} 个输入，越靠下优先级越高）";
+    }
+
+    /// <summary>按当前顺序刷新序号标签。</summary>
+    private void RenumberMergePaks()
+    {
+        for (int i = 0; i < MergePaks.Count; i++)
+        {
+            MergePaks[i].OrderLabel = MergePaks[i].IsBase ? "主" : i.ToString();
+        }
+    }
+
+    /// <summary>
+    /// 恢复上次的合并列表。仅保留仍然存在的文件：Android 的 SAF 缓存可能已被
+    /// 系统清理，Windows 上用户也可能移走了文件。
+    /// </summary>
+    private void RestoreMergePaks(IReadOnlyList<string> paths)
+    {
+        foreach (string path in paths)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                continue;
+            }
+
+            try
+            {
+                if (!File.Exists(path))
+                {
+                    Services.AppLog.Warn($"合并列表跳过已不存在的文件：{path}", "合并");
+                    continue;
+                }
+            }
+            catch
+            {
+                continue;
+            }
+
+            MergePaks.Add(new MergePakItem(path, Path.GetFileName(path), isBase: MergePaks.Count == 0));
+        }
+
+        RenumberMergePaks();
+    }
+
+    /// <summary>把（可能重复的）路径加入合并列表；主 Pak 固定占用首项。</summary>
+    private void AddMergePaks(IEnumerable<string> paths)
+    {
+        int added = 0;
+        foreach (string path in paths)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                continue;
+            }
+
+            // 主 Pak 已作为首项存在时，把"与主 Pak 相同"的重复选择忽略。
+            if (MergePaks.Any(p => string.Equals(p.Path, path, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            bool isBase = MergePaks.Count == 0;
+            MergePaks.Add(new MergePakItem(path, Path.GetFileName(path), isBase));
+            added++;
+        }
+
+        if (added > 0)
+        {
+            RenumberMergePaks();
+            NotifyMergeListChanged();
+            SaveSettings();
+        }
+
+        MergeStatus = MergePaks.Count == 0
+            ? "就绪"
+            : $"已加入 {added} 个 Pak，共 {MergePaks.Count} 个输入；越靠下优先级越高";
     }
 
     // ============ 设置（应用内视图，兼容手机） ============
@@ -2239,17 +3055,70 @@ public partial class MainViewModel : ViewModelBase
         AstcencStatus = runner?.HasAstcenc == true ? "已找到 astcenc" : "未找到 astcenc";
         TexconvStatus = runner?.HasTexconv == true ? "已找到 texconv" : "未找到 texconv";
         TempDirectory = Path.GetTempPath();
+        _cliRunnerStatusForLog = CliStatus;
+        _astcencStatusForLog = AstcencStatus;
+        _texconvStatusForLog = TexconvStatus;
+
+        // 落盘镜像：进程崩溃/被系统杀掉时仍能保留最后几条日志。
+        try
+        {
+            Services.AppLog.EnableFileMirror(Path.Combine(PrivateDataDir(), "logs", "prism-last-session.log"));
+        }
+        catch
+        {
+            // 镜像失败不影响内存日志。
+        }
+
+        Services.AppLog.Info(
+            $"应用启动 v{VersionText} | {System.Runtime.InteropServices.RuntimeInformation.OSDescription} | " +
+            $"{System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture} | 临时目录 {TempDirectory}",
+            "启动");
+        Services.AppLog.Info($"依赖探测：{CliStatus} / {AstcencStatus} / {TexconvStatus}", "启动");
+        if (!string.IsNullOrWhiteSpace(PakPath))
+        {
+            Services.AppLog.Debug($"上次 Pak 路径：{PakPath}", "启动");
+        }
+
+        if (!string.IsNullOrWhiteSpace(UsmapPath))
+        {
+            Services.AppLog.Debug(
+                $"上次映射路径（{PakTool.Core.MappingsLoader.DescribeFormat(UsmapPath)}）：{UsmapPath}",
+                "启动");
+        }
+
         RefreshLog();
-        Services.AppLog.Add($"应用启动 v{VersionText}");
     }
 
-    /// <summary>刷新日志预览文本（设置页展示）。</summary>
-    private void RefreshLog() => LogText = Services.AppLog.FullText;
+    private string _cliRunnerStatusForLog = string.Empty;
+    private string _astcencStatusForLog = string.Empty;
+    private string _texconvStatusForLog = string.Empty;
 
-    /// <summary>记录一条日志并刷新预览。</summary>
-    private void AddLog(string line)
+    /// <summary>刷新日志预览文本（设置页展示，只取尾部若干行避免长日志卡 UI）。</summary>
+    private void RefreshLog() => LogText = Services.AppLog.Count == 0
+        ? "暂无日志"
+        : Services.AppLog.Tail(LogPreviewLineLimit);
+
+    /// <summary>设置页日志预览的最大行数。</summary>
+    private const int LogPreviewLineLimit = 400;
+
+    /// <summary>记录一条 INFO 日志并刷新预览。</summary>
+    private void AddLog(string line, string category = "app")
     {
-        Services.AppLog.Add(line);
+        Services.AppLog.Info(line, category);
+        RefreshLog();
+    }
+
+    /// <summary>记录一条 WARN 日志并刷新预览。</summary>
+    private void AddWarnLog(string line, string category = "app")
+    {
+        Services.AppLog.Warn(line, category);
+        RefreshLog();
+    }
+
+    /// <summary>记录异常（含完整堆栈）并刷新预览。</summary>
+    private void AddErrorLog(Exception exception, string context, string category = "app", long? elapsedMs = null)
+    {
+        Services.AppLog.Exception(exception, context, category, elapsedMs: elapsedMs);
         RefreshLog();
     }
 
@@ -2277,8 +3146,7 @@ public partial class MainViewModel : ViewModelBase
                 return;
             }
 
-            RefreshLog();
-            byte[] content = System.Text.Encoding.UTF8.GetBytes(LogText);
+            byte[] content = System.Text.Encoding.UTF8.GetBytes(BuildLogReport());
             if (OperatingSystem.IsAndroid())
             {
                 // 先写应用缓存，再流式写入用户选择的位置；保存完成后直接唤起系统分享。
@@ -2291,7 +3159,7 @@ public partial class MainViewModel : ViewModelBase
                         await dst.WriteAsync(content);
                     }
 
-                    AddLog($"日志已导出：{file.Name}");
+                    AddLog($"日志已导出：{file.Name}（{Services.AppLog.Count:N0} 行）");
                     try
                     {
                         await InvokeNativeShareAsync([tempLogPath], $"Prism 日志：{file.Name}");
@@ -2309,7 +3177,7 @@ public partial class MainViewModel : ViewModelBase
             else if (file.TryGetLocalPath() is { } path)
             {
                 await File.WriteAllBytesAsync(path, content);
-                AddLog($"日志已导出：{path}");
+                AddLog($"日志已导出：{path}（{Services.AppLog.Count:N0} 行）");
             }
 
             StatusText = $"日志已导出（{Services.AppLog.Count:N0} 行）。";
@@ -2318,6 +3186,41 @@ public partial class MainViewModel : ViewModelBase
         {
             ResumeThumbnailsAfterUserAction();
         }
+    }
+
+    /// <summary>
+    /// 构建导出报告：环境头 + 当前会话配置 + 全部日志。
+    /// 附带配置状态是为了让日志脱离本机后仍可解读（编码器是否可用、映射格式等）。
+    /// </summary>
+    private string BuildLogReport()
+    {
+        Dictionary<string, string?> environment = new()
+        {
+            ["UAssetCLI"] = CliStatus,
+            ["astcenc"] = AstcencStatus,
+            ["texconv"] = TexconvStatus,
+            ["Pak"] = DescribeCurrentPath(PakPath),
+            ["映射文件"] = DescribeCurrentPath(UsmapPath),
+            ["导出目录"] = string.IsNullOrWhiteSpace(ExportDirectory) ? "<未设置>" : ExportDirectory,
+            ["缩略图"] = ShowThumbnails ? "开启" : "关闭",
+            ["Oodle 压缩"] = UseOodleCompression ? "开启" : "关闭",
+        };
+
+        return Services.AppLog.BuildReport($"Prism {VersionText}", environment);
+    }
+
+    /// <summary>路径摘要：带映射格式标注，空值给出可读占位。</summary>
+    private static string DescribeCurrentPath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return "<未选择>";
+        }
+
+        return PakTool.Core.MappingsLoader.Patterns.Any(p =>
+            path.EndsWith(p[1..], StringComparison.OrdinalIgnoreCase))
+            ? $"{path}（{PakTool.Core.MappingsLoader.DescribeFormat(path)}）"
+            : path;
     }
 
     private IStorageFile? _mergeOutputTarget;
@@ -2353,26 +3256,92 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
+    /// <summary>界面过渡动画开关（设置页）。</summary>
+    [ObservableProperty]
+    public partial bool IsAnimationsEnabled { get; set; } = true;
+
+    partial void OnIsAnimationsEnabledChanged(bool value) => SaveSettings();
+
     [RelayCommand]
     private async Task BrowseUsmapAsync()
     {
-        string? path = await PickFileAsync("选择 .usmap 映射文件", ["*.usmap"], UsmapPath);
+        // 同时接受 .usmap 与 .jmap（含 gz）；CUE4Parse 按扩展名自动选择解析器。
+        string? path = await PickFileAsync(
+            "选择映射文件（.usmap / .jmap）",
+            PakTool.Core.MappingsLoader.Patterns,
+            UsmapPath,
+            ["application/octet-stream", "application/gzip", "application/json"]);
         if (path is not null)
         {
             UsmapPath = path;
-            StatusText = $"已选择 Usmap：{Path.GetFileName(path)}";
+            string format = PakTool.Core.MappingsLoader.DescribeFormat(path);
+            StatusText = $"已选择 {format} 映射：{Path.GetFileName(path)}";
+            AddLog($"选择映射文件（{format}）：{Path.GetFileName(path)}");
         }
     }
 
+    /// <summary>
+    /// 多选加入合并列表。第一个选中的 Pak 若列表为空则成为主 Pak（基底）。
+    /// Android 上逐个复制到私有缓存（SAF 无法一次拿多个本地路径）。
+    /// </summary>
     [RelayCommand]
     private async Task BrowseMergePakAsync()
     {
-        string? path = await PickFileAsync("选择合并 Pak 文件", ["*.pak"], MergePakPath);
-        if (path is not null)
+        TopLevel? top = TopLevel;
+        if (top is null)
         {
-            MergePakPath = path;
-            StatusText = $"已选择合并 Pak：{Path.GetFileName(path)}";
+            return;
         }
+
+        IReadOnlyList<IStorageFile> files = await top.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "选择要合并的 Pak（可多选）",
+            AllowMultiple = true,
+            FileTypeFilter = [new FilePickerFileType("Pak 文件") { Patterns = ["*.pak"] }],
+        });
+        if (files.Count == 0)
+        {
+            return;
+        }
+
+        List<string> resolved = [];
+        if (OperatingSystem.IsAndroid())
+        {
+            // SAF：逐个复制到私有目录，文件名保留可读前缀 + 唯一后缀。
+            string destDir = Path.Combine(PrivateDataDir(), "picked");
+            Directory.CreateDirectory(destDir);
+            foreach (IStorageFile file in files)
+            {
+                string stem = SanitizeFileName(Path.GetFileNameWithoutExtension(file.Name));
+                if (string.IsNullOrWhiteSpace(stem))
+                {
+                    stem = "merge";
+                }
+
+                string destPath = Path.Combine(destDir, $"{stem}.{Guid.NewGuid():N}.pak");
+                await using Stream src = await file.OpenReadAsync();
+                await using (FileStream dst = File.Create(destPath))
+                {
+                    await src.CopyToAsync(dst);
+                }
+
+                resolved.Add(destPath);
+            }
+        }
+        else
+        {
+            foreach (IStorageFile file in files)
+            {
+                if (file.TryGetLocalPath() is { } path)
+                {
+                    resolved.Add(path);
+                }
+            }
+        }
+
+        AddMergePaks(resolved);
+        StatusText = $"合并列表：{MergePaks.Count} 个 Pak（越靠下优先级越高）";
+        AddLog($"合并列表更新：{MergePaks.Count} 个输入", "合并");
     }
 
     [RelayCommand]
@@ -2558,7 +3527,11 @@ public partial class MainViewModel : ViewModelBase
         }
 
         var keep = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (string? path in new[] { PakPath, UsmapPath, MergePakPath })
+
+        // 合并列表可能有多项，逐项保留（否则下次启动前就被清掉了）。
+        IEnumerable<string?> tracked = new[] { PakPath, UsmapPath, ConvertSourcePath }
+            .Concat(MergePaks.Select(p => (string?)p.Path));
+        foreach (string? path in tracked)
         {
             if (string.IsNullOrWhiteSpace(path))
             {
@@ -2637,6 +3610,8 @@ public partial class MainViewModel : ViewModelBase
         PreviewDetails = [];
         SelectedPathText = string.Empty;
         HasPreview = false;
+        _selectedLocresPath = null;
+        HasLocresPreview = false;
         ModelPreview = null;
         PreviewEmptyText = "此文件无预览";
     }
@@ -2720,8 +3695,44 @@ public partial class MainViewModel : ViewModelBase
     }
 }
 
-/// <summary>Merge 检查结果。</summary>
-public sealed record MergeInspectionResponse(int BaseCount, int MergeCount, int ConflictCount, IReadOnlyList<string> Conflicts);
+/// <summary>
+/// 合并前的检查结果：每个输入 Pak 的文件数，以及路径冲突统计。
+/// </summary>
+public sealed record MergeInspectionResponse(
+    int BaseCount,
+    int MergeCount,
+    IReadOnlyList<int> PerPakCounts,
+    int ConflictCount,
+    IReadOnlyList<string> Conflicts)
+{
+    public static MergeInspectionResponse Empty { get; } = new(0, 0, [], 0, []);
+
+    /// <summary>一行摘要，用于合并页状态栏。</summary>
+    public string Summary => PerPakCounts.Count == 0
+        ? "尚未加入待合并的 Pak"
+        : $"{PerPakCounts.Count} 个输入（主 Pak {BaseCount:N0} 项，合计 {MergeCount:N0} 项），路径冲突 {ConflictCount:N0} 个";
+}
 
 /// <summary>Merge 构建结果。</summary>
 public sealed record MergeBuildResponse(string OutputPakPath, int FileCount, int ConflictCount, int ReplacedCount);
+
+/// <summary>Pak 转换的界面状态（单条纹理）。</summary>
+public sealed partial class PakConversionRow : CommunityToolkit.Mvvm.ComponentModel.ObservableObject
+{
+    public PakConversionRow(string pakPath, string status, string? message)
+    {
+        PakPath = pakPath;
+        StatusText = status;
+        Message = message ?? string.Empty;
+    }
+
+    public string PakPath { get; }
+
+    public string StatusText { get; }
+
+    public string Message { get; }
+
+    public bool HasMessage => Message.Length > 0;
+
+    public bool IsFailure => StatusText == "失败";
+}

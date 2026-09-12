@@ -131,6 +131,9 @@
                     <MenuFlyout>
                         <MenuItem Header="导出原始" Command="{Binding ExportRawCommand}" />
                         <MenuItem Header="导出预览" Command="{Binding ExportPreviewCommand}" />
+                        <MenuItem Header="导出本地化 JSON"
+                                  Command="{Binding ExportLocresJsonCommand}"
+                                  IsVisible="{Binding HasLocresPreview}" />
                         <MenuItem Header="分享原始"
                                   Command="{Binding ShareRawCommand}"
                                   IsVisible="{Binding IsAndroid}" />

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Prism.Desktop.Services;
 
@@ -14,6 +15,9 @@ internal sealed class AppSettings
 
     public bool AskBeforeReplace { get; set; } = true;
 
+    /// <summary>界面过渡动画开关（低配设备或偏好静态界面的用户可关闭）。</summary>
+    public bool IsAnimationsEnabled { get; set; } = true;
+
     public string ExportDirectory { get; set; } = string.Empty;
 
     /// <summary>Android SAF 导出目录书签（重启后恢复目录权限，Windows 不使用）。</summary>
@@ -23,9 +27,26 @@ internal sealed class AppSettings
 
     public string UsmapPath { get; set; } = string.Empty;
 
-    public string MergePakPath { get; set; } = string.Empty;
+    /// <summary>
+    /// 合并输入列表（顺序即覆盖优先级，主 Pak 在首位）。
+    /// 兼容旧版本的单项 <c>MergePakPath</c>。
+    /// </summary>
+    public List<string> MergePakPaths { get; set; } = [];
+
+    /// <summary>旧版本的单合并 Pak 字段，仅用于迁移。</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? MergePakPath { get; set; }
 
     public string MergeOutputPath { get; set; } = string.Empty;
+
+    /// <summary>Pak 转换：待转换 Pak 路径。</summary>
+    public string ConvertSourcePath { get; set; } = string.Empty;
+
+    /// <summary>Pak 转换：输出路径（Android 上不持久化，见 SaveSettings）。</summary>
+    public string ConvertOutputPath { get; set; } = string.Empty;
+
+    /// <summary>Pak 转换：是否并入源 Pak 中主 Pak 没有的文件。</summary>
+    public bool ConvertMergeAll { get; set; }
 
     public string AesKey { get; set; } = string.Empty;
 
@@ -83,7 +104,8 @@ internal static class AppSettingsStore
 
             if (File.Exists(path))
             {
-                return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path), Options) ?? new AppSettings();
+                AppSettings loaded = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path), Options) ?? new AppSettings();
+                return Migrate(loaded);
             }
         }
         catch
@@ -92,6 +114,21 @@ internal static class AppSettingsStore
         }
 
         return new AppSettings();
+    }
+
+    /// <summary>
+    /// 旧配置迁移：v1 只有单个 <c>mergePakPath</c>，本版本改为列表。
+    /// 迁移后清空旧字段，避免下次写入又冒出来。
+    /// </summary>
+    private static AppSettings Migrate(AppSettings settings)
+    {
+        if (settings.MergePakPaths.Count == 0 && !string.IsNullOrWhiteSpace(settings.MergePakPath))
+        {
+            settings.MergePakPaths = [settings.MergePakPath];
+        }
+
+        settings.MergePakPath = null;
+        return settings;
     }
 
     public static void Save(AppSettings settings)

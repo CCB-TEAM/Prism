@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO.Compression;
+using System.Runtime.Intrinsics.X86;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Http.Features;
@@ -77,15 +78,23 @@ app.MapPost("/api/settings", (
     if (!string.IsNullOrWhiteSpace(update.AstcVariant))
     {
         string variant = update.AstcVariant.Trim().ToLowerInvariant();
-        string[] allowed = ["avx2", "sse4.1", "sse2"];
+        string[] allowed = ["auto", "avx2", "sse4.1", "sse2"];
         if (!allowed.Contains(variant))
         {
             return Results.BadRequest(new ErrorResponse($"无效的 ASTC 版本: {variant}。可选: {string.Join(", ", allowed)}"));
         }
 
-        string fileName = $"astcenc-{variant}.exe";
-        string resolvedPath = EncoderSettings.FindEncoder(env.ContentRootPath, fileName) ?? string.Empty;
-        fileSettings.AstcEncoderPath = resolvedPath;
+        if (variant == "auto")
+        {
+            // 清除固定路径，让启动/加载逻辑按当前 CPU 自动选择
+            fileSettings.AstcEncoderPath = string.Empty;
+        }
+        else
+        {
+            string fileName = $"astcenc-{variant}.exe";
+            string resolvedPath = EncoderSettings.FindEncoder(env.ContentRootPath, fileName) ?? string.Empty;
+            fileSettings.AstcEncoderPath = resolvedPath;
+        }
     }
 
     string jsonOut = JsonSerializer.Serialize(fileSettings, JsonFileOptions);
@@ -575,11 +584,8 @@ internal sealed class EncoderSettings
 
         if (string.IsNullOrWhiteSpace(astcPath))
         {
-            // 优先选择 AVX2，其次 SSE4.1，最后 SSE2
-            astcPath = FindEncoder(contentRootPath, "astcenc-avx2.exe")
-                    ?? FindEncoder(contentRootPath, "astcenc-sse4.1.exe")
-                    ?? FindEncoder(contentRootPath, "astcenc-sse2.exe")
-                    ?? string.Empty;
+            // 自动选择当前 CPU 支持的 ASTC 编码器版本
+            astcPath = FindBestAstcEncoder(contentRootPath) ?? string.Empty;
         }
 
         return new EncoderSettings
@@ -605,6 +611,31 @@ internal sealed class EncoderSettings
         ];
 
         return searchPaths.Select(Path.GetFullPath).FirstOrDefault(File.Exists);
+    }
+
+    /// <summary>
+    /// 根据当前 CPU 支持的指令集自动选择最佳 ASTC 编码器。
+    /// 支持 AVX2 时优先 AVX2，否则优先 SSE4.1，最后回退 SSE2。
+    /// </summary>
+    internal static string? FindBestAstcEncoder(string contentRootPath)
+    {
+        if (Avx2.IsSupported)
+        {
+            return FindEncoder(contentRootPath, "astcenc-avx2.exe")
+                ?? FindEncoder(contentRootPath, "astcenc-sse4.1.exe")
+                ?? FindEncoder(contentRootPath, "astcenc-sse2.exe");
+        }
+
+        if (Sse41.IsSupported)
+        {
+            return FindEncoder(contentRootPath, "astcenc-sse4.1.exe")
+                ?? FindEncoder(contentRootPath, "astcenc-sse2.exe")
+                ?? FindEncoder(contentRootPath, "astcenc-avx2.exe");
+        }
+
+        return FindEncoder(contentRootPath, "astcenc-sse2.exe")
+            ?? FindEncoder(contentRootPath, "astcenc-sse4.1.exe")
+            ?? FindEncoder(contentRootPath, "astcenc-avx2.exe");
     }
 
     public string GetConfigurationError()
@@ -658,14 +689,20 @@ internal sealed record CliInvocation(string FileName, IReadOnlyList<string> Pref
         [
             Path.Combine(baseDirectory, "UAssetCLI", "UAssetCLI.exe"),
             Path.Combine(baseDirectory, "UAssetCLI", "UAssetCLI.dll"),
+            Path.Combine(baseDirectory, "UAssetCLI", "win-x64", "UAssetCLI.exe"),
+            Path.Combine(baseDirectory, "UAssetCLI", "win-x64", "UAssetCLI.dll"),
             Path.Combine(contentRootPath, "UAssetCLI.exe"),
             Path.Combine(contentRootPath, "UAssetCLI.dll"),
             Path.Combine(baseDirectory, "UAssetCLI.exe"),
             Path.Combine(baseDirectory, "UAssetCLI.dll"),
             Path.Combine(contentRootPath, "..", "UAssetCLI", "bin", "Release", "net10.0", "UAssetCLI.exe"),
             Path.Combine(contentRootPath, "..", "UAssetCLI", "bin", "Release", "net10.0", "UAssetCLI.dll"),
+            Path.Combine(contentRootPath, "..", "UAssetCLI", "bin", "Release", "net10.0", "win-x64", "UAssetCLI.exe"),
+            Path.Combine(contentRootPath, "..", "UAssetCLI", "bin", "Release", "net10.0", "win-x64", "UAssetCLI.dll"),
             Path.Combine(contentRootPath, "..", "UAssetCLI", "bin", "Debug", "net10.0", "UAssetCLI.exe"),
             Path.Combine(contentRootPath, "..", "UAssetCLI", "bin", "Debug", "net10.0", "UAssetCLI.dll"),
+            Path.Combine(contentRootPath, "..", "UAssetCLI", "bin", "Debug", "net10.0", "win-x64", "UAssetCLI.exe"),
+            Path.Combine(contentRootPath, "..", "UAssetCLI", "bin", "Debug", "net10.0", "win-x64", "UAssetCLI.dll"),
         ];
 
         return candidates.Select(Path.GetFullPath).FirstOrDefault(File.Exists);

@@ -97,6 +97,35 @@ namespace UAssetAPI
             if (_propertyTypeRegistry != null) return;
             _propertyTypeRegistry = new Dictionary<string, RegistryEntry>();
 
+            // ── 本地修改（Prism）：Native AOT 下不能因反射失败而整进程崩溃 ──────────
+            //
+            // 下面这段通过 Assembly.GetTypes() + Expression.Compile() 反射发现所有
+            // PropertyData 子类，但 Native AOT 不支持其中两件事：
+            //   - Assembly.GetReferencedAssemblies() → PlatformNotSupportedException
+            //   - Expression.Compile()               → 运行时编译不可用
+            // 二者都会让静态构造函数抛异常；而 UAsset 在【任何】读取导出表的分支里
+            // 都会访问 PropertyTypeRegistry（UAsset.cs:1046），于是连"只读原始字节"
+            // 的纹理替换都会在启动时直接崩掉。
+            //
+            // 实测：Release 的 UAssetCLI（PublishAot=true）执行 replace-texture 立即失败，
+            // 也就是发布版的桌面纹理替换完全不可用 —— 而 Debug 走 JIT，看不出问题。
+            //
+            // 处理：反射发现失败时退化为显式注册表（类型清单见下方 ExplicitPropertyDataTypes）。
+            // 纹理替换不需要注册表内容（不反序列化属性），所以降级安全；
+            // 完整属性解析在 AOT 下最坏退化为 UnknownPropertyData。
+            try
+            {
+                PopulatePropertyTypeRegistryByReflection();
+            }
+            catch (Exception)
+            {
+                _propertyTypeRegistry.Clear();
+                PopulatePropertyTypeRegistryExplicit();
+            }
+        }
+
+        private static void PopulatePropertyTypeRegistryByReflection()
+        {
             Assembly[] allDependentAssemblies = GetDependentAssemblies(registryParentDataType.Assembly).ToArray();
             Assembly[] allAssemblies = new Assembly[allDependentAssemblies.Length + 1];
             allAssemblies[0] = registryParentDataType.Assembly;
@@ -141,6 +170,107 @@ namespace UAssetAPI
                 }
             }
         }
+
+        /// <summary>
+        /// Native AOT 下的显式注册表。与反射发现等价，只是不依赖
+        /// <c>Assembly.GetTypes()</c> / <c>Expression.Compile()</c>。
+        /// </summary>
+        private static void PopulatePropertyTypeRegistryExplicit()
+        {
+            foreach (Type propertyDataType in ExplicitPropertyDataTypes)
+            {
+                if (propertyDataType.ContainsGenericParameters) continue;
+
+                try
+                {
+                    if (Activator.CreateInstance(propertyDataType) is not PropertyData probe) continue;
+                    if (!probe.ShouldBeRegistered) continue;
+
+                    string? propType = probe.PropertyType?.Value;
+                    if (string.IsNullOrEmpty(propType)) continue;
+
+                    var ctor = propertyDataType.GetConstructor([typeof(FName)]);
+                    if (ctor == null) continue;
+
+                    _propertyTypeRegistry[propType] = new RegistryEntry
+                    {
+                        PropertyType = propertyDataType,
+                        HasCustomStructSerialization = probe.HasCustomStructSerialization,
+                        Creator = name => (PropertyData)ctor.Invoke([name]),
+                    };
+                }
+                catch
+                {
+                    // 单个类型登记失败不影响其他类型（抽象类、需要特殊构造的类型等）。
+                }
+            }
+        }
+
+        /// <summary>
+        /// 供 Native AOT 构建注册表用的 PropertyData 子类清单。
+        /// 新增 PropertyData 子类时需要同步维护这里。
+        /// </summary>
+        private static readonly Type[] ExplicitPropertyDataTypes =
+        [
+            typeof(ArrayPropertyData),
+            typeof(BoolPropertyData),
+            typeof(BytePropertyData),
+            typeof(ColorPropertyData),
+            typeof(DateTimePropertyData),
+            typeof(DelegatePropertyData),
+            typeof(DoublePropertyData),
+            typeof(EnumPropertyData),
+            typeof(FloatPropertyData),
+            typeof(FloatRangePropertyData),
+            typeof(FontCharacterPropertyData),
+            typeof(FontDataPropertyData),
+            typeof(GameplayTagContainerPropertyData),
+            typeof(GuidPropertyData),
+            typeof(Int16PropertyData),
+            typeof(Int64PropertyData),
+            typeof(Int8PropertyData),
+            typeof(IntPointPropertyData),
+            typeof(IntPropertyData),
+            typeof(KeyHandleMapPropertyData),
+            typeof(LevelSequenceObjectReferenceMapPropertyData),
+            typeof(MapPropertyData),
+            typeof(MovieSceneDoubleChannelPropertyData),
+            typeof(MovieSceneEvaluationFieldEntityTreePropertyData),
+            typeof(MovieSceneEvaluationKeyPropertyData),
+            typeof(MovieSceneEventParametersPropertyData),
+            typeof(MovieSceneFloatChannelPropertyData),
+            typeof(MovieSceneFloatValuePropertyData),
+            typeof(MovieSceneFrameRangePropertyData),
+            typeof(MovieSceneGenerationLedgerPropertyData),
+            typeof(MovieSceneSegmentIdentifierPropertyData),
+            typeof(MovieSceneSegmentPropertyData),
+            typeof(MovieSceneSequenceIDPropertyData),
+            typeof(MovieSceneSequenceInstanceDataPtrPropertyData),
+            typeof(MovieSceneSubSectionFieldDataPropertyData),
+            typeof(MovieSceneSubSequenceTreePropertyData),
+            typeof(MovieSceneTrackFieldDataPropertyData),
+            typeof(MovieSceneTrackIdentifierPropertyData),
+            typeof(MulticastDelegatePropertyData),
+            typeof(NamePropertyData),
+            typeof(ObjectPropertyData),
+            typeof(RawStructPropertyData),
+            typeof(SectionEvaluationDataTreePropertyData),
+            typeof(SkeletalMeshSamplingLODBuiltDataPropertyData),
+            typeof(SmartNamePropertyData),
+            typeof(SoftObjectPathPropertyData),
+            typeof(SplinePropertyData),
+            typeof(StrPropertyData),
+            typeof(StructPropertyData),
+            typeof(TextPropertyData),
+            typeof(TimespanPropertyData),
+            typeof(UInt16PropertyData),
+            typeof(UInt32PropertyData),
+            typeof(UInt64PropertyData),
+            typeof(UniqueNetIdReplPropertyData),
+            typeof(UnknownPropertyData),
+            typeof(Utf8StrPropertyData),
+            typeof(ViewTargetBlendParamsPropertyData),
+        ];
 
         /// <summary>
         /// Generates an unversioned header based on a list of properties, and sorts the list in the correct order to be serialized.

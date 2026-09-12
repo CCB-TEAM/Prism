@@ -5,6 +5,27 @@
              x:Class="Prism.Desktop.Views.FileBrowserView"
              x:DataType="vm:MainViewModel">
 
+    <UserControl.Styles>
+        <!--
+            文件列表淡入：目录/搜索结果整批替换时，整个列表淡入，避免"啪"地换屏。
+            刻意<b>不</b>做成逐项动画：locres 编辑器一次能渲染 300 行，
+            逐项动画会让 300 行同时闪一下，反而更刺眼且更耗性能。
+            只做 Opacity（合成层动画，不触发重排）。
+        -->
+        <Style Selector="ListBox.browser-list">
+            <Style.Animations>
+                <Animation Duration="0:0:0.18" FillMode="Forward">
+                    <KeyFrame Cue="0%">
+                        <Setter Property="Opacity" Value="0" />
+                    </KeyFrame>
+                    <KeyFrame Cue="100%">
+                        <Setter Property="Opacity" Value="1" />
+                    </KeyFrame>
+                </Animation>
+            </Style.Animations>
+        </Style>
+    </UserControl.Styles>
+
     <DockPanel>
         <!-- 路径栏 -->
         <Border DockPanel.Dock="Top"
@@ -72,6 +93,7 @@
                 </Grid>
             </Border>
             <ListBox Grid.Row="1"
+                     Classes="browser-list"
                      ItemsSource="{Binding Entries}"
                      SelectedItem="{Binding SelectedItem}"
                      Tapped="OnListTapped"

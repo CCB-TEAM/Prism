@@ -31,6 +31,8 @@
                               IsChecked="{Binding UseOodleCompression}" />
                     <CheckBox Content="合并前询问冲突替换"
                               IsChecked="{Binding AskBeforeReplace}" />
+                    <CheckBox Content="界面过渡动画（关闭可提升低配设备流畅度）"
+                              IsChecked="{Binding IsAnimationsEnabled}" />
                 </StackPanel>
             </Border>
 
@@ -51,11 +53,12 @@
                         </Grid>
                     </StackPanel>
                     <StackPanel Spacing="6">
-                        <TextBlock Text="Usmap 映射" FontSize="11" Opacity="0.55" />
+                        <TextBlock Text="映射文件（.usmap / .jmap）" FontSize="11" Opacity="0.55" />
                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                             <TextBox Grid.Column="0"
                                      Text="{Binding UsmapPath}"
-                                     ToolTip.Tip="{Binding UsmapPath}" />
+                                     ToolTip.Tip="{Binding UsmapPath}"
+                                     PlaceholderText="可选：.usmap / .jmap / .jmap.gz" />
                             <Button Grid.Column="1"
                                     Content="浏览"
                                     Command="{Binding BrowseUsmapCommand}"
@@ -96,18 +99,24 @@
             <Border Classes="card" Padding="22">
                 <StackPanel Spacing="14">
                     <TextBlock Text="合并" FontSize="12" FontWeight="SemiBold" Opacity="0.6" />
+
+                    <!-- 合并输入已改为列表（支持多选 + 拖动排序），这里只显示摘要 -->
                     <StackPanel Spacing="6">
-                        <TextBlock Text="合并 Pak" FontSize="11" Opacity="0.55" />
-                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                            <TextBox Grid.Column="0"
-                                     Text="{Binding MergePakPath}"
-                                     ToolTip.Tip="{Binding MergePakPath}" />
-                            <Button Grid.Column="1"
-                                    Content="浏览"
-                                    Command="{Binding BrowseMergePakCommand}"
-                                    Classes="ghost" />
-                        </Grid>
+                        <TextBlock Text="待合并的 Pak" FontSize="11" Opacity="0.55" />
+                        <TextBlock Text="{Binding MergeInputSummary}"
+                                   FontSize="12"
+                                   TextWrapping="Wrap"
+                                   IsVisible="{Binding HasMergePaks}" />
+                        <TextBlock Text="尚未加入 Pak，请在「Pak 合并」页选择。"
+                                   FontSize="12"
+                                   Opacity="0.6"
+                                   IsVisible="{Binding HasNoMergePaks}" />
+                        <Button Content="前往 Pak 合并页"
+                                Command="{Binding GoMergeCommand}"
+                                Classes="accent"
+                                HorizontalAlignment="Left" />
                     </StackPanel>
+
                     <StackPanel Spacing="6">
                         <TextBlock Text="合并输出" FontSize="11" Opacity="0.55" />
                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
@@ -120,6 +129,37 @@
                                     Classes="ghost" />
                         </Grid>
                     </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Pak 转换 -->
+            <Border Classes="card" Padding="22">
+                <StackPanel Spacing="14">
+                    <TextBlock Text="Pak 转换" FontSize="12" FontWeight="SemiBold" Opacity="0.6" />
+                    <TextBlock Text="把「待转换 Pak」里的贴图，按主 Pak 的纹理格式重新编码后替换进主 Pak，再合成一个新 Pak。"
+                               FontSize="10"
+                               Opacity="0.55"
+                               TextWrapping="Wrap" />
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="主 Pak（基底，取上面的 Pak 文件）" FontSize="11" Opacity="0.55" />
+                        <TextBlock Text="{Binding PakPath}"
+                                   FontSize="12"
+                                   Opacity="0.8"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip.Tip="{Binding PakPath}" />
+                    </StackPanel>
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="待转换 Pak" FontSize="11" Opacity="0.55" />
+                        <TextBox Text="{Binding ConvertSourcePath}"
+                                 ToolTip.Tip="{Binding ConvertSourcePath}" />
+                    </StackPanel>
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="转换输出" FontSize="11" Opacity="0.55" />
+                        <TextBox Text="{Binding ConvertOutputPath}"
+                                 ToolTip.Tip="{Binding ConvertOutputPath}" />
+                    </StackPanel>
+                    <CheckBox Content="同时并入源 Pak 中主 Pak 没有的文件"
+                              IsChecked="{Binding ConvertMergeAll}" />
                 </StackPanel>
             </Border>
 

@@ -42,6 +42,10 @@ public static class TextureAssetParser
         (1u << 29) |
         (1u << 30);
 
+    /// <summary>
+    /// 加载纹理资产。注意 <paramref name="usmapPath"/> 同时支持 .usmap 与 .jmap：
+    /// <see cref="UAssetAPI.Unversioned.Usmap"/> 会按文件扩展名自动选择解析器。
+    /// </summary>
     public static TextureAssetInfo Load(string assetPath, EngineVersion engineVersion, string? usmapPath, string? formatHint = null)
     {
         var fullAssetPath = Path.GetFullPath(assetPath);

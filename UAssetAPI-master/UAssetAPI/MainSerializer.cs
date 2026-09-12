@@ -460,6 +460,7 @@ namespace UAssetAPI
                     if (relevantSchema == null) throw new FormatException("Failed to find a valid property for schema index " + header.UnversionedPropertyIndex + " in the class " + parentName.ToString());
                 }
                 UsmapProperty relevantProperty = relevantSchema.Properties[practicingUnversionedPropertyIndex];
+                Console.Error.WriteLine("POLARIZER_DIAG unversioned idx=" + practicingUnversionedPropertyIndex + " schema=" + relevantSchema.Name + " name=" + relevantProperty.Name + " type=" + relevantProperty.PropertyData.Type + " pos=" + reader.BaseStream.Position);
                 header.UnversionedPropertyIndex += 1;
 
                 name = FName.DefineDummy(reader.Asset, relevantProperty.Name);
