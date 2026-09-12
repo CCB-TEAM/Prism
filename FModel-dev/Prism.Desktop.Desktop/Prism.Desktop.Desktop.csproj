@@ -77,4 +77,18 @@
           ContinueOnError="true" />
   </Target>
 
+  <!--
+    发布时也要带上编码器工具：Publish 不会重跑挂在 Build 上的目标，
+    上一版就是因此导致发布包缺 tools/，实机表现为 ASTC/BC7 编码失败。
+  -->
+  <Target Name="CopyEncoderToolsForPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <_EncoderToolPublishFiles Include="$(MSBuildThisFileDirectory)..\..\UAssetTextureWeb\tools\*.exe" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_EncoderToolPublishFiles)"
+          DestinationFolder="$(PublishDir)tools\"
+          SkipUnchangedFiles="true"
+          ContinueOnError="true" />
+  </Target>
+
 </Project>
