@@ -70,12 +70,44 @@ dotnet publish Prism.Desktop.Desktop/Prism.Desktop.Desktop.csproj \
 # Android release APK（需要 JDK 与 Android SDK）
 dotnet build Prism.Desktop.Android/Prism.Desktop.Android.csproj \
   -c Release -p:JavaSdkDirectory=<你的 JDK 路径>
+```
 
-# 贴图替换 CLI：请用 Release 构建，AOT 产物才会落在应用查找的位置
+### 贴图命令行工具（`UAssetCLI/`）
+
+贴图替换与 pak 转换会调用外部程序 `UAssetCLI`，它**不是**项目引用 —— 桌面端构建会把它复制到
+可执行文件旁边的 `UAssetCLI/` 目录。请先构建它，并且用 Release，产物才会落在复制目标查找的位置：
+
+```sh
 dotnet build UAssetCLI/UAssetCLI.csproj -c Release
 ```
 
-`external/CUE4Parse` 是 git 子模块，首次构建前先执行 `git submodule update --init --recursive`。
+Release 构建出的 CLI 是**依赖框架**的可执行文件，需要机器上装有 .NET 10 运行时。
+想要自包含的原生单文件（需要 AOT 工具链），请发布它：
+
+```sh
+dotnet publish UAssetCLI/UAssetCLI.csproj -c Release
+```
+
+应用自身的 build 与 publish 都会复制 CLI；publish 是从 CLI 的 publish 输出取件的，
+所以想要一个完整的发布目录，CLI 也要执行 publish。缺件时 `smoke` 会报告。
+
+### `external/CUE4Parse`
+
+`PakTool.Core` 引用的是 `..\external\CUE4Parse\CUE4Parse\CUE4Parse.csproj` 与
+`CUE4Parse-Conversion.csproj`，因此**构建任何东西之前**这棵树必须存在。
+**它不在本仓库中，且 `.gitmodules` 无法帮你拉取** —— 本项目开发所用的那棵树带有本地改动、
+且早于当前上游（`CUE4Parse-Natives`、包版本如 SharpGLTF 1.0.6 而非上游的 alpha 版），
+而 `.gitmodules` 里也没有声明任何固定提交。
+
+请自行提供其中一种：
+
+- **与之匹配的那棵树**，放到 `external/CUE4Parse/`。如果你有同一份开发快照，这是唯一能保证匹配的做法。
+- **上游 `main`** 克隆到 `external/CUE4Parse/`，再用 `git checkout` 切到你那个游戏版本需要的提交。
+  预期会有 API 漂移：本代码是针对较旧的 CUE4Parse 写的，当前版本可能需要改动；
+  并且 `CUE4Parse-Natives/ACL` 本身也是一个子模块（需在其中再执行
+  `git submodule update --init --recursive`）。
+
+`third_party/` 与 `tools/` 都解析到本仓库根目录，因此扁平布局可直接使用。
 
 ### 原生依赖（不随仓库提交）
 

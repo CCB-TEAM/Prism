@@ -70,12 +70,47 @@ dotnet publish Prism.Desktop.Desktop/Prism.Desktop.Desktop.csproj \
 # Android release APK (requires JDK + Android SDK)
 dotnet build Prism.Desktop.Android/Prism.Desktop.Android.csproj \
   -c Release -p:JavaSdkDirectory=<path-to-jdk>
+```
 
-# Texture replacement CLI: build Release so AOT output lands where the app looks for it
+### The texture CLI (`UAssetCLI/`)
+
+Texture replacement and pak conversion shell out to `UAssetCLI`, which is **not** a project
+reference — the desktop build copies it into `UAssetCLI/` next to the executable. Build it before
+the app, and build it in Release so it lands where the copy target looks:
+
+```sh
 dotnet build UAssetCLI/UAssetCLI.csproj -c Release
 ```
 
-`external/CUE4Parse` is a git submodule — run `git submodule update --init --recursive` first.
+A Release build of the CLI is a framework-dependent executable that needs the .NET 10 runtime
+installed. To get the self-contained native binary instead (requires the AOT toolchain), publish it:
+
+```sh
+dotnet publish UAssetCLI/UAssetCLI.csproj -c Release
+```
+
+Both the app's build and its publish copy the CLI; publish copies from the CLI's publish output, so
+run the CLI publish too when you want a complete release directory. `smoke` reports a missing CLI.
+
+### `external/CUE4Parse`
+
+`PakTool.Core` references `..\external\CUE4Parse\CUE4Parse\CUE4Parse.csproj` and
+`CUE4Parse-Conversion.csproj`, so that tree must exist before anything builds. **It is not in this
+repository and `.gitmodules` cannot fetch it for you** — the tree this project was developed
+against carries local changes and predates current upstream (`CUE4Parse-Natives`, per-package
+versions such as SharpGLTF 1.0.6 rather than upstream's alpha), and `.gitmodules` declares no
+pinned commit.
+
+Supply one of:
+
+- **A copy of the matching tree**, placed at `external/CUE4Parse/`, if you have the same development
+  snapshot. This is the only option guaranteed to match.
+- **Upstream `main`** cloned to `external/CUE4Parse/`, then `git checkout` the commit your game's
+  version needs. Expect API drift: this code was written against an older CUE4Parse, so a current
+  checkout may need fixes, and `CUE4Parse-Natives/ACL` is itself a submodule
+  (`git submodule update --init --recursive` inside it).
+
+`third_party/` and `tools/` resolve to this repository's root, so a plain layout works as-is.
 
 ### Native dependencies (not committed)
 

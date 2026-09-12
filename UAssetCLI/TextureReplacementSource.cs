@@ -4,6 +4,19 @@ using SixLabors.ImageSharp.Processing;
 
 internal static class TextureReplacementSource
 {
+    private const int MaxAllowedDimension = 32768;
+    private const long MaxAllowedPixels = 268_435_456;
+
+    private static void ValidateTextureSize(int width, int height)
+    {
+        if (width <= 0 || height <= 0)
+            throw new InvalidOperationException($"Invalid texture size {width}x{height}: dimensions must be positive.");
+        if (width > MaxAllowedDimension || height > MaxAllowedDimension)
+            throw new InvalidOperationException($"Texture size {width}x{height} exceeds the maximum allowed dimension of {MaxAllowedDimension}.");
+        if ((long)width * height > MaxAllowedPixels)
+            throw new InvalidOperationException($"Texture size {width}x{height} has {width * (long)height} pixels, exceeding the maximum of {MaxAllowedPixels} pixels.");
+    }
+
     public static byte[][] LoadRawMipDirectory(string directoryPath, IReadOnlyList<TextureMip> mips, TextureFormatInfo format)
     {
         string fullPath = Path.GetFullPath(directoryPath);
@@ -56,6 +69,8 @@ internal static class TextureReplacementSource
 
     public static async Task<Image<Rgba32>> LoadSourceImageAsync(string imagePath, int width, int height)
     {
+        ValidateTextureSize(width, height);
+
         Image<Rgba32> source = await Image.LoadAsync<Rgba32>(Path.GetFullPath(imagePath));
         if (source.Width != width || source.Height != height)
         {
@@ -78,6 +93,8 @@ internal static class TextureReplacementSource
 
     private static Image<Rgba32> CreateMipImage(Image<Rgba32> source, TextureMip mip)
     {
+        ValidateTextureSize(mip.Width, mip.Height);
+
         return source.Width == mip.Width && source.Height == mip.Height
             ? source.Clone()
             : source.Clone(ctx => ctx.Resize(new ResizeOptions

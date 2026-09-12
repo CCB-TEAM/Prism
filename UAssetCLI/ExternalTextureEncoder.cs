@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.Intrinsics.X86;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
@@ -62,7 +63,7 @@ internal static class ExternalTextureEncoder
         TextureFormatInfo format,
         ExternalEncoderOptions options)
     {
-        string encoder = ResolveTool(options.AstcencPath, "astcenc-avx2", "astcenc-sse4.1", "astcenc");
+        string encoder = ResolveTool(options.AstcencPath, GetAstcCandidates());
         string astcPath = Path.Combine(tempDirectory, $"mip{mipIndex}.astc");
 
         await RunAsync(encoder, ["-cl", mipPngPath, astcPath, format.AstcBlockSize, NormalizeAstcQuality(options.AstcQuality)]);
@@ -128,6 +129,21 @@ internal static class ExternalTextureEncoder
         }
 
         return dds[dataOffset..];
+    }
+
+    private static string[] GetAstcCandidates()
+    {
+        if (Avx2.IsSupported)
+        {
+            return new[] { "astcenc-avx2", "astcenc-sse4.1", "astcenc-sse2", "astcenc" };
+        }
+
+        if (Sse41.IsSupported)
+        {
+            return new[] { "astcenc-sse4.1", "astcenc-sse2", "astcenc-avx2", "astcenc" };
+        }
+
+        return new[] { "astcenc-sse2", "astcenc-sse4.1", "astcenc-avx2", "astcenc" };
     }
 
     private static string ResolveTool(string? configuredPath, params string[] candidates)

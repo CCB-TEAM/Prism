@@ -379,11 +379,11 @@ OodleSharp-master/
 *.keystore
 
 # Local downloaded/reference source trees
+# 注意：UAssetCLI/ 以前列在这里 —— 那正是导致正式 CLI 工程一直无法入库的原因。
+# 它现在是仓库顶层的正式工程，绝不能再忽略；参考克隆统一收在 reference/ 下。
 BinkadecWithWavHeader-main/
 FModel/
-UAssetCLI/
 UAssetTextureWeb/
-UE4LocalizationsTool-master/
 astc-encoder-main/
 bc7enc_rdo-master/
 binka_decoder-main/
