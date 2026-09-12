@@ -1,0 +1,9 @@
+<Directives>
+  <Application>
+    <Assembly Name="UAssetCLI" Dynamic="Required All" />
+    <Assembly Name="UAssetAPI" Dynamic="Required All" />
+    <Assembly Name="Newtonsoft.Json" Dynamic="Required All" />
+    <Assembly Name="SixLabors.ImageSharp" Dynamic="Required All" />
+    <Assembly Name="ZstdSharp" Dynamic="Required All" />
+  </Application>
+</Directives>
