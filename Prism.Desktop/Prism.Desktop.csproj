@@ -17,7 +17,7 @@
   <!-- 复制编码器工具 -->
   <Target Name="CopyEncoderTools" AfterTargets="Build">
     <ItemGroup>
-      <EncoderTools Include="..\..\UAssetTextureWeb\tools\*.exe" />
+      <EncoderTools Include="..\tools\*.exe" />
     </ItemGroup>
     <Copy SourceFiles="@(EncoderTools)"
           DestinationFiles="@(EncoderTools->'$(OutDir)tools\%(Filename)%(Extension)')"

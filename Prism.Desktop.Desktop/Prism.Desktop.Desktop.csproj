@@ -29,8 +29,8 @@
 
   <!-- 优先用 AOT 发布产物（体积小、无需运行时）；没有则回退到普通 Release 构建 -->
   <PropertyGroup>
-    <_CliPublishDir>$(MSBuildThisFileDirectory)..\..\UAssetCLI\bin\Release\net10.0\win-x64\publish\</_CliPublishDir>
-    <_CliBuildDir>$(MSBuildThisFileDirectory)..\..\UAssetCLI\bin\Release\net10.0\win-x64\</_CliBuildDir>
+    <_CliPublishDir>$(MSBuildThisFileDirectory)..\UAssetCLI\bin\Release\net10.0\win-x64\publish\</_CliPublishDir>
+    <_CliBuildDir>$(MSBuildThisFileDirectory)..\UAssetCLI\bin\Release\net10.0\win-x64\</_CliBuildDir>
   </PropertyGroup>
 
   <Target Name="CopyUAssetCliOutput" AfterTargets="Build">
@@ -69,7 +69,7 @@
   <!-- 编码器工具：从仓库里的 tools 目录复制 -->
   <Target Name="CopyEncoderTools" AfterTargets="Build">
     <ItemGroup>
-      <_EncoderToolFiles Include="$(MSBuildThisFileDirectory)..\..\UAssetTextureWeb\tools\*.exe" />
+      <_EncoderToolFiles Include="$(MSBuildThisFileDirectory)..\tools\*.exe" />
     </ItemGroup>
     <Copy SourceFiles="@(_EncoderToolFiles)"
           DestinationFolder="$(OutDir)tools\"
@@ -83,7 +83,7 @@
   -->
   <Target Name="CopyEncoderToolsForPublish" AfterTargets="Publish">
     <ItemGroup>
-      <_EncoderToolPublishFiles Include="$(MSBuildThisFileDirectory)..\..\UAssetTextureWeb\tools\*.exe" />
+      <_EncoderToolPublishFiles Include="$(MSBuildThisFileDirectory)..\tools\*.exe" />
     </ItemGroup>
     <Copy SourceFiles="@(_EncoderToolPublishFiles)"
           DestinationFolder="$(PublishDir)tools\"

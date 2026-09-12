@@ -439,3 +439,6 @@ UE-Pak-Manager/
 # （PakTool.Core 以 ..\external\CUE4Parse\... 的项目引用方式消费它；
 #   .gitmodules 无对应 gitlink，故已移除，详见 README 构建章节）
 external/
+
+# 本地参考资料克隆（astc-encoder / FModel / UAssetTextureWeb 等，不入库）
+reference/
