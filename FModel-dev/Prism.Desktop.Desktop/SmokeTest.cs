@@ -30,6 +30,11 @@ public static class SmokeTest
         string pakPath = args.Length > 1 ? args[1] : @"E:\pak\test.pak";
         string? usmapPath = args.Length > 2 ? args[2] : @"E:\pak\Mapping.usmap";
 
+        // 依赖检查：纹理替换与 Pak 转换需要 UAssetCLI 与编码器工具。
+        // 这两样靠构建目标复制（不在项目引用里），漏掉了应用仍能启动、
+        // 但相关功能全废 —— 所以冒烟测试必须把它们报出来，而不是只测读写 Pak。
+        int depsResult = VerifyExternalTools();
+
         try
         {
             using var session = new PakArchiveSession();
@@ -59,7 +64,7 @@ public static class SmokeTest
             }
 
             Console.WriteLine("[smoke] PASS");
-            return 0;
+            return depsResult;
         }
         catch (Exception ex)
         {
@@ -67,5 +72,43 @@ public static class SmokeTest
             Console.Error.WriteLine(ex.ToString());
             return 1;
         }
+    }
+
+    /// <summary>
+    /// 检查纹理替换 / Pak 转换所需的外部工具是否随构建一起就位。
+    /// 返回 0 表示齐全，非 0 表示缺失（冒烟测试据此报失败）。
+    /// </summary>
+    private static int VerifyExternalTools()
+    {
+        string baseDir = AppContext.BaseDirectory;
+        (string Label, string Path)[] required =
+        [
+            ("UAssetCLI", Path.Combine(baseDir, "UAssetCLI", "UAssetCLI.exe")),
+            ("texconv", Path.Combine(baseDir, "tools", "texconv.exe")),
+            ("astcenc", Path.Combine(baseDir, "tools", "astcenc-avx2.exe")),
+        ];
+
+        int missing = 0;
+        foreach ((string label, string path) in required)
+        {
+            if (File.Exists(path))
+            {
+                long kb = new FileInfo(path).Length / 1024;
+                Console.WriteLine($"[smoke] 依赖 {label}: OK ({kb:N0} KB)");
+            }
+            else
+            {
+                missing++;
+                Console.Error.WriteLine($"[smoke] 依赖 {label}: 缺失 → {path}");
+            }
+        }
+
+        if (missing > 0)
+        {
+            Console.Error.WriteLine(
+                "[smoke] 纹理替换与 Pak 转换将不可用。请先执行：dotnet build UAssetCLI -c Release");
+        }
+
+        return missing == 0 ? 0 : 1;
     }
 }

@@ -16,14 +16,65 @@
     <ProjectReference Include="..\Prism.Desktop\Prism.Desktop.csproj" />
   </ItemGroup>
 
-  <!-- 复制 UAssetCLI AOT 发布输出 -->
-  <Target Name="CopyUAssetCli" AfterTargets="Publish">
+  <!--
+    纹理替换与 Pak 转换依赖两样外部资源：
+      1. UAssetCLI —— 桌面端做纹理重编码（astcenc / texconv）
+      2. tools/    —— astcenc 与 texconv 本体
+    二者都不在项目引用里，必须显式复制，否则应用能启动但相关功能全部不可用。
+
+    历史坑：原先只在 Publish 后复制 UAssetCLI，于是照 README 执行 `dotnet build`
+    得到的产物缺这两样 —— 开发时替换/转换直接不可用，且只在运行时才暴露。
+    现在 Build 与 Publish 都复制。
+  -->
+
+  <!-- 优先用 AOT 发布产物（体积小、无需运行时）；没有则回退到普通 Release 构建 -->
+  <PropertyGroup>
+    <_CliPublishDir>$(MSBuildThisFileDirectory)..\..\UAssetCLI\bin\Release\net10.0\win-x64\publish\</_CliPublishDir>
+    <_CliBuildDir>$(MSBuildThisFileDirectory)..\..\UAssetCLI\bin\Release\net10.0\win-x64\</_CliBuildDir>
+  </PropertyGroup>
+
+  <Target Name="CopyUAssetCliOutput" AfterTargets="Build">
     <ItemGroup>
-      <_CliFiles Include="..\..\UAssetCLI\bin\Release\net10.0\win-x64\publish\**\*.*" />
+      <_CliFromPublish Include="$(_CliPublishDir)UAssetCLI.*" />
+      <_CliFromBuild Include="$(_CliBuildDir)UAssetCLI.*" />
     </ItemGroup>
-    <Copy SourceFiles="@(_CliFiles)"
-          DestinationFiles="@(_CliFiles->'$(PublishDir)UAssetCLI\%(RecursiveDir)%(Filename)%(Extension)')"
-          SkipUnchangedFiles="true" />
+
+    <ItemGroup Condition="'@(_CliFromPublish)' != ''">
+      <_CliToCopy Include="@(_CliFromPublish)" />
+    </ItemGroup>
+    <ItemGroup Condition="'@(_CliFromPublish)' == ''">
+      <_CliToCopy Include="@(_CliFromBuild)" />
+    </ItemGroup>
+
+    <Copy SourceFiles="@(_CliToCopy)"
+          DestinationFolder="$(OutDir)UAssetCLI\"
+          SkipUnchangedFiles="true"
+          ContinueOnError="true" />
+
+    <Warning Condition="'@(_CliToCopy)' == ''"
+             Text="未找到 UAssetCLI 产物（已尝试 AOT 发布与 Release 构建）。纹理替换与 Pak 转换将不可用。请先执行：dotnet build UAssetCLI -c Release" />
+  </Target>
+
+  <!-- 发布时复制 AOT 产物（与上面同源，保持发布包完整） -->
+  <Target Name="CopyUAssetCliForPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <_CliPublishFiles Include="$(_CliPublishDir)**\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_CliPublishFiles)"
+          DestinationFiles="@(_CliPublishFiles->'$(PublishDir)UAssetCLI\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true"
+          ContinueOnError="true" />
+  </Target>
+
+  <!-- 编码器工具：从仓库里的 tools 目录复制 -->
+  <Target Name="CopyEncoderTools" AfterTargets="Build">
+    <ItemGroup>
+      <_EncoderToolFiles Include="$(MSBuildThisFileDirectory)..\..\UAssetTextureWeb\tools\*.exe" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_EncoderToolFiles)"
+          DestinationFolder="$(OutDir)tools\"
+          SkipUnchangedFiles="true"
+          ContinueOnError="true" />
   </Target>
 
 </Project>
