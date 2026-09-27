@@ -1128,6 +1128,7 @@ namespace UAssetAPI
 #if DEBUGVERBOSE
                 Console.WriteLine("\nFailed to parse export " + (i + 1) + ": " + ex.ToString());
 #endif
+                  Console.Error.WriteLine("POLARIZER_DIAG failed export " + (i + 1) + ": " + ex.ToString());
                 if (read) reader.BaseStream.Seek(Exports[i].SerialOffset, SeekOrigin.Begin);
                 Exports[i] = Exports[i].ConvertToChildExport<RawExport>();
                 if (read) ((RawExport)Exports[i]).Data = reader.ReadBytes((int)Exports[i].SerialSize);

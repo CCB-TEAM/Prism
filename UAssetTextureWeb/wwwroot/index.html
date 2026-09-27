@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>UAsset Texture Web</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">UT</div>
+          <div>
+            <h1>Texture Web</h1>
+            <p>UAsset 纹理替换与 Pak 打包</p>
+          </div>
+        </div>
+        <nav class="nav">
+          <a href="#replace">纹理替换</a>
+          <a href="#pack">打包修改结果</a>
+          <a href="/settings.html">设置</a>
+        </nav>
+        <div class="sidebar-note">
+          <strong>提示</strong>
+          <span
+            >Android ASTC 资源常见 inline-only 布局，`.ubulk`
+            可以不上传，也不会强制输出。</span
+          >
+        </div>
+        <div id="serverStatus" class="sidebar-status">
+          <span id="statusBadge" class="badge">检测中…</span>
+          <div class="status-details">
+            <div>BC7：<span id="bc7Status">-</span></div>
+            <div>ASTC：<span id="astcStatus">-</span></div>
+            <div>CLI：<span id="cliStatus">-</span></div>
+            <div>并发：<span id="parallelStatus">-</span></div>
+          </div>
+          <p id="serverMessage" class="message"></p>
+        </div>
+      </aside>
+
+      <section class="workspace">
+        <header class="hero">
+          <div>
+            <p class="eyebrow">Unreal Engine cooked texture tools</p>
+            <h2>上传纹理资源，替换图片，并把修改后的文件直接打成 Pak。</h2>
+          </div>
+        </header>
+
+        <section id="replace" class="panel">
+          <div class="panel-heading">
+            <div>
+              <h3>纹理替换</h3>
+              <p>
+                上传 `.uasset`、`.uexp` 和替换图片。`.ubulk` 仅在资源存在外置
+                bulk 时需要。
+              </p>
+            </div>
+          </div>
+
+          <form id="replaceForm" class="tool-form">
+            <div class="upload-grid">
+              <label class="upload-card required"
+                ><span>.uasset</span
+                ><input type="file" name="uasset" accept=".uasset" required
+              /></label>
+              <label class="upload-card required"
+                ><span>.uexp</span
+                ><input type="file" name="uexp" accept=".uexp" required
+              /></label>
+              <label class="upload-card"
+                ><span>.ubulk 可选</span
+                ><input type="file" name="ubulk" accept=".ubulk"
+              /></label>
+              <label class="upload-card required"
+                ><span>替换图片</span
+                ><input
+                  type="file"
+                  name="image"
+                  accept=".png,.jpg,.jpeg,.bmp,.tga,.webp"
+                  required
+              /></label>
+            </div>
+
+            <div class="field-grid">
+              <label>
+                <span>引擎版本</span>
+                <select name="engine" required>
+                  <option value="VER_UE5_7">UE5.7</option>
+                  <option value="VER_UE5_6" selected>UE5.6</option>
+                  <option value="VER_UE5_5">UE5.5</option>
+                  <option value="VER_UE5_4">UE5.4</option>
+                  <option value="VER_UE5_3">UE5.3</option>
+                  <option value="VER_UE5_2">UE5.2</option>
+                  <option value="VER_UE5_1">UE5.1</option>
+                  <option value="VER_UE5_0">UE5.0</option>
+                </select>
+              </label>
+              <label>
+                <span>ASTC 质量</span>
+                <select name="astcQuality">
+                  <option value="fast">fast</option>
+                  <option value="medium" selected>medium</option>
+                  <option value="thorough">thorough</option>
+                  <option value="exhaustive">exhaustive</option>
+                </select>
+              </label>
+              <!-- 格式由资源自动决定，隐藏选择框 -->
+              <input type="hidden" name="format" value="PF_ASTC_6x6" />
+            </div>
+            <p class="hint">
+              纹理压缩格式由资源本身决定，无需手动选择。如果资源不是
+              ASTC，系统会自动使用其原始格式。
+            </p>
+
+            <div class="action-row">
+              <button type="submit">开始替换</button>
+              <a id="downloadLink" class="secondary-button hidden" href="#"
+                >下载替换结果</a
+              >
+              <p id="replaceMessage" class="message"></p>
+            </div>
+          </form>
+        </section>
+
+        <section id="pack" class="panel">
+          <div class="panel-heading">
+            <div>
+              <h3>打包修改结果</h3>
+              <p>
+                先完成一次纹理替换，然后填写修改后的 `.uasset/.uexp/.ubulk` 在
+                Pak 内的路径。
+              </p>
+            </div>
+          </div>
+
+          <form id="packForm" class="tool-form">
+            <div class="field-grid two">
+              <label
+                ><span>输出 Pak 文件名</span
+                ><input
+                  name="outputPakName"
+                  placeholder="pakchunk99_P.pak"
+                  required
+              /></label>
+              <label
+                ><span>Mount Point</span
+                ><input name="mountPoint" value="../../../"
+              /></label>
+            </div>
+            <div class="field-grid">
+              <label
+                ><span>.uasset 在 Pak 内路径</span
+                ><input
+                  name="uassetPakPath"
+                  placeholder="Content/Blueprints/Cards/.../Texture.uasset"
+                  required
+              /></label>
+              <label
+                ><span>.uexp 在 Pak 内路径</span
+                ><input
+                  name="uexpPakPath"
+                  placeholder="Content/Blueprints/Cards/.../Texture.uexp"
+                  required
+              /></label>
+              <label
+                ><span>.ubulk 在 Pak 内路径</span
+                ><input
+                  name="ubulkPakPath"
+                  placeholder="若本次没有 ubulk 可留空"
+              /></label>
+            </div>
+            <div class="pack-options">
+              <label>
+                <span>Pak 版本</span>
+                <select name="version">
+                  <option value="V11" selected>V11</option>
+                  <option value="V10">V10</option>
+                  <option value="V9">V9</option>
+                  <option value="V8B">V8B</option>
+                  <option value="V8A">V8A</option>
+                  <option value="V7">V7</option>
+                  <option value="V6">V6</option>
+                  <option value="V5">V5</option>
+                  <option value="V4">V4</option>
+                  <option value="V3">V3</option>
+                </select>
+              </label>
+              <label class="checkbox-line"
+                ><input type="checkbox" name="useCompression" /><span
+                  >启用压缩</span
+                ></label
+              >
+              <label>
+                <span>压缩算法</span>
+                <select name="compression">
+                  <option value="Zlib" selected>Zlib</option>
+                  <option value="Gzip">Gzip</option>
+                  <option value="Oodle">Oodle</option>
+                  <option value="Zstd">Zstd</option>
+                </select>
+              </label>
+            </div>
+            <div class="action-row">
+              <button type="submit">打包当前替换结果</button>
+              <p id="packMessage" class="message"></p>
+            </div>
+          </form>
+        </section>
+      </section>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>

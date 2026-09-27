@@ -33,65 +33,136 @@ internal static class TextureAssetParser
         byte[] ubulkBytes = File.Exists(ubulkPath) ? File.ReadAllBytes(ubulkPath) : [];
         TextureFormatInfo format = TextureFormats.DetectFormat(exportData, asset.GetNameMapIndexList().Select(name => name.Value));
 
-        int width = BitConverter.ToInt32(exportData, 4);
-        int height = BitConverter.ToInt32(exportData, 8);
-        if (width <= 0 || height <= 0)
+        // 纹理尺寸不能写死在固定偏移上。
+        //
+        // 原先固定读 exportData[4] / exportData[8]：对 t_cromwell 这类资产恰好正确，
+        // 但 KARDS 的资产在导出数据前还有一段内联元数据，尺寸三元组落在 offset 80，
+        // 于是读到的 15x0 被当成真实尺寸，mip 链整条错位，最终在
+        // TextureReplacer.WriteReplacement 里以 Buffer.BlockCopy 越界告终。
+        //
+        // 改为扫描所有 (宽度, 高度, 深度=1) 三元组作为候选，按面积从大到小逐个尝试，
+        // 取第一个能解析出完整 mip 布局的候选。
+        List<(int Width, int Height)> candidates = FindTextureSizeCandidates(exportData);
+        if (candidates.Count == 0)
         {
-            throw new InvalidOperationException("Failed to read a valid texture size from the export data.");
+            throw new InvalidOperationException("Failed to find a valid texture size in the export data.");
         }
 
-        List<TextureMip> fullMipChain = BuildMipChain(width, height, format).ToList();
-        int externalMipCount = ResolveExternalMipCount(fullMipChain, ubulkBytes.Length);
-        List<TextureMip> externalMips = fullMipChain.Take(externalMipCount).ToList();
-        (List<TextureMip> inlineMips, List<int> markers) = ResolveInlineMipLayout(exportData, fullMipChain.Skip(externalMipCount).ToList());
-        List<TextureMip> mips = externalMips.Concat(inlineMips).ToList();
-
-        List<TextureMipPlacement> placements = new();
-        int ubulkOffset = 0;
-        for (int i = 0; i < externalMipCount; i++)
+        Exception? lastError = null;
+        foreach ((int candidateWidth, int candidateHeight) in candidates)
         {
-            TextureMip mip = mips[i];
-            placements.Add(new TextureMipPlacement(mip.Index, mip.Width, mip.Height, mip.ByteLength, TextureMipStorage.Ubulk, ubulkOffset));
-            ubulkOffset += mip.ByteLength;
-        }
-
-        if (inlineMips.Count > 0)
-        {
-            int firstInlineStart = markers[0] - inlineMips[0].ByteLength;
-            placements.Add(new TextureMipPlacement(
-                inlineMips[0].Index,
-                inlineMips[0].Width,
-                inlineMips[0].Height,
-                inlineMips[0].ByteLength,
-                TextureMipStorage.UexpInline,
-                firstInlineStart));
-
-            for (int i = 1; i < inlineMips.Count; i++)
+            try
             {
-                int offset = markers[i - 1] + 16;
-                TextureMip mip = inlineMips[i];
-                placements.Add(new TextureMipPlacement(mip.Index, mip.Width, mip.Height, mip.ByteLength, TextureMipStorage.UexpInline, offset));
+                List<TextureMip> fullMipChain = BuildMipChain(candidateWidth, candidateHeight, format).ToList();
+                int externalMipCount = ResolveExternalMipCount(fullMipChain, ubulkBytes.Length);
+                List<TextureMip> externalMips = fullMipChain.Take(externalMipCount).ToList();
+                (List<TextureMip> inlineMips, List<int> markers) = ResolveInlineMipLayout(exportData, fullMipChain.Skip(externalMipCount).ToList());
+                if (inlineMips.Count == 0 && externalMipCount == 0)
+                {
+                    continue;
+                }
+
+                List<TextureMip> mips = externalMips.Concat(inlineMips).ToList();
+
+                List<TextureMipPlacement> placements = new();
+                int ubulkOffset = 0;
+                for (int i = 0; i < externalMipCount; i++)
+                {
+                    TextureMip mip = mips[i];
+                    placements.Add(new TextureMipPlacement(mip.Index, mip.Width, mip.Height, mip.ByteLength, TextureMipStorage.Ubulk, ubulkOffset));
+                    ubulkOffset += mip.ByteLength;
+                }
+
+                if (inlineMips.Count > 0)
+                {
+                    int firstInlineStart = markers[0] - inlineMips[0].ByteLength;
+                    placements.Add(new TextureMipPlacement(
+                        inlineMips[0].Index,
+                        inlineMips[0].Width,
+                        inlineMips[0].Height,
+                        inlineMips[0].ByteLength,
+                        TextureMipStorage.UexpInline,
+                        firstInlineStart));
+
+                    for (int i = 1; i < inlineMips.Count; i++)
+                    {
+                        int offset = markers[i - 1] + 16;
+                        TextureMip mip = inlineMips[i];
+                        placements.Add(new TextureMipPlacement(mip.Index, mip.Width, mip.Height, mip.ByteLength, TextureMipStorage.UexpInline, offset));
+                    }
+                }
+
+                int sentinelOffset = markers.Count > 0 ? markers[^1] : -1;
+
+                return new TextureAssetInfo(
+                    fullAssetPath,
+                    uexpPath,
+                    ubulkPath,
+                    exportData,
+                    footer,
+                    ubulkBytes,
+                    format,
+                    candidateWidth,
+                    candidateHeight,
+                    mips,
+                    externalMipCount,
+                    inlineMips,
+                    markers,
+                    sentinelOffset,
+                    placements);
+            }
+            catch (Exception ex)
+            {
+                lastError = ex;
             }
         }
 
-        int sentinelOffset = markers.Count > 0 ? markers[^1] : -1;
+        throw new InvalidOperationException(
+            $"Failed to resolve the texture mip layout. format={format.Name}, export={exportData.Length} bytes, " +
+            $"uexp={uexpBytes.Length} bytes, ubulk={ubulkBytes.Length} bytes, " +
+            $"candidates=[{string.Join(", ", candidates.Select(c => $"{c.Width}x{c.Height}"))}], " +
+            $"last={lastError?.Message ?? "<none>"}",
+            lastError);
+    }
 
-        return new TextureAssetInfo(
-            fullAssetPath,
-            uexpPath,
-            ubulkPath,
-            exportData,
-            footer,
-            ubulkBytes,
-            format,
-            width,
-            height,
-            mips,
-            externalMipCount,
-            inlineMips,
-            markers,
-            sentinelOffset,
-            placements);
+    /// <summary>
+    /// 扫描导出数据，收集所有看似纹理尺寸的 (宽度, 高度, 深度=1) 三元组，
+    /// 按面积从大到小返回。过滤掉非 2 的幂与超范围的值，避免把纹理数据里的
+    /// 巧合字节当成尺寸。
+    /// </summary>
+    private static List<(int Width, int Height)> FindTextureSizeCandidates(byte[] exportData)
+    {
+        List<(int Width, int Height)> result = new();
+        HashSet<(int Width, int Height)> seen = new();
+
+        for (int offset = 0; offset <= exportData.Length - 12; offset++)
+        {
+            int width = BitConverter.ToInt32(exportData, offset);
+            int height = BitConverter.ToInt32(exportData, offset + 4);
+            int depth = BitConverter.ToInt32(exportData, offset + 8);
+
+            if (depth != 1 || !IsSaneTextureSize(width) || !IsSaneTextureSize(height))
+            {
+                continue;
+            }
+
+            if (seen.Add((width, height)))
+            {
+                result.Add((width, height));
+            }
+        }
+
+        return result
+            .OrderByDescending(candidate => (long)candidate.Width * candidate.Height)
+            .ThenByDescending(candidate => Math.Max(candidate.Width, candidate.Height))
+            .ToList();
+    }
+
+    private static bool IsSaneTextureSize(int value)
+    {
+        return value > 0
+            && value <= 32768
+            && (value & (value - 1)) == 0;
     }
 
     private static IEnumerable<TextureMip> BuildMipChain(int width, int height, TextureFormatInfo format)

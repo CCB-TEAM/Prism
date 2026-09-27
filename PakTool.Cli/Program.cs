@@ -178,6 +178,9 @@ static async Task InspectLooseTextureAsync(string uassetPath, string game, strin
 
             var png = bitmap.Encode(ETextureFormat.Png, false, out var ext);
             Console.WriteLine($"decoded {bitmap.Width}x{bitmap.Height} {bitmap.PixelFormat}, encoded={png.Length} .{ext}");
+            var pngPath = Path.ChangeExtension(uassetPath, ".png");
+            File.WriteAllBytes(pngPath, png);
+            Console.WriteLine("png=" + pngPath);
         }
         catch (Exception ex)
         {

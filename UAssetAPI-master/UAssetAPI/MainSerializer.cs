@@ -3,7 +3,6 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Linq.Expressions;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using UAssetAPI.ExportTypes;
@@ -97,15 +96,6 @@ namespace UAssetAPI
             if (_propertyTypeRegistry != null) return;
             _propertyTypeRegistry = new Dictionary<string, RegistryEntry>();
 
-            // 本地修改（Prism）：Native AOT 下 Assembly.GetReferencedAssemblies() 不受支持，
-            // 会抛 PlatformNotSupportedException。而 UAsset 在任何读取导出表的分支里都会
-            // 访问 PropertyTypeRegistry（UAsset.cs:1046），于是连"只读原始字节"的纹理替换
-            // 都会在进程启动时直接崩掉 —— 即 Release 的 UAssetCLI（PublishAot=true）不可用，
-            // 而 Debug 走 JIT 看不出问题。
-            //
-            // AOT 下 AppDomain.GetAssemblies() 只返回 UAssetAPI 自身，而它的 PropertyData
-            // 子类都在本程序集里，所以拿下依赖程序集列表置空即可（下面的 allAssemblies[0]
-            // 就是本程序集）。这与另一份副本 UAssetAPI-master/ 里的处理保持一致。
             Assembly[] allDependentAssemblies;
             try
             {
@@ -113,6 +103,8 @@ namespace UAssetAPI
             }
             catch (PlatformNotSupportedException)
             {
+                // Native AOT does not support Assembly.GetReferencedAssemblies().
+                // UAssetAPI's own property types live in this assembly, which is enough for the CLI.
                 allDependentAssemblies = Array.Empty<Assembly>();
             }
 
@@ -143,11 +135,9 @@ namespace UAssetAPI
                         res.PropertyType = currentPropertyDataType;
                         res.HasCustomStructSerialization = (bool)returnedHasCustomStructSerialization;
 
-                        var nameParam = Expression.Parameter(typeof(FName));
-                        res.Creator = Expression.Lambda<Func<FName, PropertyData>>(
-                           Expression.New(currentPropertyDataType.GetConstructor(new[] { typeof(FName), }), new[] { nameParam, }),
-                           nameParam
-                        ).Compile();
+                        ConstructorInfo constructor = currentPropertyDataType.GetConstructor(new[] { typeof(FName), });
+                        if (constructor == null) continue;
+                        res.Creator = name => (PropertyData)constructor.Invoke(new object[] { name });
 
                         // prevent duplicate entries
                         if (_propertyTypeRegistry.ContainsKey(returnedPropType.Value))
@@ -470,6 +460,7 @@ namespace UAssetAPI
                     if (relevantSchema == null) throw new FormatException("Failed to find a valid property for schema index " + header.UnversionedPropertyIndex + " in the class " + parentName.ToString());
                 }
                 UsmapProperty relevantProperty = relevantSchema.Properties[practicingUnversionedPropertyIndex];
+                Console.Error.WriteLine("POLARIZER_DIAG unversioned idx=" + practicingUnversionedPropertyIndex + " schema=" + relevantSchema.Name + " name=" + relevantProperty.Name + " type=" + relevantProperty.PropertyData.Type + " pos=" + reader.BaseStream.Position);
                 header.UnversionedPropertyIndex += 1;
 
                 name = FName.DefineDummy(reader.Asset, relevantProperty.Name);

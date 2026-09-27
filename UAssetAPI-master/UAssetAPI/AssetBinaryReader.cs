@@ -111,7 +111,13 @@ public class UnrealBinaryReader : BinaryReader
     public virtual FString ReadFString()
     {
         int length = this.ReadInt32();
-        if (length > MainSerializer.MaxSerializedArrayLength) throw new InvalidOperationException($"Invalid FString length: {length}"); // some parsing error is obviously occurring if we have extremely large strings
+        // Guard BOTH directions. The upper check alone is not enough: a corrupt
+        // negative length reaches the case below, where "-length * 2" overflows
+        // (unchecked) and feeds stackalloc an enormous size. A stack overflow is
+        // uncatchable in .NET and kills the process, so a single bad header field
+        // could take down a whole application with no diagnostic.
+        if (length > MainSerializer.MaxSerializedArrayLength || length < -MainSerializer.MaxSerializedArrayLength)
+            throw new InvalidOperationException($"Invalid FString length: {length}"); // some parsing error is obviously occurring if we have extremely large strings
         switch (length)
         {
             case < 0:
@@ -131,7 +137,7 @@ public class UnrealBinaryReader : BinaryReader
     public virtual FString ReadUtf8String()
     {
         int length = this.ReadInt32();
-        if (length > MainSerializer.MaxSerializedArrayLength) throw new InvalidOperationException($"Invalid UTF-8 string length: {length}");
+        if (length > MainSerializer.MaxSerializedArrayLength || length < -MainSerializer.MaxSerializedArrayLength) throw new InvalidOperationException($"Invalid UTF-8 string length: {length}");
         switch (length)
         {
             case < 0:

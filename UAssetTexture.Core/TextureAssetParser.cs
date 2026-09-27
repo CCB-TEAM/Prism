@@ -122,7 +122,7 @@ public static class TextureAssetParser
                     var candidateInlineMips = fullMipChain
                         .Where(mip => !externalIndexes.Contains(mip.Index))
                         .ToList();
-                    var (inlineMips, markers) = ResolveInlineMipLayout(exportData, candidateInlineMips);
+                    var (inlineMips, markers, inlinePayloadOffsets) = ResolveInlineMipLayout(exportData, candidateInlineMips);
                     if (externalRun.Mips.Count == 0 && inlineMips.Count == 0)
                         continue;
 
@@ -137,13 +137,25 @@ public static class TextureAssetParser
                     for (var i = 0; i < inlineMips.Count; i++)
                     {
                         var mip = inlineMips[i];
+
+                        // 载荷偏移由"相邻尺寸标记"推得，而不是 marker - ByteLength。
+                        //
+                        // 每级 mip 的排布是：[载荷][该级尺寸标记/尾部元数据]，而这段元数据
+                        // 的长度逐级不同（实测 48/52/28/16 交错）。marker - ByteLength 隐含了
+                        // "元数据长度恒定"的假设，只有第一级恰好成立，从第二级起就会把载荷
+                        // 起点算到前一级的数据里，产出静默损坏的贴图。
+                        // 相邻标记之差才是真实的"载荷 + 本级元数据"步长。
+                        int payloadOffset = i == 0
+                            ? markers[0] - inlineMips[0].ByteLength
+                            : markers[i - 1] + 16;
+
                         placements.Add(new TextureMipPlacement(
                             mip.Index,
                             mip.Width,
                             mip.Height,
                             mip.ByteLength,
                             TextureMipStorage.UexpInline,
-                            markers[i] - mip.ByteLength));
+                            payloadOffset));
                     }
 
                     return new TextureLayout(
@@ -338,6 +350,21 @@ public static class TextureAssetParser
             .Where(record => record.Storage != TextureMipStorage.Ubulk)
             .Select(record => record.DimensionOffset)
             .ToList();
+
+        // 校验"外部"声明是否成立：声明为 Ubulk 的 mip 必须真的落在 .ubulk 里。
+        //
+        // 否则这个布局是假的、必须放弃，让内联路径接手。KARDS 这类资产没有 .ubulk
+        // 文件（ubulkLength = 0），mip 载荷内联在 .uexp 里，但载荷之后的 FByteBulkData
+        // 头会被误认成"外部 mip"记录 —— 于是这里只登记出一级 mip（4x4），
+        // 而真实布局是 11 级内联。此前它会抢先返回这个残缺布局，内联路径再无机会执行，
+        // 最终在 TextureReplacer.WriteReplacement 里以 Buffer.BlockCopy 越界告终。
+        foreach (var placement in placements.Where(p => p.Storage == TextureMipStorage.Ubulk))
+        {
+            if (ubulkLength == 0)
+                return null;
+            if (placement.Offset < 0 || (long)placement.Offset + placement.ByteLength > ubulkLength)
+                return null;
+        }
 
         return new TextureLayout(
             fullMipChain[0].Width,
@@ -550,34 +577,43 @@ public static class TextureAssetParser
         return depth == 1 && mips.TryGetValue((width, height), out mip!);
     }
 
-    private static (List<TextureMip> Mips, List<int> Markers) ResolveInlineMipLayout(byte[] exportData, IReadOnlyList<TextureMip> candidateInlineMips)
+    private static (List<TextureMip> Mips, List<int> Markers, List<int> PayloadOffsets) ResolveInlineMipLayout(byte[] exportData, IReadOnlyList<TextureMip> candidateInlineMips)
     {
         if (candidateInlineMips.Count == 0)
-            return ([], []);
+            return ([], [], []);
 
         var markers = new List<int>();
+        var payloadOffsets = new List<int>();
         var inlineMips = new List<TextureMip>();
+
+        // 推进基准必须是"上一级载荷的末尾"，不能是"上一级标记的位置"。
+        //
+        // KARDS 这类资产的排布是：每级 mip 的尺寸标记位于【该级载荷之后】——
+        //   [头部][mip0 载荷][mip0 标记][mip1 载荷][mip1 标记]...
+        // 若把 previousEnd 推进到上一级标记之后，下一级的标记就在它前面，
+        // 会被 hit > previousEnd 直接排除，mip 链从第二级起全部丢失。
         var previousEnd = 0;
         foreach (var mip in candidateInlineMips)
         {
             var hits = FindDimensionMarkers(exportData, mip.Width, mip.Height);
-            var marker = hits
-                .Where(hit => hit > previousEnd)
+            var match = hits
+                .Where(hit => hit >= mip.ByteLength)
                 .Select(hit => new { Marker = hit, PayloadStart = hit - mip.ByteLength })
                 .Where(hit => hit.PayloadStart >= previousEnd)
-                .Select(hit => (int?)hit.Marker)
+                .Select(hit => (int?)hit.PayloadStart)
                 .FirstOrDefault();
 
-            if (marker is null)
+            if (match is null)
                 break;
 
             inlineMips.Add(mip);
-            markers.Add(marker.Value);
-            previousEnd = marker.Value + 16;
+            markers.Add(match.Value + mip.ByteLength);
+            payloadOffsets.Add(match.Value);
+            previousEnd = match.Value + mip.ByteLength;
         }
 
         if (inlineMips.Count == 0)
-            return ([], []);
+            return ([], [], []);
 
         for (var i = 1; i < markers.Count; i++)
         {
@@ -587,14 +623,13 @@ public static class TextureAssetParser
 
         for (var i = 0; i < inlineMips.Count; i++)
         {
-            var payloadStart = markers[i] - inlineMips[i].ByteLength;
-            if (payloadStart < 0)
+            if (payloadOffsets[i] < 0)
                 throw new InvalidOperationException($"Inline mip {inlineMips[i].Index} would start before the export data begins.");
-            if (payloadStart + inlineMips[i].ByteLength > exportData.Length)
+            if (payloadOffsets[i] + inlineMips[i].ByteLength > exportData.Length)
                 throw new InvalidOperationException($"Inline mip {inlineMips[i].Index} would end after the export data.");
         }
 
-        return (inlineMips, markers);
+        return (inlineMips, markers, payloadOffsets);
     }
 
     private static List<int> FindDimensionMarkers(byte[] exportData, int width, int height)

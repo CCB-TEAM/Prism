@@ -1,0 +1,19 @@
+Prism Third-party Notices
+
+Prism application code is licensed under the MIT License. Some source files,
+libraries, and runtime dependencies are provided by third parties and remain
+under their respective licenses.
+
+- CUE4Parse (https://github.com/FabianFG/CUE4Parse) is licensed under the
+  Apache License 2.0. See external/CUE4Parse/LICENSE and
+  external/CUE4Parse/NOTICE.
+- Android, .NET, SkiaSharp, ImageSharp, Oodle.NET, compression libraries, and
+  other NuGet/runtime dependencies remain under their own upstream licenses.
+  See their package metadata and bundled license files where applicable.
+- Oodle native binaries, Unreal Engine code, game assets, AES keys, and mapping
+  files are not included in this repository and are not covered by Prism's MIT
+  license.
+
+The MIT license in this repository applies only to code and documentation that
+ccbteam has the right to license. It does not relicense third-party code or
+proprietary middleware.
