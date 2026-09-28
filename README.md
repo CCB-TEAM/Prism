@@ -1,6 +1,6 @@
 # Prism 工作区
 
-UE `.pak` 资产管理工具生态：**Android + Windows 桌面**双端，基于 [CUE4Parse](https://github.com/FabianFG/CUE4Parse)，在 [kardswalker/Prism](https://github.com/kardswalker/Prism) 基础上扩展。
+UE `.pak` 资产管理工具生态：**Android + Windows 桌面**双端，基于 [CUE4Parse](https://github.com/FabianFG/CUE4Parse)。
 
 ## 目录
 
