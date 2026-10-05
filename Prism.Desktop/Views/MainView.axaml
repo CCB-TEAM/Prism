@@ -11,13 +11,7 @@
         （页面切换是 IsVisible 显隐，Transitions 对布局移除不产生视觉效果）。
         IsAnimationEnabled 绑定设置项，供低配设备或偏好静态界面的用户关闭。
     -->
-    <!--
-        宽屏整体放大：窗口够宽时把字号、间距、控件一起放大一档（手机与窄窗为 1.0，即完全不变）。
-        放在所有页面的共同宿主上，一处生效，不用逐页改字号。
-        页面切换的淡入/位移在 ViewTransitionHost 内部，与这里的布局缩放互不冲突。
-    -->
-    <LayoutTransformControl LayoutTransform="{Binding UiScaleTransform}">
-        <Panel>
+    <Panel>
             <views:ViewTransitionHost IsVisible="{Binding IsHomeVisible}"
                                       IsAnimationEnabled="{Binding IsAnimationsEnabled}"
                                       OffsetY="0"
@@ -70,9 +64,9 @@
                     <DockPanel>
                         <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="20,16,14,10">
                             <TextBlock Grid.Column="0" Text="{Binding HelpTitle}"
-                                       FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                       FontSize="{DynamicResource Fs14}" FontWeight="SemiBold" VerticalAlignment="Center" />
                             <Button Grid.Column="1" Content="✕" Command="{Binding CloseHelpCommand}"
-                                    Classes="ghost" FontSize="12" Padding="8,2" />
+                                    Classes="ghost" FontSize="{DynamicResource Fs12}" Padding="8,2" />
                         </Grid>
 
                         <Button DockPanel.Dock="Bottom"
@@ -89,40 +83,40 @@
                                 <!-- ── Pak 转换 ── -->
                                 <StackPanel Spacing="14" IsVisible="{Binding IsHelpConvert}">
                                     <StackPanel Spacing="6">
-                                        <TextBlock Text="用途" FontSize="12" FontWeight="SemiBold" Opacity="0.7" />
-                                        <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
+                                        <TextBlock Text="用途" FontSize="{DynamicResource Fs12}" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" />
+                                        <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}"
                                                    Text="把另一个平台 Pak 里的同路径贴图搬到本平台：解出源贴图像素 → 按主 Pak 的纹理格式重新编码 → 合成新 Pak。" />
                                     </StackPanel>
 
                                     <StackPanel Spacing="6">
-                                        <TextBlock Text="三步" FontSize="12" FontWeight="SemiBold" Opacity="0.7" />
+                                        <TextBlock Text="三步" FontSize="{DynamicResource Fs12}" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" />
                                         <!-- 浮层会盖住页面，所以这里放一张页面截图当参照 -->
                                         <Border CornerRadius="8" ClipToBounds="True" Margin="0,2,0,4"
                                                 BorderBrush="#22000000" BorderThickness="1">
                                             <Image Source="avares://Prism.Desktop/Assets/help/convert-page.png"
                                                    Stretch="Uniform" />
                                         </Border>
-                                        <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
+                                        <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}"
                                                    Text="1. 主 Pak：选本平台要装进游戏的那个 Pak（它决定输出的纹理格式）。" />
-                                        <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
+                                        <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}"
                                                    Text="2. 待转换 Pak：选另一个平台的 Pak，它提供新贴图。" />
-                                        <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
+                                        <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}"
                                                    Text="3. 输出：选保存位置，点「开始转换」。完成后把输出 Pak 放进游戏的 Paks 目录。" />
                                     </StackPanel>
 
                                     <StackPanel Spacing="6">
-                                        <TextBlock Text="输出里装什么" FontSize="12" FontWeight="SemiBold" Opacity="0.7" />
-                                        <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
+                                        <TextBlock Text="输出里装什么" FontSize="{DynamicResource Fs12}" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" />
+                                        <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}"
                                                    Text="• 默认：只装转换过的贴图，体积≈改动量。游戏会把它叠加在原 Pak 之上，同路径以后加载的为准。" />
-                                        <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
+                                        <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}"
                                                    Text="• 并入模组的其他文件：再带上源 Pak 的蓝图、本地化、数据表等。这些内容双端通用，不需要转换，会原样复制进输出 Pak —— 开了它就不必再单独做一次 Pak 合并。" />
-                                        <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
+                                        <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}"
                                                    Text="• 输出完整整包：连主 Pak 的其他文件一起打包，体积≈主 Pak。只在需要「用一个 Pak 替换整包」时用。" />
                                     </StackPanel>
 
                                     <StackPanel Spacing="6">
-                                        <TextBlock Text="开始前检查" FontSize="12" FontWeight="SemiBold" Opacity="0.7" />
-                                        <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
+                                        <TextBlock Text="开始前检查" FontSize="{DynamicResource Fs12}" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" />
+                                        <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}"
                                                    Text="• 映射文件：两侧贴图格式不同时必须解出源像素才能重编码，这一步需要 .usmap / .jmap（在「设置」页选择，两个平台导出的映射通用）。缺映射的贴图会被跳过并在明细里写明原因。" />
                                         <Border CornerRadius="8" ClipToBounds="True" Margin="0,2,0,4"
                                                 BorderBrush="#22000000" BorderThickness="1"
@@ -130,15 +124,15 @@
                                             <Image Source="avares://Prism.Desktop/Assets/help/settings-path.png"
                                                    Stretch="Uniform" MaxWidth="480" />
                                         </Border>
-                                        <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
+                                        <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}"
                                                    Text="• AES 密钥：只有加密 Pak 需要，沿用「解包 &amp; 模组」页里填的。" />
-                                        <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
+                                        <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}"
                                                    Text="• 编码器：桌面端需要 UAssetCLI 与 astcenc / texconv，发行版已随包提供（须与主程序放在一起）；Android 端在应用内完成编码。" />
                                     </StackPanel>
 
                                     <StackPanel Spacing="6">
-                                        <TextBlock Text="结果怎么看" FontSize="12" FontWeight="SemiBold" Opacity="0.7" />
-                                        <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
+                                        <TextBlock Text="结果怎么看" FontSize="{DynamicResource Fs12}" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" />
+                                        <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}"
                                                    Text="转换完成后下方逐条列出每张贴图的处理结果：替换 / 主 Pak 缺失 / 跳过 / 失败。失败项会写明具体原因，可据此调整映射文件或输入 Pak。" />
                                     </StackPanel>
                                 </StackPanel>
@@ -146,24 +140,24 @@
                                 <!-- ── 解包 & Mod ── -->
                                 <StackPanel Spacing="14" IsVisible="{Binding IsHelpWorkspace}">
                                     <StackPanel Spacing="6">
-                                        <TextBlock Text="用途" FontSize="12" FontWeight="SemiBold" Opacity="0.7" />
-                                        <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
+                                        <TextBlock Text="用途" FontSize="{DynamicResource Fs12}" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" />
+                                        <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}"
                                                    Text="浏览 Pak 内容、预览资产、导出资源，并制作贴图替换与本地化补丁。" />
                                     </StackPanel>
                                     <StackPanel Spacing="6">
-                                        <TextBlock Text="三个标签" FontSize="12" FontWeight="SemiBold" Opacity="0.7" />
-                                        <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
+                                        <TextBlock Text="三个标签" FontSize="{DynamicResource Fs12}" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" />
+                                        <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}"
                                                    Text="• 配置：选 Pak 文件、映射文件与导出目录。加密 Pak 需要填 AES 密钥。" />
-                                        <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
+                                        <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}"
                                                    Text="• 浏览：像文件管理器一样查看包内文件。搜索框输入关键词是搜索；输入 Pak 内路径（如 kards/Content/Assets/Textures）则是直接跳转。" />
-                                        <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
+                                        <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}"
                                                    Text="• 替换：把选中的资产加入替换列表后在这里逐项处理 —— 贴图选一张替换图片；本地化则直接改词条文本。" />
                                     </StackPanel>
                                     <StackPanel Spacing="6">
-                                        <TextBlock Text="产出" FontSize="12" FontWeight="SemiBold" Opacity="0.7" />
-                                        <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
+                                        <TextBlock Text="产出" FontSize="{DynamicResource Fs12}" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" />
+                                        <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}"
                                                    Text="点「构建补丁 Pak」生成补丁包，放进游戏的 Paks 目录即会叠加生效。" />
-                                        <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
+                                        <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}"
                                                    Text="本地化改完按回车写回，然后再构建补丁 Pak。" />
                                     </StackPanel>
                                 </StackPanel>
@@ -171,22 +165,22 @@
                                 <!-- ── Pak 合并 ── -->
                                 <StackPanel Spacing="14" IsVisible="{Binding IsHelpMerge}">
                                     <StackPanel Spacing="6">
-                                        <TextBlock Text="用途" FontSize="12" FontWeight="SemiBold" Opacity="0.7" />
-                                        <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
+                                        <TextBlock Text="用途" FontSize="{DynamicResource Fs12}" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" />
+                                        <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}"
                                                    Text="把多个 Pak 合成一个；同一个路径在多份 Pak 里都有时，用优先级决定谁生效。" />
                                     </StackPanel>
                                     <StackPanel Spacing="6">
-                                        <TextBlock Text="优先级" FontSize="12" FontWeight="SemiBold" Opacity="0.7" />
-                                        <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
+                                        <TextBlock Text="优先级" FontSize="{DynamicResource Fs12}" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" />
+                                        <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}"
                                                    Text="越靠上优先级越高（第 1 项最高）。列表里每一项都能拖动排序、都能移除，没有钉死的「主 Pak」。" />
                                     </StackPanel>
                                     <StackPanel Spacing="6">
-                                        <TextBlock Text="基准本地化（可选）" FontSize="12" FontWeight="SemiBold" Opacity="0.7" />
-                                        <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
+                                        <TextBlock Text="基准本地化（可选）" FontSize="{DynamicResource Fs12}" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" />
+                                        <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}"
                                                    Text="两份文本模组对每一条词条都有值，只对比它们无法判断谁改过哪条 —— 所以需要一个「原版」当参照。" />
-                                        <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
+                                        <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}"
                                                    Text="选了游戏原版的 .locres 之后，输入里同名的 .locres 会与它逐条对比，把各模组的改动合并到一起（同一词条被多份改动时按优先级取高者）；不选则仍是整份文件覆盖。" />
-                                        <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
+                                        <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}"
                                                    Text="原版 .locres 怎么拿：在「解包 &amp; Mod」页打开游戏原版 Pak，找到 Content/Localization/…/Game.locres，导出即可，一次导出可长期复用。" />
                                     </StackPanel>
                                 </StackPanel>
@@ -194,26 +188,26 @@
                                 <!-- ── 设置 ── -->
                                 <StackPanel Spacing="14" IsVisible="{Binding IsHelpSettings}">
                                     <StackPanel Spacing="6">
-                                        <TextBlock Text="通用" FontSize="12" FontWeight="SemiBold" Opacity="0.7" />
-                                        <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
+                                        <TextBlock Text="通用" FontSize="{DynamicResource Fs12}" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" />
+                                        <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}"
                                                    Text="• 显示纹理缩略图：低配设备可关掉以提升流畅度。" />
-                                        <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
+                                        <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}"
                                                    Text="• 替换时使用 Oodle 压缩：默认关闭。开启后需要 oo2core 原生库可用（发行版默认不含，见 README）；不需要时保持关闭更省事。" />
-                                        <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
+                                        <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}"
                                                    Text="• 合并前询问冲突替换：合并时若存在同名路径，先弹窗确认。" />
-                                        <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
+                                        <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}"
                                                    Text="• 界面过渡动画：关闭可提升低配设备流畅度。" />
                                     </StackPanel>
                                     <StackPanel Spacing="6">
-                                        <TextBlock Text="路径与文件" FontSize="12" FontWeight="SemiBold" Opacity="0.7" />
-                                        <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
+                                        <TextBlock Text="路径与文件" FontSize="{DynamicResource Fs12}" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" />
+                                        <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}"
                                                    Text="• 映射文件支持 .usmap 与 .jmap（含 .gz），按扩展名自动识别；两个平台导出的映射通用。" />
-                                        <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
+                                        <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}"
                                                    Text="• 用系统选择器选的文件会复制到应用私有缓存；换成新文件后旧缓存自动删除。Android 使用系统目录授权，不会申请「所有文件」权限。" />
                                     </StackPanel>
                                     <StackPanel Spacing="6">
-                                        <TextBlock Text="AES 密钥" FontSize="12" FontWeight="SemiBold" Opacity="0.7" />
-                                        <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
+                                        <TextBlock Text="AES 密钥" FontSize="{DynamicResource Fs12}" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" />
+                                        <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}"
                                                    Text="只有加密 Pak 需要。密钥会明文保存在本地配置文件（Prism.Desktop.settings.json）里，分享或截图时注意不要外发该文件。" />
                                     </StackPanel>
                                 </StackPanel>
@@ -222,6 +216,5 @@
                     </DockPanel>
                 </Border>
             </Border>
-        </Panel>
-    </LayoutTransformControl>
+    </Panel>
 </UserControl>

@@ -12,14 +12,14 @@
             <Grid ColumnDefinitions="Auto,*,Auto,Auto">
                 <Button Grid.Column="0"
                         Content="←"
-                        FontSize="16"
+                        FontSize="{DynamicResource Fs16}"
                         Foreground="{DynamicResource TextMutedBrush}"
                         Background="Transparent"
                         Command="{Binding GoHomeCommand}"
                         Margin="0,0,12,0" />
                 <TextBlock Grid.Column="1"
                            Text="解包 &amp; 模组"
-                           FontSize="15"
+                           FontSize="{DynamicResource Fs15}"
                            FontWeight="SemiBold"
                            VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis" />
@@ -28,13 +28,13 @@
                         Command="{Binding OpenHelpCommand}"
                         CommandParameter="workspace"
                         Classes="ghost"
-                        FontSize="11"
+                        FontSize="{DynamicResource Fs11}"
                         VerticalAlignment="Center"
                         Margin="0,0,10,0" />
                 <TextBlock Grid.Column="3"
                            Text="{Binding StatusText}"
-                           FontSize="11"
-                           Opacity="0.65"
+                           FontSize="{DynamicResource Fs11}"
+                           Foreground="{DynamicResource TextMutedBrush}"
                            VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis"
                            MaxWidth="{Binding TopStatusMaxWidth}"
@@ -76,7 +76,7 @@
                         <TextBox Text="{Binding SearchQuery}"
                                  Width="{Binding SearchBoxWidth}"
                                  PlaceholderText="{Binding SearchPlaceholder}"
-                                 FontSize="12"
+                                 FontSize="{DynamicResource Fs12}"
                                  KeyDown="OnSearchKeyDown" />
                         <Button Content="搜索"
                                 Command="{Binding SearchCommand}"
@@ -106,7 +106,7 @@
                         <TextBox Grid.Column="0"
                                  Text="{Binding SearchQuery}"
                                  PlaceholderText="{Binding SearchPlaceholder}"
-                                 FontSize="12"
+                                 FontSize="{DynamicResource Fs12}"
                                  KeyDown="OnSearchKeyDown" />
                         <Button Grid.Column="1"
                                 Content="搜索"
@@ -126,12 +126,12 @@
                     <Border Classes="card" Padding="20">
                         <StackPanel Spacing="16">
                             <StackPanel Spacing="6">
-                                <TextBlock Text="PAK 文件" FontSize="11" Opacity="0.55" FontWeight="SemiBold" />
+                                <TextBlock Text="PAK 文件" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}" FontWeight="SemiBold" />
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                                     <TextBlock Grid.Column="0"
                                                Text="{Binding PakPath}"
-                                               FontSize="12"
-                                               Opacity="0.8"
+                                               FontSize="{DynamicResource Fs12}"
+                                               Foreground="{DynamicResource TextMutedBrush}"
                                                VerticalAlignment="Center"
                                                TextTrimming="CharacterEllipsis"
                                                ToolTip.Tip="{Binding PakPath}" />
@@ -142,12 +142,12 @@
                                 </Grid>
                             </StackPanel>
                             <StackPanel Spacing="6">
-                                <TextBlock Text="映射文件（usmap / jmap）" FontSize="11" Opacity="0.55" FontWeight="SemiBold" />
+                                <TextBlock Text="映射文件（usmap / jmap）" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}" FontWeight="SemiBold" />
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                                     <TextBlock Grid.Column="0"
                                                Text="{Binding UsmapPath}"
-                                               FontSize="12"
-                                               Opacity="0.8"
+                                               FontSize="{DynamicResource Fs12}"
+                                               Foreground="{DynamicResource TextMutedBrush}"
                                                VerticalAlignment="Center"
                                                TextTrimming="CharacterEllipsis"
                                                ToolTip.Tip="{Binding UsmapPath}" />
@@ -158,7 +158,7 @@
                                 </Grid>
                             </StackPanel>
                             <StackPanel Spacing="6">
-                                <TextBlock Text="AES 密钥" FontSize="11" Opacity="0.55" FontWeight="SemiBold" />
+                                <TextBlock Text="AES 密钥" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}" FontWeight="SemiBold" />
                                 <TextBox Text="{Binding AesKey}"
                                          PlaceholderText="如需解密请填写" />
                             </StackPanel>
@@ -171,7 +171,7 @@
 
                     <Border Classes="card" Padding="20">
                         <StackPanel Spacing="10">
-                            <TextBlock Text="导出" FontSize="11" Opacity="0.55" FontWeight="SemiBold" />
+                            <TextBlock Text="导出" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}" FontWeight="SemiBold" />
                             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                                 <TextBox Grid.Column="0"
                                          Text="{Binding ExportDirectory}"
@@ -183,8 +183,8 @@
                                         Classes="ghost" />
                             </Grid>
                             <TextBlock Text="Android 会通过系统目录授权保存此位置，无需“所有文件”权限。"
-                                       FontSize="10"
-                                       Opacity="0.5"
+                                       FontSize="{DynamicResource Fs10}"
+                                       Foreground="{DynamicResource TextMutedBrush}"
                                        IsVisible="{Binding IsAndroid}" />
                         </StackPanel>
                     </Border>
@@ -241,13 +241,13 @@
                                 <!-- 标题栏（仅展示，点击不再收起） -->
                                 <DockPanel Margin="14,4,14,10">
                                     <TextBlock Text="{Binding PreviewTitle}"
-                                               FontSize="13"
+                                               FontSize="{DynamicResource Fs13}"
                                                FontWeight="SemiBold"
                                                TextTrimming="CharacterEllipsis" />
                                     <TextBlock DockPanel.Dock="Right"
                                                Text="拖拽上方把手调整高度"
-                                               FontSize="10"
-                                               Opacity="0.4" />
+                                               FontSize="{DynamicResource Fs10}"
+                                               Foreground="{DynamicResource TextMutedBrush}" />
                                 </DockPanel>
                                 <!-- 内容区：高度由外层 Border.MaxHeight 控制，不再单独封顶 -->
                                 <ScrollViewer IsVisible="{Binding IsPreviewExpanded}">
@@ -270,12 +270,12 @@
                                 BorderThickness="0,0,0,1">
                             <DockPanel>
                                 <TextBlock Text="替换任务"
-                                           FontSize="14"
+                                           FontSize="{DynamicResource Fs14}"
                                            FontWeight="SemiBold"
                                            VerticalAlignment="Center" />
                                 <TextBlock Text="{Binding PatchItems.Count, StringFormat=  （{0} 项）}"
-                                           FontSize="11"
-                                           Opacity="0.6"
+                                           FontSize="{DynamicResource Fs11}"
+                                           Foreground="{DynamicResource TextMutedBrush}"
                                            VerticalAlignment="Center" />
                                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="10">
                                     <CheckBox Content="Oodle 压缩"
@@ -299,29 +299,29 @@
                                             <StackPanel Spacing="3">
                                                 <StackPanel Orientation="Horizontal" Spacing="6">
                                                     <TextBlock Text="{Binding Name}"
-                                                               FontSize="12"
+                                                               FontSize="{DynamicResource Fs12}"
                                                                FontWeight="SemiBold"
                                                                TextTrimming="CharacterEllipsis" />
                                                     <TextBlock Text="{Binding Format}"
-                                                               FontSize="10"
-                                                               Opacity="0.6"
+                                                               FontSize="{DynamicResource Fs10}"
+                                                               Foreground="{DynamicResource TextMutedBrush}"
                                                                VerticalAlignment="Center" />
                                                 </StackPanel>
                                                 <TextBlock Text="{Binding SourcePath}"
-                                                           FontSize="10"
-                                                           Opacity="0.55"
+                                                           FontSize="{DynamicResource Fs10}"
+                                                           Foreground="{DynamicResource TextMutedBrush}"
                                                            TextTrimming="CharacterEllipsis" />
                                                 <TextBlock Text="已替换"
-                                                           FontSize="10"
+                                                           FontSize="{DynamicResource Fs10}"
                                                            Foreground="{DynamicResource PrimaryBrush}"
                                                            IsVisible="{Binding IsReplaced}" />
                                                 <TextBlock Text="失败"
-                                                           FontSize="10"
+                                                           FontSize="{DynamicResource Fs10}"
                                                            Foreground="{DynamicResource DangerBrush}"
                                                            IsVisible="{Binding IsFailed}" />
                                                 <TextBlock Text="待替换"
-                                                           FontSize="10"
-                                                           Opacity="0.6"
+                                                           FontSize="{DynamicResource Fs10}"
+                                                           Foreground="{DynamicResource TextMutedBrush}"
                                                            IsVisible="{Binding IsPending}" />
                                             </StackPanel>
                                         </DataTemplate>
@@ -331,12 +331,12 @@
                             <ScrollViewer Grid.Column="1">
                                 <StackPanel Margin="18" Spacing="12">
                                     <TextBlock Text="从浏览页选好资产 →「加入替换」，再回到这里处理。"
-                                               FontSize="12"
-                                               Opacity="0.6"
+                                               FontSize="{DynamicResource Fs12}"
+                                               Foreground="{DynamicResource TextMutedBrush}"
                                                IsVisible="{Binding HasNoPatchItems}" />
                                     <StackPanel IsVisible="{Binding HasPatchItems}">
                                         <TextBlock Text="{Binding SelectedPatchItem.SourcePath}"
-                                                   FontSize="12"
+                                                   FontSize="{DynamicResource Fs12}"
                                                    FontWeight="SemiBold"
                                                    TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding SelectedPatchItem.SourcePath}"/>
 
@@ -344,32 +344,32 @@
                                         <StackPanel IsVisible="{Binding SelectedPatchItem.IsLocres}">
                                             <TextBox Text="{Binding SelectedPatchItem.LocresFilterText}"
                                                      PlaceholderText="搜索本地化条目..."
-                                                     FontSize="12" />
+                                                     FontSize="{DynamicResource Fs12}" />
                                             <StackPanel Orientation="Horizontal"
                                                 Spacing="8"
                                                 IsVisible="{Binding SelectedPatchItem.IsPaged}">
                                                 <Button Content="上一页"
                                                         Command="{Binding SelectedPatchItem.PrevLocresPageCommand}"
                                                         Classes="ghost"
-                                                        FontSize="11" />
+                                                        FontSize="{DynamicResource Fs11}" />
                                                 <TextBlock Text="{Binding SelectedPatchItem.LocresPageText}"
                                                            VerticalAlignment="Center"
-                                                           FontSize="11"
-                                                           Opacity="0.6" />
+                                                           FontSize="{DynamicResource Fs11}"
+                                                           Foreground="{DynamicResource TextMutedBrush}" />
                                                 <Button Content="下一页"
                                                         Command="{Binding SelectedPatchItem.NextLocresPageCommand}"
                                                         Classes="ghost"
-                                                        FontSize="11" />
+                                                        FontSize="{DynamicResource Fs11}" />
                                             </StackPanel>
                                             <Button Content="导出 JSON"
                                                     Command="{Binding $parent[UserControl].DataContext.ExportPatchLocresJsonCommand}"
                                                     CommandParameter="{Binding SelectedPatchItem}"
                                                     Classes="ghost"
-                                                    FontSize="11"
+                                                    FontSize="{DynamicResource Fs11}"
                                                     HorizontalAlignment="Left" />
                                             <TextBlock Text="改完按回车写回，再构建补丁 Pak。"
-                                                       FontSize="10"
-                                                       Opacity="0.5" />
+                                                       FontSize="{DynamicResource Fs10}"
+                                                       Foreground="{DynamicResource TextMutedBrush}" />
                                             <ListBox ItemsSource="{Binding SelectedPatchItem.FilteredLocresEntries}"
                                                      MaxHeight="420"
                                                      Background="Transparent">
@@ -385,14 +385,14 @@
                                                               ColumnSpacing="8"
                                                               Margin="0,2">
                                                             <TextBlock Text="{Binding DisplayKey}"
-                                                                       FontSize="11"
+                                                                       FontSize="{DynamicResource Fs11}"
                                                                        TextWrapping="Wrap"
                                                                        VerticalAlignment="Center" />
                                                             <TextBox Grid.Column="1"
                                                                      Text="{Binding Text}"
                                                                      TextWrapping="Wrap"
                                                                      MinHeight="44"
-                                                                     FontSize="12"
+                                                                     FontSize="{DynamicResource Fs12}"
                                                                      KeyDown="OnLocresTextKeyDown"
                                                                      LostFocus="OnLocresTextLostFocus" />
                                                         </Grid>
@@ -407,7 +407,7 @@
                                               IsVisible="{Binding SelectedPatchItem.IsTexture}">
                                             <Border Classes="card" Padding="12">
                                                 <StackPanel Spacing="8">
-                                                    <TextBlock Text="原始" FontSize="10" Opacity="0.6" />
+                                                    <TextBlock Text="原始" FontSize="{DynamicResource Fs10}" Foreground="{DynamicResource TextMutedBrush}" />
                                                     <Image Source="{Binding SelectedPatchItem.OriginalPreview}"
                                                            Stretch="Uniform"
                                                            MaxHeight="280" />
@@ -415,18 +415,18 @@
                                             </Border>
                                             <Border Grid.Column="1" Classes="card" Padding="12">
                                                 <StackPanel Spacing="8">
-                                                    <TextBlock Text="替换" FontSize="10" Opacity="0.6" />
+                                                    <TextBlock Text="替换" FontSize="{DynamicResource Fs10}" Foreground="{DynamicResource TextMutedBrush}" />
                                                     <Image Source="{Binding SelectedPatchItem.ReplacementPreview}"
                                                            Stretch="Uniform"
                                                            MaxHeight="280" />
                                                     <TextBlock Text="{Binding SelectedPatchItem.ReplacementName}"
-                                                               FontSize="11"
-                                                               Opacity="0.6" TextTrimming="CharacterEllipsis" />
+                                                               FontSize="{DynamicResource Fs11}"
+                                                               Foreground="{DynamicResource TextMutedBrush}" TextTrimming="CharacterEllipsis" />
                                                 </StackPanel>
                                             </Border>
                                         </Grid>
                                         <TextBlock Text="{Binding SelectedPatchItem.Error}"
-                                                   FontSize="11"
+                                                   FontSize="{DynamicResource Fs11}"
                                                    Foreground="{DynamicResource DangerBrush}"
                                                    TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="3"
                                                    IsVisible="{Binding SelectedPatchItem.IsFailed}" />
@@ -452,18 +452,18 @@
                                 BorderThickness="0,0,0,1">
                             <DockPanel>
                                 <TextBlock Text="替换任务"
-                                           FontSize="13"
+                                           FontSize="{DynamicResource Fs13}"
                                            FontWeight="SemiBold"
                                            VerticalAlignment="Center" />
                                 <TextBlock Text="{Binding PatchItems.Count, StringFormat=  （{0} 项）}"
-                                           FontSize="11"
-                                           Opacity="0.6"
+                                           FontSize="{DynamicResource Fs11}"
+                                           Foreground="{DynamicResource TextMutedBrush}"
                                            VerticalAlignment="Center" />
                                 <Button DockPanel.Dock="Right"
                                         Content="构建 Pak"
                                         Command="{Binding BuildPatchPakCommand}"
                                         Classes="primary"
-                                        FontSize="11"
+                                        FontSize="{DynamicResource Fs11}"
                                         Padding="10,5" />
                             </DockPanel>
                         </Border>
@@ -479,29 +479,29 @@
                                         <StackPanel Spacing="2">
                                             <StackPanel Orientation="Horizontal" Spacing="6">
                                                 <TextBlock Text="{Binding Name}"
-                                                           FontSize="12"
+                                                           FontSize="{DynamicResource Fs12}"
                                                            FontWeight="SemiBold"
                                                            TextTrimming="CharacterEllipsis" />
                                                 <TextBlock Text="{Binding Format}"
-                                                           FontSize="10"
-                                                           Opacity="0.6"
+                                                           FontSize="{DynamicResource Fs10}"
+                                                           Foreground="{DynamicResource TextMutedBrush}"
                                                            VerticalAlignment="Center" />
                                             </StackPanel>
                                             <TextBlock Text="{Binding SourcePath}"
-                                                       FontSize="10"
-                                                       Opacity="0.55"
+                                                       FontSize="{DynamicResource Fs10}"
+                                                       Foreground="{DynamicResource TextMutedBrush}"
                                                        TextTrimming="CharacterEllipsis" />
                                             <TextBlock Text="已替换"
-                                                       FontSize="10"
+                                                       FontSize="{DynamicResource Fs10}"
                                                        Foreground="{DynamicResource PrimaryBrush}"
                                                        IsVisible="{Binding IsReplaced}" />
                                             <TextBlock Text="失败"
-                                                       FontSize="10"
+                                                       FontSize="{DynamicResource Fs10}"
                                                        Foreground="{DynamicResource DangerBrush}"
                                                        IsVisible="{Binding IsFailed}" />
                                             <TextBlock Text="待替换"
-                                                       FontSize="10"
-                                                       Opacity="0.6"
+                                                       FontSize="{DynamicResource Fs10}"
+                                                       Foreground="{DynamicResource TextMutedBrush}"
                                                        IsVisible="{Binding IsPending}" />
                                         </StackPanel>
                                     </DataTemplate>
@@ -510,12 +510,12 @@
                             <ScrollViewer Grid.Row="1">
                                 <StackPanel Margin="14" Spacing="10">
                                     <TextBlock Text="从浏览页选好资产 →「加入替换」，再回到这里处理。"
-                                               FontSize="12"
-                                               Opacity="0.6"
+                                               FontSize="{DynamicResource Fs12}"
+                                               Foreground="{DynamicResource TextMutedBrush}"
                                                IsVisible="{Binding HasNoPatchItems}" />
                                     <StackPanel IsVisible="{Binding HasPatchItems}">
                                         <TextBlock Text="{Binding SelectedPatchItem.SourcePath}"
-                                                   FontSize="12"
+                                                   FontSize="{DynamicResource Fs12}"
                                                    FontWeight="SemiBold"
                                                    TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding SelectedPatchItem.SourcePath}"/>
 
@@ -523,32 +523,32 @@
                                         <StackPanel IsVisible="{Binding SelectedPatchItem.IsLocres}">
                                             <TextBox Text="{Binding SelectedPatchItem.LocresFilterText}"
                                                      PlaceholderText="搜索本地化条目..."
-                                                     FontSize="12" />
+                                                     FontSize="{DynamicResource Fs12}" />
                                             <StackPanel Orientation="Horizontal"
                                                 Spacing="8"
                                                 IsVisible="{Binding SelectedPatchItem.IsPaged}">
                                                 <Button Content="上一页"
                                                         Command="{Binding SelectedPatchItem.PrevLocresPageCommand}"
                                                         Classes="ghost"
-                                                        FontSize="11" />
+                                                        FontSize="{DynamicResource Fs11}" />
                                                 <TextBlock Text="{Binding SelectedPatchItem.LocresPageText}"
                                                            VerticalAlignment="Center"
-                                                           FontSize="11"
-                                                           Opacity="0.6" />
+                                                           FontSize="{DynamicResource Fs11}"
+                                                           Foreground="{DynamicResource TextMutedBrush}" />
                                                 <Button Content="下一页"
                                                         Command="{Binding SelectedPatchItem.NextLocresPageCommand}"
                                                         Classes="ghost"
-                                                        FontSize="11" />
+                                                        FontSize="{DynamicResource Fs11}" />
                                             </StackPanel>
                                             <Button Content="导出 JSON"
                                                     Command="{Binding $parent[UserControl].DataContext.ExportPatchLocresJsonCommand}"
                                                     CommandParameter="{Binding SelectedPatchItem}"
                                                     Classes="ghost"
-                                                    FontSize="11"
+                                                    FontSize="{DynamicResource Fs11}"
                                                     HorizontalAlignment="Left" />
                                             <TextBlock Text="改完按回车写回，再构建补丁 Pak。"
-                                                       FontSize="10"
-                                                       Opacity="0.5" />
+                                                       FontSize="{DynamicResource Fs10}"
+                                                       Foreground="{DynamicResource TextMutedBrush}" />
                                             <ListBox ItemsSource="{Binding SelectedPatchItem.FilteredLocresEntries}"
                                                      MaxHeight="420"
                                                      Background="Transparent">
@@ -564,14 +564,14 @@
                                                               ColumnSpacing="6"
                                                               Margin="0,2">
                                                             <TextBlock Text="{Binding DisplayKey}"
-                                                                       FontSize="10"
+                                                                       FontSize="{DynamicResource Fs10}"
                                                                        TextWrapping="Wrap"
                                                                        VerticalAlignment="Center" />
                                                             <TextBox Grid.Column="1"
                                                                      Text="{Binding Text}"
                                                                      TextWrapping="Wrap"
                                                                      MinHeight="40"
-                                                                     FontSize="12"
+                                                                     FontSize="{DynamicResource Fs12}"
                                                                      KeyDown="OnLocresTextKeyDown"
                                                                      LostFocus="OnLocresTextLostFocus" />
                                                         </Grid>
@@ -584,7 +584,7 @@
                                                 Padding="12"
                                                 IsVisible="{Binding SelectedPatchItem.IsTexture}">
                                             <StackPanel Spacing="8">
-                                                <TextBlock Text="原始" FontSize="10" Opacity="0.6" />
+                                                <TextBlock Text="原始" FontSize="{DynamicResource Fs10}" Foreground="{DynamicResource TextMutedBrush}" />
                                                 <Image Source="{Binding SelectedPatchItem.OriginalPreview}"
                                                        Stretch="Uniform"
                                                        MaxHeight="200" />
@@ -592,17 +592,17 @@
                                         </Border>
                                         <Border Classes="card" Padding="12" IsVisible="{Binding SelectedPatchItem.IsTexture}">
                                             <StackPanel Spacing="8">
-                                                <TextBlock Text="替换" FontSize="10" Opacity="0.6" />
+                                                <TextBlock Text="替换" FontSize="{DynamicResource Fs10}" Foreground="{DynamicResource TextMutedBrush}" />
                                                 <Image Source="{Binding SelectedPatchItem.ReplacementPreview}"
                                                        Stretch="Uniform"
                                                        MaxHeight="200" />
                                                 <TextBlock Text="{Binding SelectedPatchItem.ReplacementName}"
-                                                           FontSize="11"
-                                                           Opacity="0.6" TextTrimming="CharacterEllipsis" />
+                                                           FontSize="{DynamicResource Fs11}"
+                                                           Foreground="{DynamicResource TextMutedBrush}" TextTrimming="CharacterEllipsis" />
                                             </StackPanel>
                                         </Border>
                                         <TextBlock Text="{Binding SelectedPatchItem.Error}"
-                                                   FontSize="11"
+                                                   FontSize="{DynamicResource Fs11}"
                                                    Foreground="{DynamicResource DangerBrush}"
                                                    TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="3"
                                                    IsVisible="{Binding SelectedPatchItem.IsFailed}" />

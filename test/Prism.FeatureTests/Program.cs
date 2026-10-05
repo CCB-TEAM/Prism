@@ -767,13 +767,18 @@ try
             $"宽屏内容列放宽（{narrowMaxWidth} → {vm.ConvertContentMaxWidth}）");
         Check(vm.SearchBoxWidth > narrowSearchWidth,
             $"宽屏搜索框加宽（{narrowSearchWidth} → {vm.SearchBoxWidth}）");
-        Check(Math.Abs(((Avalonia.Media.ScaleTransform)vm.UiScaleTransform).ScaleX - 1.2) < 0.001,
-            "宽屏整体缩放 1.2");
+
+        // 只放大文字：宽屏下把字号资源整体调大，内边距与控件尺寸不变。
+        // （曾经用整块 LayoutTransform 等比缩放，结果控件与留白一起变大，看起来像把手机界面拉大。）
+        double wideHintFont = FontResource("Fs11");
+        double wideBodyFont = FontResource("Fs12");
+        Check(wideHintFont > 11, $"宽屏字号资源已调大（Fs11 {11} → {wideHintFont}）");
+        Check(wideBodyFont > 12, $"多档字号同步调大（Fs12 {12} → {wideBodyFont}）");
 
         vm.WindowWidth = 600;
         Check(vm.IsCompact && !vm.IsWideLayout, "窄窗回到紧凑档位");
-        Check(Math.Abs(((Avalonia.Media.ScaleTransform)vm.UiScaleTransform).ScaleX - 1.0) < 0.001,
-            "窄窗不缩放（手机端与原样一致）");
+        Check(FontResource("Fs11") == 11 && FontResource("Fs12") == 12,
+            $"窄窗字号恢复原值（Fs11={FontResource("Fs11")}, Fs12={FontResource("Fs12")}）");
         Check(vm.ConvertContentMaxWidth == narrowMaxWidth, "窄窗内容列恢复原值");
 
 
@@ -950,6 +955,10 @@ static string LocateRepoRoot()
 
 static ModifiedPakFile FileOf(string root, string pakPath, string content) =>
     new(WriteTemp(root, pakPath, System.Text.Encoding.UTF8.GetBytes(content)), pakPath);
+
+/// <summary>读应用级字号资源（宽屏档位由 LayoutDensity 写入）。找不到返回 -1。</summary>
+static double FontResource(string key) =>
+    Avalonia.Application.Current?.Resources[key] is double value ? value : -1d;
 
 static string WriteTemp(string root, string pakPath, byte[] content)
 {

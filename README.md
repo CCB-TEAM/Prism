@@ -237,14 +237,21 @@ A full repack needs temp space equal to the main pak.
   and actionable prompts remain. It is an overlay rather than a dialog window because on Android the
   `TopLevel` is not necessarily a `Window`, so `ShowDialog` has no owner to attach to.
 - **Adaptive density**: one UI, two tiers. Below 620 px it is the compact single column built for
-  phones. From **1200 px** it enters a wide tier that scales the whole UI by **1.2×** and widens the
-  content columns (620 → 1000). Without it desktop text was too small and roughly two thirds of the
-  window sat empty. Resizing switches tiers live; the phone layout is unchanged.
+  phones. From **1200 px** it enters a wide tier that (a) enlarges the **text only** — through
+  app-level font-size resources, so padding and control sizes stay put — and (b) widens the content
+  columns (620 → 1000) and lays the settings/merge cards out in **two columns**, so pages get
+  *shorter* rather than taller. Resizing switches tiers live; the phone layout is unchanged.
+  Scaling the whole UI by transform was tried first and rejected: it enlarged padding and controls
+  too, which read as a zoomed phone UI and put *less* on screen than before.
+- **Legibility**: secondary text sits at **5.4:1** against cards (4.9:1 against the page) and the
+  page background is separated from the white cards. Text is never dimmed with `Opacity` — that
+  multiplies contrast down (one common label style measured **2.0:1**) and is what made the UI look
+  washed out. Hierarchy comes from size and weight instead.
 
 ## Verifying
 
 ```sh
-# Integration tests (152 assertions): mapping format detection, search-box path resolution,
+# Integration tests (153 assertions): mapping format detection, search-box path resolution,
 # pak conversion (both paths + all output modes), merge priority, locres <-> JSON round-trip,
 # non-ASCII pak path handling, headless UI loading and navigation
 dotnet run --project test/Prism.FeatureTests

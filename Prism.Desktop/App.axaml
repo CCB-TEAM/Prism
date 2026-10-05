@@ -14,17 +14,17 @@
             <ResourceDictionary.ThemeDictionaries>
                 <ResourceDictionary x:Key="Light">
                     <SolidColorBrush x:Key="PrimaryWashBrush" Color="#0d94881f" />
-                    <SolidColorBrush x:Key="SurfaceBrush" Color="#f5f3ee" />
+                    <SolidColorBrush x:Key="SurfaceBrush" Color="#e8e8ea" />
                     <SolidColorBrush x:Key="CardBrush" Color="#ffffff" />
-                    <SolidColorBrush x:Key="DividerBrush" Color="#e8e6e0" />
-                    <SolidColorBrush x:Key="TextMutedBrush" Color="#8a8982" />
+                    <SolidColorBrush x:Key="DividerBrush" Color="#dcdcdf" />
+                    <SolidColorBrush x:Key="TextMutedBrush" Color="#6b6a63" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Dark">
                     <SolidColorBrush x:Key="PrimaryWashBrush" Color="#0d948833" />
                     <SolidColorBrush x:Key="SurfaceBrush" Color="#1b1b1d" />
                     <SolidColorBrush x:Key="CardBrush" Color="#262629" />
                     <SolidColorBrush x:Key="DividerBrush" Color="#3a3a3d" />
-                    <SolidColorBrush x:Key="TextMutedBrush" Color="#9a9a9e" />
+                    <SolidColorBrush x:Key="TextMutedBrush" Color="#a9a9ad" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
 
@@ -33,6 +33,33 @@
             <SolidColorBrush x:Key="PrimaryHoverBrush" Color="#0b7f75" />
             <SolidColorBrush x:Key="PrimaryLightBrush" Color="#3cb8a8" />
             <SolidColorBrush x:Key="DangerBrush" Color="#b43a2a" />
+
+            <!--
+                字号资源（这里的值是「紧凑档」，即手机与窄窗用的那一套，与原设计一致）。
+                宽屏时由 Services/LayoutDensity 把这些键改成放大一档的值 —— 视图里用
+                {DynamicResource FsXX} 取值，于是只有文字变大，内边距与控件尺寸不变。
+
+                为什么不做「整体缩放」：把整个界面按比例放大，内边距、控件、行高会一起变大，
+                看起来像把手机界面拉大，而不是桌面版。只放大文字才对。
+            -->
+            <x:Double x:Key="Fs8">8</x:Double>
+            <x:Double x:Key="Fs10">10</x:Double>
+            <x:Double x:Key="Fs11">11</x:Double>
+            <x:Double x:Key="Fs12">12</x:Double>
+            <x:Double x:Key="Fs10_5">10.5</x:Double>
+            <x:Double x:Key="Fs11_5">11.5</x:Double>
+            <x:Double x:Key="Fs12_5">12.5</x:Double>
+            <x:Double x:Key="Fs13_5">13.5</x:Double>
+            <x:Double x:Key="Fs13">13</x:Double>
+            <x:Double x:Key="Fs14">14</x:Double>
+            <x:Double x:Key="Fs15">15</x:Double>
+            <x:Double x:Key="Fs16">16</x:Double>
+            <x:Double x:Key="Fs17">17</x:Double>
+            <x:Double x:Key="Fs18">18</x:Double>
+            <x:Double x:Key="Fs20">20</x:Double>
+            <x:Double x:Key="Fs22">22</x:Double>
+            <x:Double x:Key="Fs25">25</x:Double>
+            <x:Double x:Key="Fs40">40</x:Double>
 
             <!-- 主题强调色（Fluent 控件拾取 SystemAccentColor） -->
             <Color x:Key="SystemAccentColor">#0d9488</Color>
@@ -54,7 +81,7 @@
             <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
             <Setter Property="CornerRadius" Value="8" />
             <Setter Property="Padding" Value="14,7" />
-            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="FontSize" Value="{DynamicResource Fs12_5}" />
         </Style>
         <Style Selector="Button.tab:pointerover /template/ ContentPresenter">
             <Setter Property="Background" Value="{DynamicResource PrimaryWashBrush}" />
@@ -72,7 +99,7 @@
             <Setter Property="CornerRadius" Value="8" />
             <Setter Property="Padding" Value="16,9" />
             <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontSize" Value="{DynamicResource Fs13}" />
         </Style>
         <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
             <Setter Property="Background" Value="{DynamicResource PrimaryHoverBrush}" />
@@ -85,7 +112,7 @@
             <Setter Property="CornerRadius" Value="8" />
             <Setter Property="Padding" Value="12,7" />
             <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource Fs12}" />
         </Style>
         <Style Selector="Button.accent:pointerover /template/ ContentPresenter">
             <Setter Property="Background" Value="{DynamicResource PrimaryBrush}" />
@@ -98,7 +125,7 @@
             <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
             <Setter Property="CornerRadius" Value="8" />
             <Setter Property="Padding" Value="10,7" />
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="{DynamicResource Fs12}" />
         </Style>
         <Style Selector="Button.ghost:pointerover /template/ ContentPresenter">
             <Setter Property="Background" Value="{DynamicResource PrimaryWashBrush}" />
@@ -119,7 +146,7 @@
             <Setter Property="CornerRadius" Value="12" />
             <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontSize" Value="{DynamicResource Fs13}" />
         </Style>
         <Style Selector="Button.card:pointerover /template/ ContentPresenter">
             <Setter Property="BorderBrush" Value="{DynamicResource PrimaryLightBrush}" />

@@ -29,13 +29,13 @@
                     Spacing="28">
             <StackPanel Spacing="6">
                 <TextBlock Text="Prism"
-                           FontSize="40"
+                           FontSize="{DynamicResource Fs40}"
                            FontWeight="SemiBold"
                            HorizontalAlignment="Center"
                            Foreground="{DynamicResource PrimaryBrush}" />
                 <TextBlock Text="Pak 资产管理工具"
-                           FontSize="13"
-                           Opacity="0.6"
+                           FontSize="{DynamicResource Fs13}"
+                           Foreground="{DynamicResource TextMutedBrush}"
                            HorizontalAlignment="Center" />
             </StackPanel>
 
@@ -55,15 +55,15 @@
                         Command="{Binding GoWorkspaceCommand}"
                         Classes="card home-entry wide">
                     <StackPanel Spacing="7" HorizontalAlignment="Center">
-                        <TextBlock Text="📦" FontSize="25" HorizontalAlignment="Center" />
+                        <TextBlock Text="📦" FontSize="{DynamicResource Fs25}" HorizontalAlignment="Center" />
                         <TextBlock Text="解包 &amp; 模组"
-                                   FontSize="13.5"
+                                   FontSize="{DynamicResource Fs13_5}"
                                    FontWeight="SemiBold"
                                    HorizontalAlignment="Center"
                                    TextWrapping="Wrap" />
                         <TextBlock Text="浏览 Pak 内容，导出资源，创建替换模组"
-                                   FontSize="10"
-                                   Opacity="0.6"
+                                   FontSize="{DynamicResource Fs10}"
+                                   Foreground="{DynamicResource TextMutedBrush}"
                                    HorizontalAlignment="Center"
                                    TextAlignment="Center"
                                    TextWrapping="Wrap"
@@ -75,15 +75,15 @@
                         Command="{Binding GoMergeCommand}"
                         Classes="card home-entry wide">
                     <StackPanel Spacing="7" HorizontalAlignment="Center">
-                        <TextBlock Text="🔗" FontSize="25" HorizontalAlignment="Center" />
+                        <TextBlock Text="🔗" FontSize="{DynamicResource Fs25}" HorizontalAlignment="Center" />
                         <TextBlock Text="Pak 合并"
-                                   FontSize="13.5"
+                                   FontSize="{DynamicResource Fs13_5}"
                                    FontWeight="SemiBold"
                                    HorizontalAlignment="Center"
                                    TextWrapping="Wrap" />
                         <TextBlock Text="多选 Pak，拖动调整覆盖顺序后合成一个"
-                                   FontSize="10"
-                                   Opacity="0.6"
+                                   FontSize="{DynamicResource Fs10}"
+                                   Foreground="{DynamicResource TextMutedBrush}"
                                    HorizontalAlignment="Center"
                                    TextAlignment="Center"
                                    TextWrapping="Wrap"
@@ -95,15 +95,15 @@
                         Command="{Binding GoConvertCommand}"
                         Classes="card home-entry wide">
                     <StackPanel Spacing="7" HorizontalAlignment="Center">
-                        <TextBlock Text="🔄" FontSize="25" HorizontalAlignment="Center" />
+                        <TextBlock Text="🔄" FontSize="{DynamicResource Fs25}" HorizontalAlignment="Center" />
                         <TextBlock Text="Pak 转换"
-                                   FontSize="13.5"
+                                   FontSize="{DynamicResource Fs13_5}"
                                    FontWeight="SemiBold"
                                    HorizontalAlignment="Center"
                                    TextWrapping="Wrap" />
                         <TextBlock Text="把另一个 Pak 的贴图按本平台格式重编码后并入"
-                                   FontSize="10"
-                                   Opacity="0.6"
+                                   FontSize="{DynamicResource Fs10}"
+                                   Foreground="{DynamicResource TextMutedBrush}"
                                    HorizontalAlignment="Center"
                                    TextAlignment="Center"
                                    TextWrapping="Wrap"
@@ -116,15 +116,15 @@
                         Command="{Binding GoBrowseCommand}"
                         Classes="card home-entry wide">
                     <StackPanel Spacing="7" HorizontalAlignment="Center">
-                        <TextBlock Text="🔍" FontSize="25" HorizontalAlignment="Center" />
+                        <TextBlock Text="🔍" FontSize="{DynamicResource Fs25}" HorizontalAlignment="Center" />
                         <TextBlock Text="搜索 &amp; 导出"
-                                   FontSize="13.5"
+                                   FontSize="{DynamicResource Fs13_5}"
                                    FontWeight="SemiBold"
                                    HorizontalAlignment="Center"
                                    TextWrapping="Wrap" />
                         <TextBlock Text="按关键词或路径定位资源，批量导出与分享"
-                                   FontSize="10"
-                                   Opacity="0.6"
+                                   FontSize="{DynamicResource Fs10}"
+                                   Foreground="{DynamicResource TextMutedBrush}"
                                    HorizontalAlignment="Center"
                                    TextAlignment="Center"
                                    TextWrapping="Wrap"
@@ -136,14 +136,14 @@
                         Command="{Binding GoSettingsCommand}"
                         Classes="card home-entry wide">
                     <StackPanel Spacing="7" HorizontalAlignment="Center">
-                        <TextBlock Text="⚙" FontSize="25" HorizontalAlignment="Center" />
+                        <TextBlock Text="⚙" FontSize="{DynamicResource Fs25}" HorizontalAlignment="Center" />
                         <TextBlock Text="设置"
-                                   FontSize="13.5"
+                                   FontSize="{DynamicResource Fs13_5}"
                                    FontWeight="SemiBold"
                                    HorizontalAlignment="Center" />
                         <TextBlock Text="路径、映射、导出与工具选项"
-                                   FontSize="10"
-                                   Opacity="0.6"
+                                   FontSize="{DynamicResource Fs10}"
+                                   Foreground="{DynamicResource TextMutedBrush}"
                                    HorizontalAlignment="Center"
                                    TextAlignment="Center"
                                    TextWrapping="Wrap"
@@ -159,60 +159,60 @@
                         IsVisible="{Binding IsCompact}">
                 <Button Command="{Binding GoWorkspaceCommand}" Classes="card home-entry narrow">
                     <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
-                        <TextBlock Text="📦" FontSize="22" VerticalAlignment="Center" />
+                        <TextBlock Text="📦" FontSize="{DynamicResource Fs22}" VerticalAlignment="Center" />
                         <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
-                            <TextBlock Text="解包 &amp; 模组" FontSize="14" FontWeight="SemiBold" />
+                            <TextBlock Text="解包 &amp; 模组" FontSize="{DynamicResource Fs14}" FontWeight="SemiBold" />
                             <TextBlock Text="浏览 Pak 内容，导出资源，创建替换模组"
-                                       FontSize="10.5"
-                                       Opacity="0.6"
+                                       FontSize="{DynamicResource Fs10_5}"
+                                       Foreground="{DynamicResource TextMutedBrush}"
                                        TextTrimming="CharacterEllipsis" />
                         </StackPanel>
                     </Grid>
                 </Button>
                 <Button Command="{Binding GoMergeCommand}" Classes="card home-entry narrow">
                     <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
-                        <TextBlock Text="🔗" FontSize="22" VerticalAlignment="Center" />
+                        <TextBlock Text="🔗" FontSize="{DynamicResource Fs22}" VerticalAlignment="Center" />
                         <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
-                            <TextBlock Text="Pak 合并" FontSize="14" FontWeight="SemiBold" />
+                            <TextBlock Text="Pak 合并" FontSize="{DynamicResource Fs14}" FontWeight="SemiBold" />
                             <TextBlock Text="多选 Pak 并拖动调整覆盖顺序"
-                                       FontSize="10.5"
-                                       Opacity="0.6"
+                                       FontSize="{DynamicResource Fs10_5}"
+                                       Foreground="{DynamicResource TextMutedBrush}"
                                        TextTrimming="CharacterEllipsis" />
                         </StackPanel>
                     </Grid>
                 </Button>
                 <Button Command="{Binding GoConvertCommand}" Classes="card home-entry narrow">
                     <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
-                        <TextBlock Text="🔄" FontSize="22" VerticalAlignment="Center" />
+                        <TextBlock Text="🔄" FontSize="{DynamicResource Fs22}" VerticalAlignment="Center" />
                         <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
-                            <TextBlock Text="Pak 转换" FontSize="14" FontWeight="SemiBold" />
+                            <TextBlock Text="Pak 转换" FontSize="{DynamicResource Fs14}" FontWeight="SemiBold" />
                             <TextBlock Text="按本平台格式重编码贴图后并入主 Pak"
-                                       FontSize="10.5"
-                                       Opacity="0.6"
+                                       FontSize="{DynamicResource Fs10_5}"
+                                       Foreground="{DynamicResource TextMutedBrush}"
                                        TextTrimming="CharacterEllipsis" />
                         </StackPanel>
                     </Grid>
                 </Button>
                 <Button Command="{Binding GoBrowseCommand}" Classes="card home-entry narrow">
                     <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
-                        <TextBlock Text="🔍" FontSize="22" VerticalAlignment="Center" />
+                        <TextBlock Text="🔍" FontSize="{DynamicResource Fs22}" VerticalAlignment="Center" />
                         <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
-                            <TextBlock Text="搜索 &amp; 导出" FontSize="14" FontWeight="SemiBold" />
+                            <TextBlock Text="搜索 &amp; 导出" FontSize="{DynamicResource Fs14}" FontWeight="SemiBold" />
                             <TextBlock Text="按关键词或路径定位资源，批量导出与分享"
-                                       FontSize="10.5"
-                                       Opacity="0.6"
+                                       FontSize="{DynamicResource Fs10_5}"
+                                       Foreground="{DynamicResource TextMutedBrush}"
                                        TextTrimming="CharacterEllipsis" />
                         </StackPanel>
                     </Grid>
                 </Button>
                 <Button Command="{Binding GoSettingsCommand}" Classes="card home-entry narrow">
                     <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
-                        <TextBlock Text="⚙" FontSize="22" VerticalAlignment="Center" />
+                        <TextBlock Text="⚙" FontSize="{DynamicResource Fs22}" VerticalAlignment="Center" />
                         <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
-                            <TextBlock Text="设置" FontSize="14" FontWeight="SemiBold" />
+                            <TextBlock Text="设置" FontSize="{DynamicResource Fs14}" FontWeight="SemiBold" />
                             <TextBlock Text="路径、映射、导出与工具选项"
-                                       FontSize="10.5"
-                                       Opacity="0.6"
+                                       FontSize="{DynamicResource Fs10_5}"
+                                       Foreground="{DynamicResource TextMutedBrush}"
                                        TextTrimming="CharacterEllipsis" />
                         </StackPanel>
                     </Grid>
@@ -220,8 +220,8 @@
             </StackPanel>
 
             <TextBlock Text="{Binding StatusText}"
-                       FontSize="11.5"
-                       Opacity="0.6"
+                       FontSize="{DynamicResource Fs11_5}"
+                       Foreground="{DynamicResource TextMutedBrush}"
                        HorizontalAlignment="Center"
                        MaxWidth="520"
                        TextAlignment="Center"

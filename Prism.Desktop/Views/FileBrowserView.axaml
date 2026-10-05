@@ -41,8 +41,8 @@
                            Text="{Binding CurrentPathText}"
                            VerticalAlignment="Center"
                            Margin="8,0"
-                           FontSize="12"
-                           Opacity="0.6"
+                           FontSize="{DynamicResource Fs12}"
+                           Foreground="{DynamicResource TextMutedBrush}"
                            TextTrimming="CharacterEllipsis"
                            Background="Transparent"
                            InputElement.IsHoldingEnabled="True"
@@ -82,13 +82,13 @@
                     Padding="14,8"
                     Background="{DynamicResource SurfaceBrush}">
                 <Grid ColumnDefinitions="*,90,70">
-                    <TextBlock Text="Name" FontSize="11" FontWeight="SemiBold" Opacity="0.7" />
-                    <TextBlock Grid.Column="1" Text="Type" FontSize="11" FontWeight="SemiBold" Opacity="0.7" />
+                    <TextBlock Text="Name" FontSize="{DynamicResource Fs11}" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" />
+                    <TextBlock Grid.Column="1" Text="Type" FontSize="{DynamicResource Fs11}" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" />
                     <TextBlock Grid.Column="2"
                                Text="Size"
-                               FontSize="11"
+                               FontSize="{DynamicResource Fs11}"
                                FontWeight="SemiBold"
-                               Opacity="0.7"
+                               Foreground="{DynamicResource TextMutedBrush}"
                                TextAlignment="Right" />
                 </Grid>
             </Border>
@@ -115,7 +115,7 @@
                                         VerticalAlignment="Center"
                                         IsVisible="{Binding HasThumbnail, Converter={x:Static BoolConverters.Not}}">
                                     <TextBlock Text="{Binding KindIcon}"
-                                               FontSize="8"
+                                               FontSize="{DynamicResource Fs8}"
                                                FontWeight="SemiBold"
                                                Foreground="{DynamicResource PrimaryBrush}"
                                                HorizontalAlignment="Center"
@@ -124,23 +124,23 @@
                             </Panel>
                             <StackPanel Grid.Column="1" Spacing="1">
                                 <TextBlock Text="{Binding Name}"
-                                           FontSize="13"
+                                           FontSize="{DynamicResource Fs13}"
                                            FontWeight="SemiBold"
                                            TextTrimming="CharacterEllipsis" />
                                 <TextBlock Text="{Binding MetaText}"
-                                           FontSize="11"
-                                           Opacity="0.5"
+                                           FontSize="{DynamicResource Fs11}"
+                                           Foreground="{DynamicResource TextMutedBrush}"
                                            TextTrimming="CharacterEllipsis" />
                             </StackPanel>
                             <TextBlock Grid.Column="2"
                                        Text="{Binding Kind}"
-                                       FontSize="11"
-                                       Opacity="0.6"
+                                       FontSize="{DynamicResource Fs11}"
+                                       Foreground="{DynamicResource TextMutedBrush}"
                                        VerticalAlignment="Center" />
                             <TextBlock Grid.Column="3"
                                        Text="{Binding SizeText}"
-                                       FontSize="11"
-                                       Opacity="0.6"
+                                       FontSize="{DynamicResource Fs11}"
+                                       Foreground="{DynamicResource TextMutedBrush}"
                                        VerticalAlignment="Center"
                                        TextAlignment="Right" />
                         </Grid>

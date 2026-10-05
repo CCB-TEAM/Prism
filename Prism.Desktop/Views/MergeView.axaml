@@ -30,42 +30,45 @@
                     Spacing="20">
             <StackPanel Orientation="Horizontal" Spacing="12">
                 <Button Content="←"
-                        FontSize="16"
+                        FontSize="{DynamicResource Fs16}"
                         Command="{Binding GoHomeCommand}" />
                 <TextBlock Text="Pak 合并"
-                           FontSize="18"
+                           FontSize="{DynamicResource Fs18}"
                            FontWeight="SemiBold"
                            VerticalAlignment="Center" />
                 <Button Content="使用说明"
                         Command="{Binding OpenHelpCommand}"
                         CommandParameter="merge"
                         Classes="ghost"
-                        FontSize="11"
+                        FontSize="{DynamicResource Fs11}"
                         VerticalAlignment="Center"
                         Margin="4,0,0,0" />
             </StackPanel>
 
+            <!-- 宽屏两列：列表与输出并排，页面更短、一屏看全 -->
+            <UniformGrid Columns="{Binding MergeColumns}">
+
             <!-- ═══ 输入列表 ═══ -->
-            <Border Classes="card" Padding="18">
+            <Border Classes="card" Padding="18" Margin="{Binding CardGapMargin}">
                 <StackPanel Spacing="14">
                     <DockPanel>
-                        <TextBlock Text="待合并的 Pak" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <TextBlock Text="待合并的 Pak" FontSize="{DynamicResource Fs12}" FontWeight="SemiBold" VerticalAlignment="Center" />
                         <Button DockPanel.Dock="Right"
                                 Content="清空"
                                 Command="{Binding ClearMergePaksCommand}"
                                 Classes="ghost"
-                                FontSize="11" />
+                                FontSize="{DynamicResource Fs11}" />
                     </DockPanel>
 
-                    <TextBlock Text="越靠上优先级越高；每个条目都能拖动排序、都能移除。"
-                               FontSize="10"
-                               Opacity="0.55"
+                    <TextBlock Text="越靠上优先级越高"
+                               FontSize="{DynamicResource Fs10}"
+                               Foreground="{DynamicResource TextMutedBrush}"
                                TextWrapping="Wrap" />
 
                     <!-- 空状态 -->
                     <TextBlock Text="还没有加入任何 Pak。点下面的「添加 Pak」可一次选择多个。"
-                               FontSize="11"
-                               Opacity="0.5"
+                               FontSize="{DynamicResource Fs11}"
+                               Foreground="{DynamicResource TextMutedBrush}"
                                TextWrapping="Wrap"
                                IsVisible="{Binding HasNoMergePaks}" />
 
@@ -95,7 +98,7 @@
                                                 PointerReleased="OnMergeGripReleased"
                                                 PointerCaptureLost="OnMergeGripCaptureLost"
                                                 ToolTip.Tip="拖动调整覆盖顺序（手机上先长按）">
-                                            <TextBlock Text="⠿" FontSize="15" Opacity="0.55" VerticalAlignment="Center" />
+                                            <TextBlock Text="⠿" FontSize="{DynamicResource Fs15}" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
                                         </Border>
 
                                         <!-- 优先级序号 -->
@@ -106,7 +109,7 @@
                                                 Padding="6,2"
                                                 VerticalAlignment="Center">
                                             <TextBlock Text="{Binding OrderLabel}"
-                                                       FontSize="11"
+                                                       FontSize="{DynamicResource Fs11}"
                                                        FontWeight="SemiBold"
                                                        Foreground="{DynamicResource PrimaryBrush}"
                                                        HorizontalAlignment="Center" />
@@ -115,13 +118,13 @@
                                         <!-- 文件名 + 文件数 -->
                                         <StackPanel Grid.Column="2" Spacing="1" VerticalAlignment="Center">
                                             <TextBlock Text="{Binding DisplayName}"
-                                                       FontSize="12"
+                                                       FontSize="{DynamicResource Fs12}"
                                                        FontWeight="SemiBold"
                                                        TextTrimming="CharacterEllipsis"
                                                        ToolTip.Tip="{Binding Path}" />
                                             <TextBlock Text="{Binding Detail}"
-                                                       FontSize="10"
-                                                       Opacity="0.5"
+                                                       FontSize="{DynamicResource Fs10}"
+                                                       Foreground="{DynamicResource TextMutedBrush}"
                                                        TextTrimming="CharacterEllipsis" />
                                         </StackPanel>
 
@@ -131,7 +134,7 @@
                                                 Command="{Binding $parent[UserControl].DataContext.RemoveMergePakCommand}"
                                                 CommandParameter="{Binding}"
                                                 Classes="ghost"
-                                                FontSize="12"
+                                                FontSize="{DynamicResource Fs12}"
                                                 IsVisible="{Binding CanRemove}"
                                                 ToolTip.Tip="移除这一项" />
                                     </Grid>
@@ -152,21 +155,21 @@
                     <StackPanel Spacing="6" Margin="0,4,0,0">
                         <DockPanel>
                             <TextBlock Text="基准本地化（可选）"
-                                       FontSize="11"
-                                       Opacity="0.55"
+                                       FontSize="{DynamicResource Fs11}"
+                                       Foreground="{DynamicResource TextMutedBrush}"
                                        VerticalAlignment="Center" />
                             <Button DockPanel.Dock="Right"
                                     Content="清除"
                                     Command="{Binding ClearMergeBaseLocresCommand}"
                                     Classes="ghost"
-                                    FontSize="10"
+                                    FontSize="{DynamicResource Fs10}"
                                     IsVisible="{Binding HasMergeBaseLocres}" />
                         </DockPanel>
                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                             <TextBlock Grid.Column="0"
                                        Text="{Binding MergeBaseLocresSummary}"
-                                       FontSize="11"
-                                       Opacity="0.75"
+                                       FontSize="{DynamicResource Fs11}"
+                                       Foreground="{DynamicResource TextMutedBrush}"
                                        VerticalAlignment="Center"
                                        TextTrimming="CharacterEllipsis"
                                        ToolTip.Tip="{Binding MergeBaseLocresPath}" />
@@ -175,24 +178,20 @@
                                     Command="{Binding BrowseMergeBaseLocresCommand}"
                                     Classes="ghost" />
                         </Grid>
-                        <TextBlock Text="选原版 .locres 可把各模组的文本改动逐条合并（详见使用说明）"
-                                   FontSize="10"
-                                   Opacity="0.5"
-                                   TextWrapping="Wrap" />
                     </StackPanel>
                 </StackPanel>
             </Border>
 
             <!-- ═══ 输出与执行 ═══ -->
-            <Border Classes="card" Padding="18">
+            <Border Classes="card" Padding="18" Margin="{Binding CardGapMargin}">
                 <StackPanel Spacing="14">
                     <StackPanel Spacing="6">
-                        <TextBlock Text="输出 Pak" FontSize="12" FontWeight="SemiBold" />
+                        <TextBlock Text="输出 Pak" FontSize="{DynamicResource Fs12}" FontWeight="SemiBold" />
                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                             <TextBlock Grid.Column="0"
                                        Text="{Binding MergeOutputPath}"
-                                       FontSize="12"
-                                       Opacity="0.7"
+                                       FontSize="{DynamicResource Fs12}"
+                                       Foreground="{DynamicResource TextMutedBrush}"
                                        VerticalAlignment="Center"
                                        TextTrimming="CharacterEllipsis"
                                        ToolTip.Tip="{Binding MergeOutputPath}" />
@@ -203,7 +202,7 @@
                     </StackPanel>
 
                     <StackPanel Spacing="6">
-                        <TextBlock Text="AES 密钥" FontSize="12" FontWeight="SemiBold" />
+                        <TextBlock Text="AES 密钥" FontSize="{DynamicResource Fs12}" FontWeight="SemiBold" />
                         <TextBox Text="{Binding AesKey}"
                                  PlaceholderText="如需解密请填写" />
                     </StackPanel>
@@ -219,8 +218,8 @@
                                 MinWidth="110" />
                         <TextBlock Grid.Column="1"
                                    Text="{Binding MergeStatus}"
-                                   FontSize="11"
-                                   Opacity="0.7"
+                                   FontSize="{DynamicResource Fs11}"
+                                   Foreground="{DynamicResource TextMutedBrush}"
                                    VerticalAlignment="Center"
                                    TextWrapping="Wrap"
                                    ToolTip.Tip="{Binding MergeStatus}" />
@@ -228,12 +227,13 @@
 
                     <!-- 输入摘要 -->
                     <TextBlock Text="{Binding MergeInputSummary}"
-                               FontSize="10"
-                               Opacity="0.5"
+                               FontSize="{DynamicResource Fs10}"
+                               Foreground="{DynamicResource TextMutedBrush}"
                                TextWrapping="Wrap"
                                IsVisible="{Binding HasMergePaks}" />
                 </StackPanel>
             </Border>
+            </UniformGrid>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

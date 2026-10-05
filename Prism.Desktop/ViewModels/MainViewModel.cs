@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -76,32 +77,35 @@ public partial class MainViewModel : ViewModelBase
     public partial bool IsCompact { get; set; }
 
     /// <summary>
-    /// 宽屏（桌面）布局：窗口够宽时把界面整体放大一档，并把内容列放宽用满空间。
+    /// 宽屏（桌面）布局：窗口够宽时把字号放大一档，并把内容列放宽用满空间。
     ///
-    /// 阈值取 1200：除以放大系数 1.2 之后仍有 1000 逻辑像素，
-    /// 不会破坏 <see cref="IsLandscape"/>（≥980）那套左右布局的前提。
-    /// 手机与窄窗保持 1.0，即与原来完全一致。
+    /// 阈值取 1200。手机与窄窗保持紧凑档，排版与原设计完全一致。
     /// </summary>
     [ObservableProperty]
     public partial bool IsWideLayout { get; set; }
 
-    /// <summary>宽屏下的整体缩放系数。字号、间距、控件一起放大，避免"字太小、挤在一起"。</summary>
-    private const double WideUiScale = 1.2;
-
-    /// <summary>
-    /// 整体缩放变换（绑到 MainView 根部的 LayoutTransformControl）。
-    /// 用整体缩放而不是逐个改字号：这样间距、图标、行高会一起变大，视觉上才协调。
-    /// </summary>
-    public Transform UiScaleTransform => new ScaleTransform(
-        IsWideLayout ? WideUiScale : 1.0,
-        IsWideLayout ? WideUiScale : 1.0);
-
     // 内容列宽上限：窄窗保持原有数值（手机布局一行不改），宽屏放开以利用两侧空间。
     public double ConvertContentMaxWidth => IsWideLayout ? 1000 : 620;
-    public double MergeContentMaxWidth => IsWideLayout ? 1000 : 560;
-    public double SettingsContentMaxWidth => IsWideLayout ? 1000 : 620;
+    public double MergeContentMaxWidth => IsWideLayout ? 1360 : 560;
+    public double SettingsContentMaxWidth => IsWideLayout ? 1360 : 620;
     public double WorkspaceConfigMaxWidth => IsWideLayout ? 1000 : 560;
     public double HomeGridMaxWidth => IsWideLayout ? 1200 : 760;
+
+    /// <summary>
+    /// 卡片分几列。宽屏两列 —— 这是"一览众山小"的关键：用宽度换高度，
+    /// 页面不再比窗口还高，一屏能看到全部内容，而不是靠滚动。
+    /// </summary>
+    public int SettingsColumns => IsWideLayout ? 2 : 1;
+
+    /// <summary>合并页卡片列数：宽屏把「待合并的 Pak」与「输出 Pak」并排。</summary>
+    public int MergeColumns => IsWideLayout ? 2 : 1;
+
+    /// <summary>
+    /// 卡片间距。两列时四周留缝，单列时只在下方留缝（原来靠 StackPanel 的 Spacing）。
+    /// </summary>
+    public Thickness CardGapMargin => IsWideLayout
+        ? new Thickness(0, 0, 14, 14)
+        : new Thickness(0, 0, 0, 20);
 
     /// <summary>是否运行在 Android 上（共享 UI 仅在 Android 显示分享入口、走 SAF 等）。</summary>
     public bool IsAndroid => OperatingSystem.IsAndroid();
@@ -120,15 +124,22 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(TopStatusMaxWidth));
     }
 
+    /// <summary>
+    /// 宽屏档位变化：把字号资源切成宽屏值（只放大文字，间距与控件尺寸不变），
+    /// 并通知内容列宽等派生属性。
+    /// </summary>
     partial void OnIsWideLayoutChanged(bool value)
     {
-        OnPropertyChanged(nameof(UiScaleTransform));
+        LayoutDensity.Apply(value);
         OnPropertyChanged(nameof(ConvertContentMaxWidth));
         OnPropertyChanged(nameof(MergeContentMaxWidth));
         OnPropertyChanged(nameof(SettingsContentMaxWidth));
         OnPropertyChanged(nameof(WorkspaceConfigMaxWidth));
         OnPropertyChanged(nameof(HomeGridMaxWidth));
         OnPropertyChanged(nameof(SearchBoxWidth));
+        OnPropertyChanged(nameof(SettingsColumns));
+        OnPropertyChanged(nameof(MergeColumns));
+        OnPropertyChanged(nameof(CardGapMargin));
     }
 
     partial void OnWindowWidthChanged(double value)

@@ -8,7 +8,7 @@
 
     <StackPanel Spacing="14" Margin="20">
         <TextBlock Text="{Binding PreviewTitle}"
-                   FontSize="17"
+                   FontSize="{DynamicResource Fs17}"
                    FontWeight="SemiBold"
                    TextTrimming="CharacterEllipsis" />
 
@@ -23,7 +23,7 @@
         <Border Classes="card" Padding="14" IsVisible="{Binding HasTextPreview}">
             <TextBlock Text="{Binding PreviewText}"
                        FontFamily="Consolas, Courier New"
-                       FontSize="11"
+                       FontSize="{DynamicResource Fs11}"
                        TextWrapping="Wrap"
                        MaxHeight="320" />
         </Border>
@@ -43,15 +43,15 @@
                         VerticalAlignment="Bottom"
                         IsHitTestVisible="False">
                     <TextBlock Text="拖动旋转 · 滚轮缩放 · 双击复位"
-                               FontSize="10"
+                               FontSize="{DynamicResource Fs10}"
                                Foreground="White" />
                 </Border>
             </Panel>
         </Border>
 
         <TextBlock Text="{Binding PreviewEmptyText}"
-                   FontSize="12"
-                   Opacity="0.55"
+                   FontSize="{DynamicResource Fs12}"
+                   Foreground="{DynamicResource TextMutedBrush}"
                    IsVisible="{Binding HasPreview, Converter={x:Static BoolConverters.Not}}" />
 
         <!-- 内置音频播放器：播放/停止 + Android 进度条拖动定位 -->
@@ -61,7 +61,7 @@
             <Grid RowDefinitions="Auto,Auto" RowSpacing="6">
                 <DockPanel Grid.Row="0">
                     <TextBlock Text="🔊"
-                               FontSize="16"
+                               FontSize="{DynamicResource Fs16}"
                                VerticalAlignment="Center"
                                Margin="0,0,10,0" />
                     <Button DockPanel.Dock="Right"
@@ -70,7 +70,7 @@
                             Classes="accent"
                             MinWidth="70" />
                     <TextBlock Text="{Binding AudioStatus}"
-                               FontSize="12"
+                               FontSize="{DynamicResource Fs12}"
                                VerticalAlignment="Center"
                                TextTrimming="CharacterEllipsis" />
                 </DockPanel>
@@ -89,8 +89,8 @@
                             PointerReleased="OnAudioSliderReleased" />
                     <TextBlock Grid.Column="1"
                                Text="{Binding AudioTimeText}"
-                               FontSize="10"
-                               Opacity="0.55"
+                               FontSize="{DynamicResource Fs10}"
+                               Foreground="{DynamicResource TextMutedBrush}"
                                VerticalAlignment="Center" />
                 </Grid>
             </Grid>
@@ -111,11 +111,11 @@
                             Margin="0,0,8,8">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <TextBlock Text="{Binding Label}"
-                                       FontSize="11"
+                                       FontSize="{DynamicResource Fs11}"
                                        FontWeight="SemiBold"
-                                       Opacity="0.7" />
+                                       Foreground="{DynamicResource TextMutedBrush}" />
                             <TextBlock Text="{Binding Value}"
-                                       FontSize="11" />
+                                       FontSize="{DynamicResource Fs11}" />
                         </StackPanel>
                     </Border>
                 </DataTemplate>
@@ -148,8 +148,8 @@
         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" IsVisible="{Binding HasPreview}">
             <TextBlock Grid.Column="0"
                        Text="{Binding SelectedPathText}"
-                       FontSize="11"
-                       Opacity="0.5"
+                       FontSize="{DynamicResource Fs11}"
+                       Foreground="{DynamicResource TextMutedBrush}"
                        VerticalAlignment="Center"
                        TextTrimming="CharacterEllipsis"
                        Background="Transparent"
@@ -158,8 +158,8 @@
                        ToolTip.Tip="长按复制路径" />
             <TextBlock Grid.Column="1"
                        Text="长按复制"
-                       FontSize="10"
-                       Opacity="0.35"
+                       FontSize="{DynamicResource Fs10}"
+                       Foreground="{DynamicResource TextMutedBrush}"
                        VerticalAlignment="Center" />
         </Grid>
     </StackPanel>
