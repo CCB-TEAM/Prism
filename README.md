@@ -21,8 +21,12 @@ Browse pak contents, preview textures / audio / 3D meshes / localization, export
 - Desktop encodes via UAssetCLI + astcenc / texconv; Android encodes in-process via `libprism_codecs`.
 
 **Pak merging**
-- Select multiple paks at once and drag to set override priority (lower in the list wins).
+- Select multiple paks at once and drag to reorder; **the higher entry wins** on conflicting paths.
+  Every entry is removable and reorderable — there is no pinned "main pak".
 - Conflict inspection before building.
+- Optional **baseline `.locres`**: give it the game's original localization file and same-named
+  `.locres` files are merged entry by entry instead of one whole file winning — so two mods that each
+  edited different strings can be combined. Without a baseline they fall back to whole-file override.
 
 **Pak conversion (cross-platform texture porting)**
 - Move textures from one platform's pak into another's, re-encoded to the target asset's format.
@@ -236,7 +240,7 @@ A full repack needs temp space equal to the main pak.
 ## Verifying
 
 ```sh
-# Integration tests (125 assertions): mapping format detection, search-box path resolution,
+# Integration tests (142 assertions): mapping format detection, search-box path resolution,
 # pak conversion (both paths + all output modes), merge priority, locres <-> JSON round-trip,
 # non-ASCII pak path handling, headless UI loading and navigation
 dotnet run --project test/Prism.FeatureTests

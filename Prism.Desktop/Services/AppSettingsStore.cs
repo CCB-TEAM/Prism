@@ -33,6 +33,15 @@ internal sealed class AppSettings
     /// </summary>
     public List<string> MergePakPaths { get; set; } = [];
 
+    /// <summary>
+    /// 合并：基准本地化文件（.locres，可选）。
+    ///
+    /// 设了它就对合并输入里同名的 .locres 做三路合并 —— 逐条与基准对比算出各模组的
+    /// 改动集再叠加，于是两份各改各的文本模组能真正合到一起。
+    /// 不设则同名 .locres 仍按整文件覆盖（列表靠上者胜出）。
+    /// </summary>
+    public string MergeBaseLocresPath { get; set; } = string.Empty;
+
     /// <summary>旧版本的单合并 Pak 字段，仅用于迁移。</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? MergePakPath { get; set; }

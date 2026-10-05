@@ -625,6 +625,76 @@ try
         Check(doc?.Entries.Any(e => e.Text == "你好") == true, "中文内容正确保留");
     }
 
+    // ══════════════════════════════════════════════════════════════
+    Section("F8 · 本地化三路合并（需要基准文件）");
+
+    // 基准 = 游戏原版。用 4 条词条方便观察。
+    var baseLoc = new LocresPreviewDto("Optimized", 1, 4,
+    [
+        new LocresEntryDto(0, "/Game/Loc/UI", "K0", "原0", NamespaceHash: 1, KeyHash: 10),
+        new LocresEntryDto(1, "/Game/Loc/UI", "K1", "原1", NamespaceHash: 1, KeyHash: 11),
+        new LocresEntryDto(2, "/Game/Loc/UI", "K2", "原2", NamespaceHash: 1, KeyHash: 12),
+        new LocresEntryDto(3, "/Game/Loc/UI", "K3", "原3", NamespaceHash: 1, KeyHash: 13),
+    ]);
+    byte[] baseLocBytes = LocresResourceCodec.Write(baseLoc);
+
+    static byte[] EditLocres(LocresPreviewDto dto, string key, string text) =>
+        LocresResourceCodec.Write(dto with
+        {
+            Entries = dto.Entries.Select(e => e.Key == key ? e with { Text = text } : e).ToArray(),
+        });
+
+    // 两份模组各改各的：A 改 K0，B 改 K1。
+    byte[] modLocA = EditLocres(baseLoc, "K0", "A改0");
+    byte[] modLocB = EditLocres(baseLoc, "K1", "B改1");
+
+    // 对照：没有基准时只能整文件覆盖 —— 这正是"两份文本没法合起来"的原因。
+    LocresPreviewDto overrideOnly = LocresResourceCodec.Read(modLocA);
+    Check(overrideOnly.Entries.First(e => e.Key == "K1").Text == "原1",
+        "整文件覆盖会丢掉另一份模组的改动（说明必须要有基准）");
+
+    // 三路合并：两份改动都保留，没动过的保持原版。
+    byte[] mergedLocBytes = LocresMerge.Merge(baseLocBytes, [modLocA, modLocB], out LocresMergeReport mr1);
+    LocresPreviewDto mergedLoc = LocresResourceCodec.Read(mergedLocBytes);
+    Check(mergedLoc.Entries.First(e => e.Key == "K0").Text == "A改0", "三路合并保留 A 的改动");
+    Check(mergedLoc.Entries.First(e => e.Key == "K1").Text == "B改1", "三路合并保留 B 的改动");
+    Check(mergedLoc.Entries.First(e => e.Key == "K2").Text == "原2", "未被任何模组改动的词条保持原版");
+    Check(mergedLoc.EntryCount == 4, $"词条总数保持（{mergedLoc.EntryCount}）");
+    Check(mr1.ChangedFromBaseline == 2, $"统计出 2 条实际改动（实际 {mr1.ChangedFromBaseline}）");
+    Check(mr1.Conflicts == 0, $"无冲突（实际 {mr1.Conflicts}）");
+
+    // 顺序调换：改动不重叠时，两份改动同样都在。
+    byte[] mergedLocRev = LocresMerge.Merge(baseLocBytes, [modLocB, modLocA], out _);
+    LocresPreviewDto revLoc = LocresResourceCodec.Read(mergedLocRev);
+    Check(revLoc.Entries.First(e => e.Key == "K0").Text == "A改0"
+          && revLoc.Entries.First(e => e.Key == "K1").Text == "B改1",
+        "顺序调换后两份改动仍然都在");
+
+    // 冲突：两份都改了同一条 → 列表靠上（优先级高）的胜出。
+    byte[] conflictA = EditLocres(baseLoc, "K2", "A改2");
+    byte[] conflictB = EditLocres(baseLoc, "K2", "B改2");
+    LocresPreviewDto conflictLoc = LocresResourceCodec.Read(
+        LocresMerge.Merge(baseLocBytes, [conflictA, conflictB], out LocresMergeReport mr2));
+    Check(conflictLoc.Entries.First(e => e.Key == "K2").Text == "A改2",
+        "冲突时按优先级取高者（列表靠上胜出）");
+    Check(mr2.Conflicts == 1, $"统计出 1 条冲突（实际 {mr2.Conflicts}）");
+
+    // 基准里有、模组文件里没有 → 计入 MissingFromMods（版本不一致的信号）。
+    var shortLoc = new LocresPreviewDto("Optimized", 1, 2,
+    [
+        new LocresEntryDto(0, "/Game/Loc/UI", "K0", "原0", NamespaceHash: 1, KeyHash: 10),
+        new LocresEntryDto(1, "/Game/Loc/UI", "K1", "原1", NamespaceHash: 1, KeyHash: 11),
+    ]);
+    LocresMerge.Merge(baseLocBytes, [LocresResourceCodec.Write(shortLoc)], out LocresMergeReport mr3);
+    Check(mr3.MissingFromMods == 2, $"基准多出的词条计入 MissingFromMods（实际 {mr3.MissingFromMods}）");
+
+    Check(LocresMerge.MatchesBaselineFileName(
+            "kards/Content/Localization/Game/zh-Hans/Game.locres", @"D:\x\Game.locres"),
+        "按文件名匹配基准（大小写不敏感）");
+    Check(!LocresMerge.MatchesBaselineFileName(
+            "kards/Content/Localization/Game/en/Game.locres", @"D:\x\Other.locres"),
+        "文件名不同则不匹配");
+
     Section("F4/F1/F7 · UI 层验证（headless 真实窗口）");
 
     try
@@ -707,6 +777,17 @@ try
         vm.MoveMergePak(vm.MergePaks[1], 0);
         Check(vm.MergePaks[0].Path == "y.pak", "任意一项都能移到首位（第 1 项即最高优先级）");
         vm.MergePaks.Clear();
+
+        // 合并的三路合并"判定"是纯函数，直接单测（不经过 VM 的异步命令）。
+        // 完整链路由 F8 的算法测试 + 真实数据原型覆盖。
+        Check(LocresMerge.ShouldMergeConflict(cfgFolder + "Game.locres", @"D:\x\Game.locres", baseLocBytes),
+            "设了基准且路径同名 .locres → 该走三路合并");
+        Check(!LocresMerge.ShouldMergeConflict(cfgFolder + "Game.locres", @"D:\x\Game.locres", null),
+            "没设基准（字节为 null）→ 退回整文件覆盖");
+        Check(!LocresMerge.ShouldMergeConflict(cfgFolder + "Shared.ini", @"D:\x\Game.locres", baseLocBytes),
+            "非 .locres 路径 → 不走三路合并");
+        Check(!LocresMerge.ShouldMergeConflict(cfgFolder + "Other.locres", @"D:\x\Game.locres", baseLocBytes),
+            "基准文件名不同 → 不走三路合并");
 
         vm.SearchQuery = "T_Button";
         Check(vm.SearchPlaceholder.Contains("搜索"), $"关键词输入时提示搜索（{vm.SearchPlaceholder}）");

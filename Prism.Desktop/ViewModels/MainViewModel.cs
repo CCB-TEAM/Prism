@@ -45,6 +45,7 @@ public partial class MainViewModel : ViewModelBase
         UsmapPath = _settings.UsmapPath;
         MergeOutputPath = _settings.MergeOutputPath;
         RestoreMergePaks(_settings.MergePakPaths);
+        MergeBaseLocresPath = _settings.MergeBaseLocresPath;
         ConvertSourcePath = _settings.ConvertSourcePath;
         ConvertMergeAll = _settings.ConvertMergeAll;
         ConvertIncludeModFiles = _settings.ConvertIncludeModFiles;
@@ -646,8 +647,11 @@ public partial class MainViewModel : ViewModelBase
     /// 合并输入列表的持久化形式：每行一个路径，保留顺序即保留优先级。
     /// （Android 上的 SAF 缓存路径跨重启仍有效，故可安全落盘。）
     /// </summary>
-    private void PersistMergePakPaths() =>
+    private void PersistMergePakPaths()
+    {
         _settings.MergePakPaths = MergePaks.Select(p => p.Path).ToList();
+        _settings.MergeBaseLocresPath = MergeBaseLocresPath;
+    }
 
     partial void OnAesKeyChanged(string value)
     {
@@ -756,6 +760,51 @@ public partial class MainViewModel : ViewModelBase
     }
 
     public bool CanMergePak => MergePaks.Count >= 1 && HasMergeOutput;
+
+    /// <summary>
+    /// 合并：基准本地化文件（游戏原版的 .locres，可选）。
+    ///
+    /// 设了它，就把合并输入里同名的 .locres 做三路合并：逐条与基准对比算出每份模组的
+    /// 改动集，再按优先级叠加。不设则同名 .locres 退回整文件覆盖。
+    /// </summary>
+    [ObservableProperty]
+    public partial string MergeBaseLocresPath { get; set; } = string.Empty;
+
+    partial void OnMergeBaseLocresPathChanged(string value)
+    {
+        SaveSettings();
+        OnPropertyChanged(nameof(HasMergeBaseLocres));
+        OnPropertyChanged(nameof(MergeBaseLocresSummary));
+    }
+
+    public bool HasMergeBaseLocres => MergeBaseLocresPath.Length > 0;
+
+    public string MergeBaseLocresSummary => HasMergeBaseLocres
+        ? Path.GetFileName(MergeBaseLocresPath)
+        : "未选择：同名 .locres 按整文件覆盖";
+
+    [RelayCommand]
+    private async Task BrowseMergeBaseLocresAsync()
+    {
+        string? path = await PickFileAsync(
+            "选择基准本地化文件（游戏原版的 .locres）",
+            ["*.locres"],
+            MergeBaseLocresPath);
+
+        if (path is not null)
+        {
+            MergeBaseLocresPath = path;
+            StatusText = $"已选择基准本地化：{Path.GetFileName(path)}";
+            AddLog($"合并基准本地化：{Path.GetFileName(path)}", "合并");
+        }
+    }
+
+    [RelayCommand]
+    private void ClearMergeBaseLocres()
+    {
+        MergeBaseLocresPath = string.Empty;
+        MergeStatus = "已清除基准本地化，同名 .locres 将按整文件覆盖";
+    }
 
     /// <summary>输出目标是否就绪（Android 上是 SAF 句柄，Windows 上是路径）。</summary>
     private bool HasMergeOutput => OperatingSystem.IsAndroid()
@@ -2414,7 +2463,11 @@ public partial class MainViewModel : ViewModelBase
         if (AskBeforeReplace && inspection.ConflictCount > 0)
         {
             string question = $"共发现 {inspection.ConflictCount:N0} 个路径冲突。" +
-                              "冲突路径将以列表中靠上的 Pak 为准（第 1 项优先级最高）。是否继续？";
+                              "冲突路径将以列表中靠上的 Pak 为准（第 1 项优先级最高）。" +
+                              (HasMergeBaseLocres
+                                  ? "同名 .locres 例外：会与所选基准逐条合并，各模组的改动都会保留。"
+                                  : string.Empty) +
+                              "是否继续？";
             bool confirmed = OperatingSystem.IsAndroid()
                 ? (NativeConfirmAsync is not null
                     ? await NativeConfirmAsync("确认合并", question)
@@ -2440,7 +2493,8 @@ public partial class MainViewModel : ViewModelBase
                     await src.CopyToAsync(dst);
                 }
 
-                MergeStatus = $"合并完成：{_mergeOutputTarget.Name}，{result.FileCount:N0} 个文件，冲突 {result.ConflictCount:N0}";
+                MergeStatus = $"合并完成：{_mergeOutputTarget.Name}，{result.FileCount:N0} 个文件，" +
+                              $"冲突 {result.ConflictCount:N0}{DescribeLocresMerge(result)}";
                 StatusText = $"合并完成：{_mergeOutputTarget.Name}";
                 try
                 {
@@ -2457,13 +2511,41 @@ public partial class MainViewModel : ViewModelBase
             }
             else
             {
-                MergeStatus = $"合并完成：{result.FileCount:N0} 个文件，冲突 {result.ConflictCount:N0}，替换 {result.ReplacedCount:N0}";
+                MergeStatus = $"合并完成：{result.FileCount:N0} 个文件，冲突 {result.ConflictCount:N0}，" +
+                              $"替换 {result.ReplacedCount:N0}{DescribeLocresMerge(result)}";
                 StatusText = $"合并完成：{Path.GetFileName(result.OutputPakPath)}";
             }
 
             AddLog($"合并 Pak：{MergePaks.Count} 个输入 → {Path.GetFileName(result.OutputPakPath)}，" +
-                   $"{result.FileCount:N0} 个文件，冲突 {result.ConflictCount:N0}，覆盖 {result.ReplacedCount:N0}");
+                   $"{result.FileCount:N0} 个文件，冲突 {result.ConflictCount:N0}，覆盖 {result.ReplacedCount:N0}" +
+                   DescribeLocresMerge(result));
         });
+    }
+
+    /// <summary>
+    /// 合并结果里关于"本地化三路合并"的一句话。没做合并（未设基准，或没有同名 .locres）时为空。
+    /// </summary>
+    private static string DescribeLocresMerge(MergeBuildResponse result)
+    {
+        if (result.MergedLocresFiles == 0)
+        {
+            return string.Empty;
+        }
+
+        string text = $"，本地化逐条合并 {result.MergedLocresFiles:N0} 个文件" +
+                      $"（生效改动 {result.MergedLocresEntries:N0} 条";
+        if (result.LocresConflicts > 0)
+        {
+            text += $"，冲突 {result.LocresConflicts:N0}";
+        }
+
+        text += "）";
+        if (result.LocresFailed > 0)
+        {
+            text += $"，{result.LocresFailed:N0} 个退回整文件覆盖";
+        }
+
+        return text;
     }
 
     /// <summary>
@@ -2525,6 +2607,11 @@ public partial class MainViewModel : ViewModelBase
     ///
     /// 实现方式是"只收第一份"—— 顺序遍历各 Pak，某个路径第一次出现时就把它定下来，
     /// 之后再遇到同路径一律丢弃；列表第 1 项因此天然成为最高优先级。
+    ///
+    /// <b>本地化例外</b>：若设置了<b>基准 .locres</b>，合并输入里同名的 .locres 不再整份
+    /// 覆盖，而是与基准做三路合并 —— 逐条算出各模组的改动集再叠加。这样两份各改各的
+    /// 文本模组能真正合到一起（否则整份覆盖会丢掉其中一份的全部改动）。
+    /// 其它资产仍是覆盖语义（二进制资产无法逐条合并）。
     /// </summary>
     private async Task<MergeBuildResponse> BuildMergeCoreAsync()
     {
@@ -2535,9 +2622,27 @@ public partial class MainViewModel : ViewModelBase
             string? aes = NullIfWhiteSpace(AesKey);
             string? mappings = NullIfWhiteSpace(UsmapPath);
 
+            // 基准本地化：只在确实存在时才启用；缺失则退回覆盖语义，不静默失败。
+            byte[]? baselineLocres = null;
+            if (HasMergeBaseLocres)
+            {
+                if (File.Exists(MergeBaseLocresPath))
+                {
+                    baselineLocres = await File.ReadAllBytesAsync(MergeBaseLocresPath);
+                }
+                else
+                {
+                    AddLog($"基准本地化文件不存在，本次按整文件覆盖处理：{MergeBaseLocresPath}", "合并");
+                }
+            }
+
             Dictionary<string, ModifiedPakFile> merged = new(StringComparer.OrdinalIgnoreCase);
             int conflicts = 0;
             int replaced = 0;
+            int locresMergedFiles = 0;
+            int locresChangedEntries = 0;
+            int locresConflicts = 0;
+            int locresFailed = 0;
 
             // 顺序遍历：先出现者胜出，即"越靠上优先级越高"。
             for (int index = 0; index < MergePaks.Count; index++)
@@ -2551,15 +2656,44 @@ public partial class MainViewModel : ViewModelBase
 
                 foreach (PakRawFileCopy file in files)
                 {
-                    if (merged.ContainsKey(file.PakPath))
+                    if (!merged.TryGetValue(file.PakPath, out ModifiedPakFile? existing))
                     {
-                        // 该路径已被更靠上的 Pak 收录 —— 这一份被覆盖，丢弃。
-                        conflicts++;
-                        replaced++;
+                        merged[file.PakPath] = new ModifiedPakFile(file.DiskPath, file.PakPath);
                         continue;
                     }
 
-                    merged[file.PakPath] = new ModifiedPakFile(file.DiskPath, file.PakPath);
+                    // 该路径已被更靠上的 Pak 收录。
+                    conflicts++;
+                    replaced++;
+
+                    // 同名 .locres + 有基准 → 三路合并，而不是丢掉这一份。
+                    if (LocresMerge.ShouldMergeConflict(file.PakPath, MergeBaseLocresPath, baselineLocres))
+                    {
+                        try
+                        {
+                            byte[] higher = await File.ReadAllBytesAsync(existing.DiskPath);
+                            byte[] lower = await File.ReadAllBytesAsync(file.DiskPath);
+                            byte[] combined = LocresMerge.Merge(
+                                baselineLocres, [higher, lower], out LocresMergeReport report);
+
+                            string mergedLocresPath = Path.Combine(tempRoot, $"locres{Guid.NewGuid():N}.locres");
+                            await File.WriteAllBytesAsync(mergedLocresPath, combined);
+                            merged[file.PakPath] = new ModifiedPakFile(mergedLocresPath, file.PakPath);
+
+                            locresMergedFiles++;
+                            locresChangedEntries += report.ChangedFromBaseline;
+                            locresConflicts += report.Conflicts;
+                            continue;
+                        }
+                        catch (Exception ex)
+                        {
+                            // 某一份本地化合并失败不该让整次合并崩掉：退回覆盖语义并记录下来。
+                            locresFailed++;
+                            AddLog($"本地化合并失败，该项退回整文件覆盖：{file.PakPath}（{ex.Message}）", "合并");
+                        }
+                    }
+
+                    // 覆盖语义：靠上的那份已收录，这一份丢弃。
                 }
             }
 
@@ -2573,7 +2707,9 @@ public partial class MainViewModel : ViewModelBase
                 UseCompression: UseOodleCompression,
                 Compression: PakCompression.Oodle)));
 
-            return new MergeBuildResponse(packTarget, merged.Count, conflicts, replaced);
+            return new MergeBuildResponse(
+                packTarget, merged.Count, conflicts, replaced,
+                locresMergedFiles, locresChangedEntries, locresConflicts, locresFailed);
         }
         finally
         {
@@ -3732,7 +3868,19 @@ public sealed record MergeInspectionResponse(
 }
 
 /// <summary>Merge 构建结果。</summary>
-public sealed record MergeBuildResponse(string OutputPakPath, int FileCount, int ConflictCount, int ReplacedCount);
+public sealed record MergeBuildResponse(
+    string OutputPakPath,
+    int FileCount,
+    int ConflictCount,
+    int ReplacedCount,
+    /// <summary>做了三路合并的 .locres 文件数（设置了基准且确实合并了才有值）。</summary>
+    int MergedLocresFiles = 0,
+    /// <summary>这些本地化里相对基准真正生效的改动词条数。</summary>
+    int MergedLocresEntries = 0,
+    /// <summary>被多份模组改动、按优先级裁决的词条数。</summary>
+    int LocresConflicts = 0,
+    /// <summary>因异常退回整文件覆盖的本地化个数。</summary>
+    int LocresFailed = 0);
 
 /// <summary>Pak 转换的界面状态（单条纹理）。</summary>
 public sealed partial class PakConversionRow : CommunityToolkit.Mvvm.ComponentModel.ObservableObject
