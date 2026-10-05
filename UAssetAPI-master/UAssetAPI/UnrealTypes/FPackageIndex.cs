@@ -163,9 +163,7 @@ public class FPackageIndex : IComparable
     public FPackageIndex(AssetBinaryReader reader)
     {
         Index = reader.ReadInt32();
-        // Cooked KARDS packages can contain positive object indices that exceed the
-        // in-memory export map size (legacy/EDL data). Keep the raw index instead of
-        // aborting the whole export; validation still happens lazily in ToImport/ToExport.
+        if ((reader?.Asset?.Exports != null && Index > reader.Asset.Exports.Count) || (reader?.Asset?.Imports != null && Index < -reader.Asset.Imports.Count)) throw new InvalidOperationException($"Invalid FPackageIndex value {Index} was read");
     }
 
     public int Write(AssetBinaryWriter writer)
