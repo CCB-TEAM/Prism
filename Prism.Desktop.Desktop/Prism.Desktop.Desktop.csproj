@@ -91,4 +91,44 @@
           ContinueOnError="true" />
   </Target>
 
+  <!--
+    Oodle 原生库（Windows）：与 Android 的 third_party/lib/arm64-v8a/liboodle-data-shared.so
+    同一性质 —— 本地提供、不进仓库（third_party/lib 已在 .gitignore 中）。
+    放在 third_party/lib/win-x64/oo2core_9_win64.dll 即可，构建与发布会自动带上。
+
+    历史坑：这个文件以前只在开发目录里被手工拷过，**发布包从来没有**。于是设置里勾选
+    「Oodle 压缩」后，repak_bind 按名字加载失败 → Rust panic → 直接 abort 整个进程
+    （Windows 上 0xC0000409，.NET 拦不住，用户看到的就是"点一下闪退"）。
+    Android 一直有这个库（走 AndroidNativeLibrary），Windows 侧从来没接上。
+  -->
+  <PropertyGroup>
+    <_OodleWinDir>$(MSBuildThisFileDirectory)..\third_party\lib\win-x64\</_OodleWinDir>
+  </PropertyGroup>
+
+  <Target Name="CopyOodleNative" AfterTargets="Build">
+    <ItemGroup>
+      <_OodleWinFiles Include="$(_OodleWinDir)oo2core_*.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_OodleWinFiles)"
+          DestinationFolder="$(OutDir)"
+          SkipUnchangedFiles="true"
+          ContinueOnError="true" />
+    <Message Condition="'@(_OodleWinFiles)' != ''"
+             Importance="high"
+             Text="已带上 Oodle 原生库：@(_OodleWinFiles->'%(Filename)%(Extension)')" />
+  </Target>
+
+  <!-- Publish 不会重跑挂在 Build 上的目标，必须单独再挂一次（与 tools/ 同理） -->
+  <Target Name="CopyOodleNativeForPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <_OodleWinPublishFiles Include="$(_OodleWinDir)oo2core_*.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_OodleWinPublishFiles)"
+          DestinationFolder="$(PublishDir)"
+          SkipUnchangedFiles="true"
+          ContinueOnError="true" />
+    <Warning Condition="'@(_OodleWinPublishFiles)' == ''"
+             Text="未找到 Oodle 原生库（third_party/lib/win-x64/oo2core_9_win64.dll）。发布包将不带 Oodle，勾选「Oodle 压缩」时会自动降级为不压缩。" />
+  </Target>
+
 </Project>

@@ -19,17 +19,25 @@ public static class OodleNative
     /// <summary>Oodle 原生库是否可加载。首次调用会真正尝试加载一次并立即释放。</summary>
     public static bool IsAvailable => LazyAvailable.Value;
 
-    /// <summary>缺失时给用户看的说明（用于日志与界面提示）。</summary>
-    public const string MissingHint =
-        "未找到 Oodle 原生库（oo2core_9_win64.dll），本次按不压缩打包。" +
-        "发行包不包含该库（再分发受 RAD/Epic 授权约束）；" +
-        "需要 Oodle 压缩时把它放到主程序旁边即可。";
+    /// <summary>缺失时给用户看的说明（用于日志与界面提示），按平台给出正确的库名。</summary>
+    public static string MissingHint => OperatingSystem.IsAndroid()
+        ? "未找到 Oodle 原生库（liboodle-data-shared.so），本次按不压缩打包。"
+        : "未找到 Oodle 原生库（oo2core_9_win64.dll），本次按不压缩打包。" +
+          "把该文件放到主程序旁边即可启用 Oodle 压缩（可从虚幻引擎安装目录取得，例如 " +
+          "Engine\\Binaries\\DotNET\\UnrealBuildTool\\oo2core_9_win64.dll）。";
 
     private static bool Probe()
     {
-        string[] candidates = OperatingSystem.IsWindows()
-            ? ["oo2core_9_win64.dll", "oo2core_9_win64", "oo2core_8_win64.dll"]
-            : ["liboo2corelinux64.so.9", "liboo2corelinux64.so"];
+        // 各平台的名字不同，必须分别探：
+        // - Windows：repak_bind 用 libloading 加载 oo2core_9_win64.dll
+        // - Android：原生库随 APK 一起打包，名字是 liboodle-data-shared.so
+        //   （native/RepakBind/build-android-arm64.ps1 会把 repak_bind 的加载名改成它）
+        // - Linux：liboo2corelinux64.so
+        string[] candidates = OperatingSystem.IsAndroid()
+            ? ["liboodle-data-shared.so"]
+            : OperatingSystem.IsWindows()
+                ? ["oo2core_9_win64.dll", "oo2core_9_win64", "oo2core_8_win64.dll"]
+                : ["liboo2corelinux64.so.9", "liboo2corelinux64.so"];
 
         foreach (string name in candidates)
         {
