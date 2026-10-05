@@ -733,23 +733,49 @@ try
         // 打开后才把源 Pak 的蓝图/本地化等双端通用文件一并塞进输出 Pak。
         Check(!vm.ConvertIncludeModFiles, "「并入模组文件」开关默认关闭（默认只转换贴图）");
 
-        // 「使用说明」浮层：默认收起，命令可开可关。
+        // 「使用说明」浮层：各页共用一个，按 HelpTopic 切换内容，默认收起。
         // 用页内浮层而非独立 Window，是为了 Android 上也能用（TopLevel 不一定是 Window）。
-        Check(!vm.IsConvertHelpVisible, "「使用说明」浮层默认收起");
-        if (typeof(Prism.Desktop.ViewModels.MainViewModel).GetProperty("ShowConvertHelpCommand")?.GetValue(vm)
-                is CommunityToolkit.Mvvm.Input.IRelayCommand showHelp
-            && typeof(Prism.Desktop.ViewModels.MainViewModel).GetProperty("CloseConvertHelpCommand")?.GetValue(vm)
+        Check(!vm.IsHelpOpen, "「使用说明」浮层默认收起");
+        if (typeof(Prism.Desktop.ViewModels.MainViewModel).GetProperty("OpenHelpCommand")?.GetValue(vm)
+                is CommunityToolkit.Mvvm.Input.IRelayCommand openHelp
+            && typeof(Prism.Desktop.ViewModels.MainViewModel).GetProperty("CloseHelpCommand")?.GetValue(vm)
                 is CommunityToolkit.Mvvm.Input.IRelayCommand closeHelp)
         {
-            showHelp.Execute(null);
-            Check(vm.IsConvertHelpVisible, "ShowConvertHelpCommand 展开浮层");
+            openHelp.Execute("convert");
+            Check(vm.IsHelpOpen && vm.IsHelpConvert, "OpenHelp(\"convert\") 展开转换说明");
+            Check(vm.HelpTitle.Contains("转换"), $"标题随主题切换（{vm.HelpTitle}）");
+
+            openHelp.Execute("merge");
+            Check(vm.IsHelpMerge && !vm.IsHelpConvert, "切到合并主题时旧主题不再显示");
+
             closeHelp.Execute(null);
-            Check(!vm.IsConvertHelpVisible, "CloseConvertHelpCommand 收起浮层");
+            Check(!vm.IsHelpOpen, "CloseHelpCommand 收起浮层");
         }
         else
         {
             Check(false, "找不到使用说明的开合命令");
         }
+
+        // 宽屏档位：整体放大 + 内容列与搜索框放宽；窄窗必须回到原值（手机布局一行不改）。
+        Check(!vm.IsWideLayout, "默认窗口宽度下不是宽屏档位");
+        double narrowMaxWidth = vm.ConvertContentMaxWidth;
+        double narrowSearchWidth = vm.SearchBoxWidth;
+
+        vm.WindowWidth = 1920;
+        Check(vm.IsWideLayout, "窗口 1920 宽时进入宽屏档位");
+        Check(vm.ConvertContentMaxWidth > narrowMaxWidth,
+            $"宽屏内容列放宽（{narrowMaxWidth} → {vm.ConvertContentMaxWidth}）");
+        Check(vm.SearchBoxWidth > narrowSearchWidth,
+            $"宽屏搜索框加宽（{narrowSearchWidth} → {vm.SearchBoxWidth}）");
+        Check(Math.Abs(((Avalonia.Media.ScaleTransform)vm.UiScaleTransform).ScaleX - 1.2) < 0.001,
+            "宽屏整体缩放 1.2");
+
+        vm.WindowWidth = 600;
+        Check(vm.IsCompact && !vm.IsWideLayout, "窄窗回到紧凑档位");
+        Check(Math.Abs(((Avalonia.Media.ScaleTransform)vm.UiScaleTransform).ScaleX - 1.0) < 0.001,
+            "窄窗不缩放（手机端与原样一致）");
+        Check(vm.ConvertContentMaxWidth == narrowMaxWidth, "窄窗内容列恢复原值");
+
 
         // 主页「搜索 & 导出」入口应直达浏览标签，而不是和工作区入口落在同一个标签。
         var goBrowse = typeof(Prism.Desktop.ViewModels.MainViewModel).GetProperty("GoBrowseCommand");

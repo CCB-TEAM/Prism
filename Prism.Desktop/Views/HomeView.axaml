@@ -48,7 +48,7 @@
                   RowDefinitions="Auto,Auto"
                   ColumnSpacing="10"
                   RowSpacing="10"
-                  MaxWidth="760"
+                  MaxWidth="{Binding HomeGridMaxWidth}"
                   IsVisible="{Binding IsCompact, Converter={x:Static BoolConverters.Not}}">
 
                 <Button Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2"

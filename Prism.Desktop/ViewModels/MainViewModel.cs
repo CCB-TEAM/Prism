@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using Avalonia.Controls;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -74,6 +75,34 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     public partial bool IsCompact { get; set; }
 
+    /// <summary>
+    /// 宽屏（桌面）布局：窗口够宽时把界面整体放大一档，并把内容列放宽用满空间。
+    ///
+    /// 阈值取 1200：除以放大系数 1.2 之后仍有 1000 逻辑像素，
+    /// 不会破坏 <see cref="IsLandscape"/>（≥980）那套左右布局的前提。
+    /// 手机与窄窗保持 1.0，即与原来完全一致。
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsWideLayout { get; set; }
+
+    /// <summary>宽屏下的整体缩放系数。字号、间距、控件一起放大，避免"字太小、挤在一起"。</summary>
+    private const double WideUiScale = 1.2;
+
+    /// <summary>
+    /// 整体缩放变换（绑到 MainView 根部的 LayoutTransformControl）。
+    /// 用整体缩放而不是逐个改字号：这样间距、图标、行高会一起变大，视觉上才协调。
+    /// </summary>
+    public Transform UiScaleTransform => new ScaleTransform(
+        IsWideLayout ? WideUiScale : 1.0,
+        IsWideLayout ? WideUiScale : 1.0);
+
+    // 内容列宽上限：窄窗保持原有数值（手机布局一行不改），宽屏放开以利用两侧空间。
+    public double ConvertContentMaxWidth => IsWideLayout ? 1000 : 620;
+    public double MergeContentMaxWidth => IsWideLayout ? 1000 : 560;
+    public double SettingsContentMaxWidth => IsWideLayout ? 1000 : 620;
+    public double WorkspaceConfigMaxWidth => IsWideLayout ? 1000 : 560;
+    public double HomeGridMaxWidth => IsWideLayout ? 1200 : 760;
+
     /// <summary>是否运行在 Android 上（共享 UI 仅在 Android 显示分享入口、走 SAF 等）。</summary>
     public bool IsAndroid => OperatingSystem.IsAndroid();
 
@@ -91,6 +120,17 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(TopStatusMaxWidth));
     }
 
+    partial void OnIsWideLayoutChanged(bool value)
+    {
+        OnPropertyChanged(nameof(UiScaleTransform));
+        OnPropertyChanged(nameof(ConvertContentMaxWidth));
+        OnPropertyChanged(nameof(MergeContentMaxWidth));
+        OnPropertyChanged(nameof(SettingsContentMaxWidth));
+        OnPropertyChanged(nameof(WorkspaceConfigMaxWidth));
+        OnPropertyChanged(nameof(HomeGridMaxWidth));
+        OnPropertyChanged(nameof(SearchBoxWidth));
+    }
+
     partial void OnWindowWidthChanged(double value)
     {
         bool landscape = value >= 980;
@@ -103,6 +143,13 @@ public partial class MainViewModel : ViewModelBase
         if (compact != IsCompact)
         {
             IsCompact = compact;
+        }
+
+        // 宽屏档位单独判断：只有桌面把窗口拉得足够宽时才放大整体 UI。
+        bool wide = value >= 1200;
+        if (wide != IsWideLayout)
+        {
+            IsWideLayout = wide;
         }
     }
 
@@ -839,19 +886,51 @@ public partial class MainViewModel : ViewModelBase
     public partial bool ConvertIncludeModFiles { get; set; }
 
     /// <summary>
-    /// 转换页「使用说明」浮层是否展开。
+    /// 当前打开的「使用说明」主题；空字符串表示浮层关闭。
     ///
-    /// 用页内浮层而不是独立 Window：Android 上 TopLevel 不一定是 Window，
-    /// ShowDialog 拿不到宿主；浮层两端行为一致。
+    /// 各页共用一个浮层（挂在 MainView 顶层），而不是每页各写一份：
+    /// 页面正文只留必要信息，说明集中到这里，按主题切换内容。
+    /// 用页内浮层而不是独立 Window —— Android 上 TopLevel 不一定是 Window，
+    /// ShowDialog 找不到宿主；浮层两端行为一致。
     /// </summary>
     [ObservableProperty]
-    public partial bool IsConvertHelpVisible { get; set; }
+    public partial string HelpTopic { get; set; } = string.Empty;
+
+    partial void OnHelpTopicChanged(string value)
+    {
+        OnPropertyChanged(nameof(IsHelpOpen));
+        OnPropertyChanged(nameof(HelpTitle));
+        OnPropertyChanged(nameof(IsHelpConvert));
+        OnPropertyChanged(nameof(IsHelpWorkspace));
+        OnPropertyChanged(nameof(IsHelpMerge));
+        OnPropertyChanged(nameof(IsHelpSettings));
+    }
+
+    public bool IsHelpOpen => HelpTopic.Length > 0;
+    public bool IsHelpConvert => HelpTopic == "convert";
+    public bool IsHelpWorkspace => HelpTopic == "workspace";
+    public bool IsHelpMerge => HelpTopic == "merge";
+    public bool IsHelpSettings => HelpTopic == "settings";
+
+    public string HelpTitle => HelpTopic switch
+    {
+        "convert" => "Pak 转换 · 使用说明",
+        "workspace" => "解包 & Mod · 使用说明",
+        "merge" => "Pak 合并 · 使用说明",
+        "settings" => "设置 · 使用说明",
+        _ => "使用说明",
+    };
 
     [RelayCommand]
-    private void ShowConvertHelp() => IsConvertHelpVisible = true;
+    private void OpenHelp(string? topic) => HelpTopic = topic ?? string.Empty;
 
     [RelayCommand]
-    private void CloseConvertHelp() => IsConvertHelpVisible = false;
+    private void CloseHelp() => HelpTopic = string.Empty;
+
+    /// <summary>
+    /// 浏览页搜索框宽度：宽屏给足，避免占位提示被截断（原来写死 170 太窄）。
+    /// </summary>
+    public double SearchBoxWidth => IsWideLayout ? 360 : 230;
 
     public bool CanConvertPak => IsPakOpen
         && ConvertSourcePath.Length > 0

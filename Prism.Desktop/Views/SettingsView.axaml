@@ -5,7 +5,7 @@
              x:DataType="vm:MainViewModel">
 
     <ScrollViewer>
-        <StackPanel MaxWidth="620"
+        <StackPanel MaxWidth="{Binding SettingsContentMaxWidth}"
                     HorizontalAlignment="Stretch"
                     Margin="16,20"
                     Spacing="20">
@@ -19,6 +19,13 @@
                            FontSize="20"
                            FontWeight="SemiBold"
                            VerticalAlignment="Center" />
+                <Button Content="使用说明"
+                        Command="{Binding OpenHelpCommand}"
+                        CommandParameter="settings"
+                        Classes="ghost"
+                        FontSize="11"
+                        VerticalAlignment="Center"
+                        Margin="4,0,0,0" />
             </StackPanel>
 
             <!-- 通用 -->
@@ -136,12 +143,9 @@
             <Border Classes="card" Padding="22">
                 <StackPanel Spacing="14">
                     <TextBlock Text="Pak 转换" FontSize="12" FontWeight="SemiBold" Opacity="0.6" />
-                    <TextBlock Text="把另一个平台 Pak 的贴图按主 Pak 格式重编码后替换，再合成新 Pak。详见转换页的「使用说明」。"
-                               FontSize="10"
-                               Opacity="0.55"
-                               TextWrapping="Wrap" />
+
                     <StackPanel Spacing="6">
-                        <TextBlock Text="主 Pak（基底，取上面的 Pak 文件）" FontSize="11" Opacity="0.55" />
+                        <TextBlock Text="主 Pak" FontSize="11" Opacity="0.55" />
                         <TextBlock Text="{Binding PakPath}"
                                    FontSize="12"
                                    Opacity="0.8"
@@ -171,7 +175,7 @@
                     <TextBlock Text="AES 密钥" FontSize="12" FontWeight="SemiBold" Opacity="0.6" />
                     <TextBox Text="{Binding AesKey}"
                              PlaceholderText="如需解密请填写" />
-                    <TextBlock Text="注意：AES 密钥会明文保存在本地配置文件（Prism.Desktop.settings.json）中。"
+                    <TextBlock Text="密钥明文保存在本地配置文件，注意不要外发。"
                                FontSize="10"
                                Opacity="0.5"
                                TextWrapping="Wrap" />

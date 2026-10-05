@@ -230,17 +230,21 @@ A full repack needs temp space equal to the main pak.
 
 - **Search box**: a keyword searches; a pak-internal path (e.g. `kards/Content/Assets/Textures`)
   navigates instead. The placeholder changes to indicate which mode the input will use.
-- **Merge list**: the first entry is the main pak and is pinned; everything below overrides it,
-  with the lowest entry winning. Drag the `⠿` handle — **on touch, long-press for ~0.35 s first**.
-- **Pak Convert**: the page itself only shows the three inputs and two toggles; the explanation
-  lives behind the **使用说明 / Help** button in the top bar, which opens an in-page overlay with
-  the walkthrough and screenshots. It is an overlay rather than a dialog window because on Android
-  the `TopLevel` is not necessarily a `Window`, so `ShowDialog` has no owner to attach to.
+- **Merge list**: **the higher entry wins** on conflicting paths, and every entry can be dragged or
+  removed — there is no pinned main pak. Drag the `⠿` handle — **on touch, long-press for ~0.35 s first**.
+- **Help**: each major page has a 使用说明 / Help button in its top bar. All pages share one overlay
+  that switches content by topic (with screenshots), so the pages themselves stay terse — only state
+  and actionable prompts remain. It is an overlay rather than a dialog window because on Android the
+  `TopLevel` is not necessarily a `Window`, so `ShowDialog` has no owner to attach to.
+- **Adaptive density**: one UI, two tiers. Below 620 px it is the compact single column built for
+  phones. From **1200 px** it enters a wide tier that scales the whole UI by **1.2×** and widens the
+  content columns (620 → 1000). Without it desktop text was too small and roughly two thirds of the
+  window sat empty. Resizing switches tiers live; the phone layout is unchanged.
 
 ## Verifying
 
 ```sh
-# Integration tests (142 assertions): mapping format detection, search-box path resolution,
+# Integration tests (152 assertions): mapping format detection, search-box path resolution,
 # pak conversion (both paths + all output modes), merge priority, locres <-> JSON round-trip,
 # non-ASCII pak path handling, headless UI loading and navigation
 dotnet run --project test/Prism.FeatureTests

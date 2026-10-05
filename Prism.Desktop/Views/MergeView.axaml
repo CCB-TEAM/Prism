@@ -24,7 +24,7 @@
     </UserControl.Styles>
 
     <ScrollViewer>
-        <StackPanel MaxWidth="560"
+        <StackPanel MaxWidth="{Binding MergeContentMaxWidth}"
                     HorizontalAlignment="Stretch"
                     Margin="16,20"
                     Spacing="20">
@@ -36,6 +36,13 @@
                            FontSize="18"
                            FontWeight="SemiBold"
                            VerticalAlignment="Center" />
+                <Button Content="使用说明"
+                        Command="{Binding OpenHelpCommand}"
+                        CommandParameter="merge"
+                        Classes="ghost"
+                        FontSize="11"
+                        VerticalAlignment="Center"
+                        Margin="4,0,0,0" />
             </StackPanel>
 
             <!-- ═══ 输入列表 ═══ -->
@@ -50,7 +57,7 @@
                                 FontSize="11" />
                     </DockPanel>
 
-                    <TextBlock Text="越靠上优先级越高；同一路径在多份 Pak 里都有时，以上方那份为准。所有条目都可以拖动排序、都可以移除。"
+                    <TextBlock Text="越靠上优先级越高；每个条目都能拖动排序、都能移除。"
                                FontSize="10"
                                Opacity="0.55"
                                TextWrapping="Wrap" />
@@ -168,7 +175,7 @@
                                     Command="{Binding BrowseMergeBaseLocresCommand}"
                                     Classes="ghost" />
                         </Grid>
-                        <TextBlock Text="选游戏原版的 .locres（可用「解包 &amp; Mod」页从原版 Pak 里导出）。设了它，输入里同名的 .locres 会与它逐条对比、把各模组的改动合并到一起（冲突按上面的优先级）；不设则仍是整文件覆盖。"
+                        <TextBlock Text="选原版 .locres 可把各模组的文本改动逐条合并（详见使用说明）"
                                    FontSize="10"
                                    Opacity="0.5"
                                    TextWrapping="Wrap" />

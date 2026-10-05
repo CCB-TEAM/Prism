@@ -28,7 +28,7 @@
                                TextTrimming="CharacterEllipsis" />
                     <Button Grid.Column="2"
                             Content="使用说明"
-                            Command="{Binding ShowConvertHelpCommand}"
+                            Command="{Binding OpenHelpCommand}" CommandParameter="convert"
                             Classes="ghost"
                             FontSize="11"
                             Margin="0,0,10,0"
@@ -50,7 +50,7 @@
                          IsVisible="{Binding IsBusy}" />
 
             <ScrollViewer>
-                <StackPanel MaxWidth="620"
+                <StackPanel MaxWidth="{Binding ConvertContentMaxWidth}"
                             HorizontalAlignment="Stretch"
                             Margin="16,18"
                             Spacing="14">
@@ -189,93 +189,5 @@
                 </StackPanel>
             </ScrollViewer>
         </DockPanel>
-
-        <!-- ═══ 使用说明浮层 ═══ -->
-        <Border IsVisible="{Binding IsConvertHelpVisible}"
-                Background="#A0000000">
-            <Border Classes="card"
-                    MaxWidth="580"
-                    MaxHeight="640"
-                    Margin="24"
-                    Padding="0"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center">
-                <DockPanel>
-                    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="20,16,14,10">
-                        <TextBlock Grid.Column="0" Text="Pak 转换 · 使用说明"
-                                   FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
-                        <Button Grid.Column="1" Content="✕" Command="{Binding CloseConvertHelpCommand}"
-                                Classes="ghost" FontSize="12" Padding="8,2" />
-                    </Grid>
-
-                    <Button DockPanel.Dock="Bottom"
-                            Content="知道了"
-                            Command="{Binding CloseConvertHelpCommand}"
-                            Classes="primary"
-                            HorizontalAlignment="Right"
-                            Margin="20,10,20,18"
-                            MinWidth="90" />
-
-                    <ScrollViewer Margin="20,0,20,0">
-                        <StackPanel Spacing="14">
-
-                            <StackPanel Spacing="6">
-                                <TextBlock Text="用途" FontSize="12" FontWeight="SemiBold" Opacity="0.7" />
-                                <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
-                                           Text="把另一个平台 Pak 里的同路径贴图搬到本平台：解出源贴图像素 → 按主 Pak 的纹理格式重新编码 → 合成新 Pak。" />
-                            </StackPanel>
-
-                            <StackPanel Spacing="6">
-                                <TextBlock Text="三步" FontSize="12" FontWeight="SemiBold" Opacity="0.7" />
-                                <!-- 浮层会盖住页面，所以这里放一张页面截图当参照 -->
-                                <Border CornerRadius="8" ClipToBounds="True" Margin="0,2,0,4"
-                                        BorderBrush="#22000000" BorderThickness="1">
-                                    <Image Source="avares://Prism.Desktop/Assets/help/convert-page.png"
-                                           Stretch="Uniform" />
-                                </Border>
-                                <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
-                                           Text="1. 主 Pak：选本平台要装进游戏的那个 Pak（它决定输出的纹理格式）。" />
-                                <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
-                                           Text="2. 待转换 Pak：选另一个平台的 Pak，它提供新贴图。" />
-                                <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
-                                           Text="3. 输出：选保存位置，点「开始转换」。完成后把输出 Pak 放进游戏的 Paks 目录。" />
-                            </StackPanel>
-
-                            <StackPanel Spacing="6">
-                                <TextBlock Text="输出里装什么" FontSize="12" FontWeight="SemiBold" Opacity="0.7" />
-                                <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
-                                           Text="• 默认：只装转换过的贴图，体积≈改动量。游戏会把它叠加在原 Pak 之上，同路径以后加载的为准。" />
-                                <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
-                                           Text="• 并入模组的其他文件：再带上源 Pak 的蓝图、本地化、数据表等。这些内容双端通用，不需要转换，会原样复制进输出 Pak —— 开了它就不必再单独做一次 Pak 合并。" />
-                                <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
-                                           Text="• 输出完整整包：连主 Pak 的其他文件一起打包，体积≈主 Pak。只在需要「用一个 Pak 替换整包」时用。" />
-                            </StackPanel>
-
-                            <StackPanel Spacing="6">
-                                <TextBlock Text="开始前检查" FontSize="12" FontWeight="SemiBold" Opacity="0.7" />
-                                <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
-                                           Text="• 映射文件：两侧贴图格式不同时必须解出源像素才能重编码，这一步需要 .usmap / .jmap（在「设置」页选择，两个平台导出的映射通用）。缺映射的贴图会被跳过并在明细里写明原因。" />
-                                <Border CornerRadius="8" ClipToBounds="True" Margin="0,2,0,4"
-                                        BorderBrush="#22000000" BorderThickness="1"
-                                        HorizontalAlignment="Left">
-                                    <Image Source="avares://Prism.Desktop/Assets/help/settings-path.png"
-                                           Stretch="Uniform" MaxWidth="480" />
-                                </Border>
-                                <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
-                                           Text="• AES 密钥：只有加密 Pak 需要，沿用「解包 &amp; 模组」页里填的。" />
-                                <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
-                                           Text="• 编码器：桌面端需要 UAssetCLI 与 astcenc / texconv，发行版已随包提供（须与主程序放在一起）；Android 端在应用内完成编码。" />
-                            </StackPanel>
-
-                            <StackPanel Spacing="6">
-                                <TextBlock Text="结果怎么看" FontSize="12" FontWeight="SemiBold" Opacity="0.7" />
-                                <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.75"
-                                           Text="转换完成后下方逐条列出每张贴图的处理结果：替换 / 主 Pak 缺失 / 跳过 / 失败。失败项会写明具体原因，可据此调整映射文件或输入 Pak。" />
-                            </StackPanel>
-                        </StackPanel>
-                    </ScrollViewer>
-                </DockPanel>
-            </Border>
-        </Border>
     </Panel>
 </UserControl>

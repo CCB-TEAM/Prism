@@ -9,7 +9,7 @@
     <DockPanel>
         <!-- 顶栏 -->
         <Border DockPanel.Dock="Top" Padding="12,10">
-            <Grid ColumnDefinitions="Auto,*,Auto">
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto">
                 <Button Grid.Column="0"
                         Content="←"
                         FontSize="16"
@@ -23,7 +23,15 @@
                            FontWeight="SemiBold"
                            VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis" />
-                <TextBlock Grid.Column="2"
+                <Button Grid.Column="2"
+                        Content="使用说明"
+                        Command="{Binding OpenHelpCommand}"
+                        CommandParameter="workspace"
+                        Classes="ghost"
+                        FontSize="11"
+                        VerticalAlignment="Center"
+                        Margin="0,0,10,0" />
+                <TextBlock Grid.Column="3"
                            Text="{Binding StatusText}"
                            FontSize="11"
                            Opacity="0.65"
@@ -66,7 +74,7 @@
                                 Spacing="8"
                                 IsVisible="{Binding IsBrowseTab}">
                         <TextBox Text="{Binding SearchQuery}"
-                                 Width="170"
+                                 Width="{Binding SearchBoxWidth}"
                                  PlaceholderText="{Binding SearchPlaceholder}"
                                  FontSize="12"
                                  KeyDown="OnSearchKeyDown" />
@@ -114,7 +122,7 @@
 
             <!-- ═══════ 配置 ═══════ -->
             <ScrollViewer IsVisible="{Binding IsConfigTab}">
-                <StackPanel Margin="16,20" Spacing="16" MaxWidth="560" HorizontalAlignment="Stretch">
+                <StackPanel Margin="16,20" Spacing="16" MaxWidth="{Binding WorkspaceConfigMaxWidth}" HorizontalAlignment="Stretch">
                     <Border Classes="card" Padding="20">
                         <StackPanel Spacing="16">
                             <StackPanel Spacing="6">
@@ -322,7 +330,7 @@
                             </Border>
                             <ScrollViewer Grid.Column="1">
                                 <StackPanel Margin="18" Spacing="12">
-                                    <TextBlock Text="从浏览页选择纹理资产后点击「加入替换」，再在此选择替换图片。"
+                                    <TextBlock Text="从浏览页选好资产 →「加入替换」，再回到这里处理。"
                                                FontSize="12"
                                                Opacity="0.6"
                                                IsVisible="{Binding HasNoPatchItems}" />
@@ -501,7 +509,7 @@
                             </ListBox>
                             <ScrollViewer Grid.Row="1">
                                 <StackPanel Margin="14" Spacing="10">
-                                    <TextBlock Text="从浏览页选择纹理资产后点击「加入替换」，再在此选择替换图片。"
+                                    <TextBlock Text="从浏览页选好资产 →「加入替换」，再回到这里处理。"
                                                FontSize="12"
                                                Opacity="0.6"
                                                IsVisible="{Binding HasNoPatchItems}" />
