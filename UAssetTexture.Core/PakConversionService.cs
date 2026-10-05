@@ -185,7 +185,7 @@ public sealed class PakConversionService
             HashSet<string> targetPaths;
             HashSet<string> targetTexturePackages;
 
-            await targetSession.OpenAsync(new PakOpenOptions([options.TargetPakPath], aes, mappings))
+            await EnsureMountedAsync(targetSession, "主 Pak", options.TargetPakPath, aes, mappings)
                 .ConfigureAwait(false);
 
             if (carryAllTargetFiles)
@@ -236,7 +236,7 @@ public sealed class PakConversionService
             HashSet<string> convertedSourcePaths = new(StringComparer.OrdinalIgnoreCase);
 
             {
-                await sourceSession.OpenAsync(new PakOpenOptions([options.SourcePakPath], aes, mappings))
+                await EnsureMountedAsync(sourceSession, "待转换 Pak", options.SourcePakPath, aes, mappings)
                     .ConfigureAwait(false);
 
                 IReadOnlyList<PakRawFileCopy> sourceFiles = await sourceSession
@@ -735,6 +735,43 @@ public sealed class PakConversionService
             return false;
 
         return allPaths.Contains(PakPathFor(pakPath, ".uexp"));
+    }
+
+    /// <summary>
+    /// 打开 Pak 并确认真的读到了文件；文件数为 0 时立刻中止。
+    ///
+    /// <b>为什么必须拦</b>：加密 Pak 在没有（或错误）AES 密钥时，挂载本身会"成功"，
+    /// 但一个文件都读不出来，且不抛异常。若继续往下走，主 Pak 的索引是空的，
+    /// 所有纹理都会被判成"主 Pak 中没有同路径纹理"，于是产出一个<b>没有任何贴图被转换</b>
+    /// 的废包，结果还报告"失败 0" —— 用户拿到手才会发现不对。
+    /// 与其产出这种东西，不如在这里直接报错，并把最可能的原因说清楚。
+    /// </summary>
+    private static async Task EnsureMountedAsync(
+        PakArchiveSession session,
+        string role,
+        string pakPath,
+        string? aesKey,
+        string? mappings)
+    {
+        PakOpenResult open = await session
+            .OpenAsync(new PakOpenOptions([pakPath], aesKey, mappings))
+            .ConfigureAwait(false);
+
+        if (open.FileCount > 0)
+        {
+            return;
+        }
+
+        string name = Path.GetFileName(pakPath);
+        string hint = open.MountedArchiveCount == 0
+            ? "没有挂载到任何归档：请确认文件存在，且是受支持的 .pak。"
+            : string.IsNullOrWhiteSpace(aesKey)
+                ? "该 Pak 已加密但没有提供 AES 密钥 —— 请在「设置」页填入密钥后重试。"
+                : "已提供 AES 密钥但仍读不出文件：请确认密钥与游戏版本匹配。";
+
+        throw new InvalidOperationException(
+            $"{role}「{name}」挂载后文件数为 0，已中止转换。{hint}" +
+            $"（归档 {open.MountedArchiveCount} 个，需要密钥 {open.RequiredKeyCount} 个）");
     }
 
     private static void TryDeleteDirectory(string path)

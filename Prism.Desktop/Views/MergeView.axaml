@@ -14,10 +14,6 @@
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="BorderBrush" Value="Transparent" />
         </Style>
-        <Style Selector="Border.merge-row.base">
-            <Setter Property="Background" Value="{DynamicResource PrimaryWashBrush}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource PrimaryLightBrush}" />
-        </Style>
         <Style Selector="Border.merge-row.dragging">
             <Setter Property="Opacity" Value="0.45" />
         </Style>
@@ -54,7 +50,7 @@
                                 FontSize="11" />
                     </DockPanel>
 
-                    <TextBlock Text="越靠下优先级越高；第一项是主 Pak（基底）。"
+                    <TextBlock Text="越靠上优先级越高；同一路径在多份 Pak 里都有时，以上方那份为准。所有条目都可以拖动排序、都可以移除。"
                                FontSize="10"
                                Opacity="0.55"
                                TextWrapping="Wrap" />
@@ -76,7 +72,6 @@
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="models:MergePakItem">
                                 <Border Classes="merge-row"
-                                        Classes.base="{Binding IsBase}"
                                         Classes.dragging="{Binding IsDragging}"
                                         Classes.droptarget="{Binding IsDropTarget}"
                                         Margin="0,0,0,6">
@@ -123,7 +118,7 @@
                                                        TextTrimming="CharacterEllipsis" />
                                         </StackPanel>
 
-                                        <!-- 移除（主 Pak 不显示） -->
+                                        <!-- 移除 -->
                                         <Button Grid.Column="3"
                                                 Content="✕"
                                                 Command="{Binding $parent[UserControl].DataContext.RemoveMergePakCommand}"

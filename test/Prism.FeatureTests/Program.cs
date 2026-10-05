@@ -518,7 +518,7 @@ try
     }
 
     // ══════════════════════════════════════════════════════════════
-    Section("F7 · 合并覆盖优先级（后加入的覆盖先加入的）");
+    Section("F7 · 合并覆盖优先级（越靠上优先级越高）");
 
     string pakA = Path.Combine(root, "prio-a.pak");
     string pakB = Path.Combine(root, "prio-b.pak");
@@ -537,7 +537,7 @@ try
     ModifiedPakPackService.Pack(new ModifiedPakRequest(
         [FileOf(root, cfgFolder + "Shared.ini", "FROM-C")], pakC));
 
-    // 复刻 BuildMergeCoreAsync 的语义：按列表顺序遍历，后写覆盖先写。
+    // 复刻 BuildMergeCoreAsync 的语义：顺序遍历，先出现者胜出 —— 即"越靠上优先级越高"。
     // 用 CopyAllRawFilesAsync（与生产代码同一条路径）+ ModifiedPakPackService。
     async Task<Dictionary<string, string>> MergeInOrderAsync(params string[] paks)
     {
@@ -553,6 +553,12 @@ try
 
             foreach (PakRawFileCopy file in files)
             {
+                // 已被更靠上的 Pak 收录 —— 这一份被覆盖。
+                if (merged.ContainsKey(file.PakPath))
+                {
+                    continue;
+                }
+
                 merged[file.PakPath] = new ModifiedPakFile(file.DiskPath, file.PakPath);
             }
         }
@@ -580,10 +586,10 @@ try
 
     foreach ((string[] order, string expected, string label) in new (string[], string, string)[]
              {
-                 ([pakA, pakB, pakC], "FROM-C", "A,B,C"),
-                 ([pakC, pakB, pakA], "FROM-A", "C,B,A"),
-                 ([pakB, pakA, pakC], "FROM-C", "B,A,C"),
-                 ([pakC, pakA, pakB], "FROM-B", "C,A,B"),
+                 ([pakA, pakB, pakC], "FROM-A", "A,B,C"),
+                 ([pakC, pakB, pakA], "FROM-C", "C,B,A"),
+                 ([pakB, pakA, pakC], "FROM-B", "B,A,C"),
+                 ([pakC, pakA, pakB], "FROM-C", "C,A,B"),
              })
     {
         Dictionary<string, string> merged = await MergeInOrderAsync(order);
@@ -690,10 +696,17 @@ try
             Check(false, "找不到 GoBrowseCommand");
         }
 
-        var mergeBase = new Prism.Desktop.Models.MergePakItem("a.pak", "a.pak", isBase: true);
-        var mergeOther = new Prism.Desktop.Models.MergePakItem("b.pak", "b.pak", isBase: false);
-        Check(!mergeBase.CanDrag && !mergeBase.CanRemove, "主 Pak 不可拖动、不可移除");
-        Check(mergeOther.CanDrag && mergeOther.CanRemove, "普通 Pak 可拖动、可移除");
+        // 合并列表不再有固定的"主 Pak"：每一项都能拖动、能移除。
+        var mergeItem = new Prism.Desktop.Models.MergePakItem("a.pak", "a.pak");
+        Check(mergeItem.CanDrag && mergeItem.CanRemove, "合并列表每一项都可拖动、可移除（没有固定的主 Pak）");
+
+        // 优先级：越靠上越高，且任意一项都能被移到首位。
+        vm.MergePaks.Clear();
+        vm.MergePaks.Add(new Prism.Desktop.Models.MergePakItem("x.pak", "x.pak"));
+        vm.MergePaks.Add(new Prism.Desktop.Models.MergePakItem("y.pak", "y.pak"));
+        vm.MoveMergePak(vm.MergePaks[1], 0);
+        Check(vm.MergePaks[0].Path == "y.pak", "任意一项都能移到首位（第 1 项即最高优先级）");
+        vm.MergePaks.Clear();
 
         vm.SearchQuery = "T_Button";
         Check(vm.SearchPlaceholder.Contains("搜索"), $"关键词输入时提示搜索（{vm.SearchPlaceholder}）");

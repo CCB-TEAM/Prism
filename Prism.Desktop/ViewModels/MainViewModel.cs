@@ -744,7 +744,7 @@ public partial class MainViewModel : ViewModelBase
     public string MergeInputSummary => MergePaks.Count == 0
         ? string.Empty
         : $"{MergePaks.Count} 个输入 · 覆盖顺序：{string.Join(" → ", MergePaks.Select(p => p.OrderLabel))}" +
-          "（数字越大越优先）";
+          "（数字越小越优先）";
 
     /// <summary>列表变化时刷新与合并相关的派生属性。</summary>
     private void NotifyMergeListChanged()
@@ -2414,7 +2414,7 @@ public partial class MainViewModel : ViewModelBase
         if (AskBeforeReplace && inspection.ConflictCount > 0)
         {
             string question = $"共发现 {inspection.ConflictCount:N0} 个路径冲突。" +
-                              "冲突路径将由列表中靠后的 Pak 覆盖靠前的（主 Pak 优先级最低）。是否继续？";
+                              "冲突路径将以列表中靠上的 Pak 为准（第 1 项优先级最高）。是否继续？";
             bool confirmed = OperatingSystem.IsAndroid()
                 ? (NativeConfirmAsync is not null
                     ? await NativeConfirmAsync("确认合并", question)
@@ -2511,9 +2511,9 @@ public partial class MainViewModel : ViewModelBase
             .Order(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        int baseCount = perPakCounts.Count > 0 ? perPakCounts[0] : 0;
+        int topCount = perPakCounts.Count > 0 ? perPakCounts[0] : 0;
         return new MergeInspectionResponse(
-            baseCount,
+            topCount,
             perPakCounts.Sum(),
             perPakCounts,
             conflicts.Length,
@@ -2521,8 +2521,10 @@ public partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// 按列表顺序合并：列表越靠后优先级越高，路径冲突时覆盖前面的。
-    /// 主 Pak 是列表第一项，优先级最低。
+    /// 按列表顺序合并：<b>越靠上优先级越高</b>，路径冲突时以上方那份为准。
+    ///
+    /// 实现方式是"只收第一份"—— 顺序遍历各 Pak，某个路径第一次出现时就把它定下来，
+    /// 之后再遇到同路径一律丢弃；列表第 1 项因此天然成为最高优先级。
     /// </summary>
     private async Task<MergeBuildResponse> BuildMergeCoreAsync()
     {
@@ -2537,7 +2539,7 @@ public partial class MainViewModel : ViewModelBase
             int conflicts = 0;
             int replaced = 0;
 
-            // 顺序遍历：后写的覆盖先写的，天然实现"越靠后优先级越高"。
+            // 顺序遍历：先出现者胜出，即"越靠上优先级越高"。
             for (int index = 0; index < MergePaks.Count; index++)
             {
                 MergePakItem item = MergePaks[index];
@@ -2551,12 +2553,10 @@ public partial class MainViewModel : ViewModelBase
                 {
                     if (merged.ContainsKey(file.PakPath))
                     {
-                        // 只有非主 Pak 的覆盖才计入"替换"（主 Pak 自身不可能重复）。
+                        // 该路径已被更靠上的 Pak 收录 —— 这一份被覆盖，丢弃。
                         conflicts++;
-                        if (index > 0)
-                        {
-                            replaced++;
-                        }
+                        replaced++;
+                        continue;
                     }
 
                     merged[file.PakPath] = new ModifiedPakFile(file.DiskPath, file.PakPath);
@@ -2785,7 +2785,7 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand]
     private void RemoveMergePak(MergePakItem? item)
     {
-        if (item is null || item.IsBase)
+        if (item is null)
         {
             return;
         }
@@ -2805,17 +2805,8 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand]
     private void ClearMergePaks()
     {
-        // 保留主 Pak（列表首项），清空其余。
-        while (MergePaks.Count > 1)
-        {
-            MergePaks.RemoveAt(MergePaks.Count - 1);
-        }
-
-        // 若首项不是主 Pak（例如用户只添加了普通 Pak），一并清掉。
-        if (MergePaks.Count == 1 && !MergePaks[0].IsBase)
-        {
-            MergePaks.Clear();
-        }
+        // 没有固定的主 Pak，清空就是全部移除。
+        MergePaks.Clear();
 
         RenumberMergePaks();
         NotifyMergeListChanged();
@@ -2825,18 +2816,17 @@ public partial class MainViewModel : ViewModelBase
 
     /// <summary>
     /// 把 <paramref name="source"/> 移动到 <paramref name="targetIndex"/>（拖动排序）。
-    /// 主 Pak 不参与移动，也不会被挤到其他位置。
+    /// 现在每一项都可以移动，第 0 位就是最高优先级。
     /// </summary>
     public void MoveMergePak(MergePakItem source, int targetIndex)
     {
         int from = MergePaks.IndexOf(source);
-        if (from < 0 || source.IsBase)
+        if (from < 0)
         {
             return;
         }
 
-        // 主 Pak 固定在 0，其他项只能在 [1, Count-1] 之间移动。
-        int to = Math.Clamp(targetIndex, 1, MergePaks.Count - 1);
+        int to = Math.Clamp(targetIndex, 0, MergePaks.Count - 1);
         if (to == from)
         {
             return;
@@ -2846,15 +2836,15 @@ public partial class MainViewModel : ViewModelBase
         RenumberMergePaks();
         NotifyMergeListChanged();
         SaveSettings();
-        MergeStatus = $"已调整覆盖顺序（{MergePaks.Count} 个输入，越靠下优先级越高）";
+        MergeStatus = $"已调整覆盖顺序（{MergePaks.Count} 个输入，越靠上优先级越高）";
     }
 
-    /// <summary>按当前顺序刷新序号标签。</summary>
+    /// <summary>按当前顺序刷新序号标签（1 起，1 表示优先级最高）。</summary>
     private void RenumberMergePaks()
     {
         for (int i = 0; i < MergePaks.Count; i++)
         {
-            MergePaks[i].OrderLabel = MergePaks[i].IsBase ? "主" : i.ToString();
+            MergePaks[i].OrderLabel = (i + 1).ToString();
         }
     }
 
@@ -2884,13 +2874,13 @@ public partial class MainViewModel : ViewModelBase
                 continue;
             }
 
-            MergePaks.Add(new MergePakItem(path, Path.GetFileName(path), isBase: MergePaks.Count == 0));
+            MergePaks.Add(new MergePakItem(path, Path.GetFileName(path)));
         }
 
         RenumberMergePaks();
     }
 
-    /// <summary>把（可能重复的）路径加入合并列表；主 Pak 固定占用首项。</summary>
+    /// <summary>把（可能重复的）路径加入合并列表；列表顺序即覆盖优先级。</summary>
     private void AddMergePaks(IEnumerable<string> paths)
     {
         int added = 0;
@@ -2901,14 +2891,13 @@ public partial class MainViewModel : ViewModelBase
                 continue;
             }
 
-            // 主 Pak 已作为首项存在时，把"与主 Pak 相同"的重复选择忽略。
+            // 同一份 Pak 只保留一次。
             if (MergePaks.Any(p => string.Equals(p.Path, path, StringComparison.OrdinalIgnoreCase)))
             {
                 continue;
             }
 
-            bool isBase = MergePaks.Count == 0;
-            MergePaks.Add(new MergePakItem(path, Path.GetFileName(path), isBase));
+            MergePaks.Add(new MergePakItem(path, Path.GetFileName(path)));
             added++;
         }
 
@@ -2921,7 +2910,7 @@ public partial class MainViewModel : ViewModelBase
 
         MergeStatus = MergePaks.Count == 0
             ? "就绪"
-            : $"已加入 {added} 个 Pak，共 {MergePaks.Count} 个输入；越靠下优先级越高";
+            : $"已加入 {added} 个 Pak，共 {MergePaks.Count} 个输入；越靠上优先级越高";
     }
 
     // ============ 设置（应用内视图，兼容手机） ============
@@ -3310,7 +3299,7 @@ public partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// 多选加入合并列表。第一个选中的 Pak 若列表为空则成为主 Pak（基底）。
+    /// 多选加入合并列表；后加入的排在下方，因此优先级低于已有的项。
     /// Android 上逐个复制到私有缓存（SAF 无法一次拿多个本地路径）。
     /// </summary>
     [RelayCommand]
@@ -3369,7 +3358,7 @@ public partial class MainViewModel : ViewModelBase
         }
 
         AddMergePaks(resolved);
-        StatusText = $"合并列表：{MergePaks.Count} 个 Pak（越靠下优先级越高）";
+        StatusText = $"合并列表：{MergePaks.Count} 个 Pak（越靠上优先级越高）";
         AddLog($"合并列表更新：{MergePaks.Count} 个输入", "合并");
     }
 
@@ -3728,7 +3717,7 @@ public partial class MainViewModel : ViewModelBase
 /// 合并前的检查结果：每个输入 Pak 的文件数，以及路径冲突统计。
 /// </summary>
 public sealed record MergeInspectionResponse(
-    int BaseCount,
+    int TopCount,
     int MergeCount,
     IReadOnlyList<int> PerPakCounts,
     int ConflictCount,
@@ -3739,7 +3728,7 @@ public sealed record MergeInspectionResponse(
     /// <summary>一行摘要，用于合并页状态栏。</summary>
     public string Summary => PerPakCounts.Count == 0
         ? "尚未加入待合并的 Pak"
-        : $"{PerPakCounts.Count} 个输入（主 Pak {BaseCount:N0} 项，合计 {MergeCount:N0} 项），路径冲突 {ConflictCount:N0} 个";
+        : $"{PerPakCounts.Count} 个输入（首项 {TopCount:N0} 项，合计 {MergeCount:N0} 项），路径冲突 {ConflictCount:N0} 个";
 }
 
 /// <summary>Merge 构建结果。</summary>

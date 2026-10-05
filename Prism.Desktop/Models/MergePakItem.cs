@@ -3,15 +3,17 @@ using CommunityToolkit.Mvvm.ComponentModel;
 namespace Prism.Desktop.Models;
 
 /// <summary>
-/// 合并列表中的一项。列表顺序即覆盖优先级：越靠后优先级越高。
+/// 合并列表中的一项。
+///
+/// 列表顺序即覆盖优先级：<b>越靠上优先级越高</b>，同一个路径在多份 Pak 里都存在时，
+/// 以最上方那份为准。列表里的每一项都可以拖动排序、都可以移除 —— 没有固定的"主 Pak"。
 /// </summary>
 public sealed partial class MergePakItem : ObservableObject
 {
-    public MergePakItem(string path, string displayName, bool isBase)
+    public MergePakItem(string path, string displayName)
     {
         Path = path;
         DisplayName = displayName;
-        IsBase = isBase;
     }
 
     /// <summary>磁盘路径（Android 上是 SAF 复制到私有目录后的真实路径）。</summary>
@@ -20,12 +22,7 @@ public sealed partial class MergePakItem : ObservableObject
     /// <summary>用于展示的文件名。</summary>
     public string DisplayName { get; }
 
-    /// <summary>
-    /// 是否为主 Pak（基底）。主 Pak 永远排在最前，且不允许删除或拖动到其他位置。
-    /// </summary>
-    public bool IsBase { get; }
-
-    /// <summary>序号标签：主 Pak 固定显示"主"，其余显示优先级（1 起）。</summary>
+    /// <summary>序号标签：从 1 开始，1 表示优先级最高。</summary>
     [ObservableProperty]
     public partial string OrderLabel { get; set; } = string.Empty;
 
@@ -41,9 +38,12 @@ public sealed partial class MergePakItem : ObservableObject
     [ObservableProperty]
     public partial string Detail { get; set; } = string.Empty;
 
-    /// <summary>主 Pak 不可移除。</summary>
-    public bool CanRemove => !IsBase;
+    /// <summary>
+    /// 任何一项都可以移除。
+    /// 保留这个属性（恒为 true）是为了让界面上的删除按钮绑定保持简单。
+    /// </summary>
+    public bool CanRemove => true;
 
-    /// <summary>主 Pak 不可拖动（它永远是基底）。</summary>
-    public bool CanDrag => !IsBase;
+    /// <summary>任何一项都可以拖动排序。</summary>
+    public bool CanDrag => true;
 }

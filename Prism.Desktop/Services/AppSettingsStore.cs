@@ -28,7 +28,7 @@ internal sealed class AppSettings
     public string UsmapPath { get; set; } = string.Empty;
 
     /// <summary>
-    /// 合并输入列表（顺序即覆盖优先级，主 Pak 在首位）。
+    /// 合并输入列表（顺序即覆盖优先级，越靠上优先级越高）。
     /// 兼容旧版本的单项 <c>MergePakPath</c>。
     /// </summary>
     public List<string> MergePakPaths { get; set; } = [];

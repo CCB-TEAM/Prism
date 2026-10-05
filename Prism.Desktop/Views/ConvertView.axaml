@@ -100,6 +100,15 @@
                                           IsChecked="{Binding ConvertMergeAll}" />
                             </StackPanel>
 
+                            <!-- 密钥/映射是这次"转换出废包"的直接原因，所以状态要摆在页面上。
+                                 加密 Pak 没有密钥时挂载会成功但读到 0 个文件，服务端会拦下并报错。 -->
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <TextBlock Text="{Binding AesKeySummary}" FontSize="10" Opacity="0.55" />
+                                <TextBlock Text="{Binding MappingSummary}" FontSize="10" Opacity="0.55"
+                                           TextTrimming="CharacterEllipsis"
+                                           ToolTip.Tip="{Binding UsmapPath}" />
+                            </StackPanel>
+
                             <!-- 可操作的前置条件才留在页面上，其余解释都进「使用说明」。 -->
                             <TextBlock Text="⚠ 缺映射文件，跨格式贴图会被跳过"
                                        FontSize="10"
