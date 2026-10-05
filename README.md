@@ -243,6 +243,11 @@ A full repack needs temp space equal to the main pak.
   *shorter* rather than taller. Resizing switches tiers live; the phone layout is unchanged.
   Scaling the whole UI by transform was tried first and rejected: it enlarged padding and controls
   too, which read as a zoomed phone UI and put *less* on screen than before.
+- **Theme**: 跟随系统 / 浅色 / 深色 in Settings. The dark theme existed but was unreachable — the app
+  followed the OS, so on a light Windows you always got a full screen of light surface, which is
+  tiring on a 1920 display. Dark uses **white** body text (15.1:1 on cards); the light theme is the
+  opposite trade — its body text is softened to `#33322e` (11.6:1) because pure black on white was
+  glaring. The two themes are tuned in opposite directions on purpose.
 - **Legibility**: secondary text sits at **5.4:1** against cards (4.9:1 against the page) and the
   page background is separated from the white cards. Text is never dimmed with `Opacity` — that
   multiplies contrast down (one common label style measured **2.0:1**) and is what made the UI look
@@ -251,7 +256,7 @@ A full repack needs temp space equal to the main pak.
 ## Verifying
 
 ```sh
-# Integration tests (153 assertions): mapping format detection, search-box path resolution,
+# Integration tests (158 assertions): mapping format detection, search-box path resolution,
 # pak conversion (both paths + all output modes), merge priority, locres <-> JSON round-trip,
 # non-ASCII pak path handling, headless UI loading and navigation
 dotnet run --project test/Prism.FeatureTests
