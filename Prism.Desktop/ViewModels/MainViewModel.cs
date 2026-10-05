@@ -747,6 +747,21 @@ public partial class MainViewModel : ViewModelBase
         return false;
     }
 
+    /// <summary>
+    /// 打包时若请求了 Oodle 压缩但本机缺 Oodle 原生库，说明已自动降级为不压缩。
+    ///
+    /// 这条日志很重要：repak_bind 找不到 Oodle 会 panic 并 abort 整个进程
+    /// （Windows 上 0xC0000409，进程直接消失，.NET 拦不住），所以现在是提前探测 + 降级。
+    /// </summary>
+    private void LogOodleFallback(ModifiedPakPackResult result)
+    {
+        if (result.OodleRequestedButUnavailable)
+        {
+            AddLog($"警告：{result.Note}");
+            AppLog.Warn("打包", result.Note ?? "Oodle 不可用，已降级为不压缩");
+        }
+    }
+
     private void SaveSettings()
     {
         if (!_loaded)
@@ -2539,11 +2554,12 @@ public partial class MainViewModel : ViewModelBase
             {
                 // Android SAF：先打包到临时文件，再流式写入用户选择的位置，随后直接打开系统分享。
                 string tempPakPath = Path.Combine(Path.GetTempPath(), $"patch_{Guid.NewGuid():N}.pak");
-                await Task.Run(() => ModifiedPakPackService.Pack(new ModifiedPakRequest(
+                ModifiedPakPackResult androidPack = await Task.Run(() => ModifiedPakPackService.Pack(new ModifiedPakRequest(
                     files.Values.OrderBy(f => f.PakPath, StringComparer.OrdinalIgnoreCase).ToArray(),
                     tempPakPath,
                     UseCompression: UseOodleCompression,
                     Compression: PakCompression.Oodle)));
+                LogOodleFallback(androidPack);
 
                 await using (Stream src = File.OpenRead(tempPakPath))
                 await using (Stream dst = await output.OpenWriteAsync())
@@ -2567,11 +2583,12 @@ public partial class MainViewModel : ViewModelBase
             }
             else
             {
-                await Task.Run(() => ModifiedPakPackService.Pack(new ModifiedPakRequest(
+                ModifiedPakPackResult desktopPack = await Task.Run(() => ModifiedPakPackService.Pack(new ModifiedPakRequest(
                     files.Values.OrderBy(f => f.PakPath, StringComparer.OrdinalIgnoreCase).ToArray(),
                     outputPath!,
                     UseCompression: UseOodleCompression,
                     Compression: PakCompression.Oodle)));
+                LogOodleFallback(desktopPack);
 
                 StatusText = $"补丁 Pak 已构建：{Path.GetFileName(outputPath)}（{files.Count} 个文件）";
             AddLog($"构建补丁 Pak：{Path.GetFileName(outputPath)}（{files.Count} 个文件）");
@@ -2846,11 +2863,12 @@ public partial class MainViewModel : ViewModelBase
                 ? Path.Combine(Path.GetTempPath(), $"merged_{Guid.NewGuid():N}.pak")
                 : MergeOutputPath;
 
-            await Task.Run(() => ModifiedPakPackService.Pack(new ModifiedPakRequest(
+            ModifiedPakPackResult mergePack = await Task.Run(() => ModifiedPakPackService.Pack(new ModifiedPakRequest(
                 merged.Values.OrderBy(x => x.PakPath, StringComparer.OrdinalIgnoreCase).ToArray(),
                 packTarget,
                 UseCompression: UseOodleCompression,
                 Compression: PakCompression.Oodle)));
+            LogOodleFallback(mergePack);
 
             return new MergeBuildResponse(
                 packTarget, merged.Count, conflicts, replaced,
@@ -2959,7 +2977,13 @@ public partial class MainViewModel : ViewModelBase
                     EngineVersion.VER_UE5_6),
                 progress).ConfigureAwait(false);
 
-            UAssetTexture.Core.PakConversionCounts counts = result.Counts;
+            if (!string.IsNullOrEmpty(result.OodleNote))
+        {
+            AddLog($"警告：{result.OodleNote}");
+            AppLog.Warn("转换", result.OodleNote);
+        }
+
+        UAssetTexture.Core.PakConversionCounts counts = result.Counts;
             foreach (UAssetTexture.Core.PakConversionItemResult item in result.Items)
             {
                 ConvertRows.Add(new PakConversionRow(item.PakPath, DescribeConversionStatus(item.Status), item.Message));
@@ -3207,6 +3231,14 @@ public partial class MainViewModel : ViewModelBase
 
     [ObservableProperty]
     public partial string TexconvStatus { get; set; }
+
+    /// <summary>
+    /// Oodle 原生库状态。显示出来是因为：请求 Oodle 压缩而本机没有它时，
+    /// 打包会**自动降级为不压缩**（repak_bind 缺 Oodle 会 panic 并 abort 进程，拦不住）。
+    /// </summary>
+    public string OodleStatus => OodleNative.IsAvailable
+        ? "已找到 Oodle（可开启 Oodle 压缩）"
+        : "未找到 Oodle（oo2core_9_win64.dll）—— 勾选 Oodle 压缩时将自动改用不压缩";
 
     [ObservableProperty]
     public partial string TempDirectory { get; set; }

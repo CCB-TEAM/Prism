@@ -201,6 +201,10 @@
                     <TextBlock Text="{Binding CliStatus}" FontSize="{DynamicResource Fs13}" />
                     <TextBlock Text="{Binding AstcencStatus}" FontSize="{DynamicResource Fs13}" />
                     <TextBlock Text="{Binding TexconvStatus}" FontSize="{DynamicResource Fs13}" />
+                    <TextBlock Text="{Binding OodleStatus}"
+                               FontSize="{DynamicResource Fs13}"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextMutedBrush}" />
                     <StackPanel Orientation="Horizontal" Spacing="12">
                         <TextBlock Text="临时目录" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
                         <TextBlock Text="{Binding TempDirectory}" FontSize="{DynamicResource Fs12}" TextWrapping="Wrap" />

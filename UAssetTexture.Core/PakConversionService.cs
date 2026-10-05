@@ -107,7 +107,9 @@ public sealed record PakConversionProgress(
 public sealed record PakConversionResult(
     string OutputPakPath,
     PakConversionCounts Counts,
-    IReadOnlyList<PakConversionItemResult> Items);
+    IReadOnlyList<PakConversionItemResult> Items,
+    /// <summary>请求了 Oodle 压缩但本机缺 Oodle 原生库时的说明（已自动降级为不压缩）。</summary>
+    string? OodleNote = null);
 
 public sealed record PakConversionCounts(
     int TotalFiles,
@@ -401,7 +403,7 @@ public sealed class PakConversionService
                 .OrderBy(f => f.PakPath, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
-            await Task.Run(() => ModifiedPakPackService.Pack(new ModifiedPakRequest(
+            ModifiedPakPackResult packResult = await Task.Run(() => ModifiedPakPackService.Pack(new ModifiedPakRequest(
                 filesToPack,
                 packTarget,
                 UseCompression: options.UseOodleCompression,
@@ -417,7 +419,8 @@ public sealed class PakConversionService
                     skipped,
                     failed,
                     otherIncluded),
-                items);
+                items,
+                packResult.Note);
         }
         finally
         {

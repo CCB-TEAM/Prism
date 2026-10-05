@@ -899,6 +899,37 @@ try
         Path.Combine(root, "path-encoding"),
         (ok, label) => Check(ok, label));
 
+    Section("Pak 打包 · Oodle 缺失时必须降级而不是闪退");
+
+    // 真实事故：设置里开着「替换时使用 Oodle 压缩」，但发行包不含 oo2core_9_win64.dll。
+    // repak_bind 找不到 Oodle 会 Rust panic → abort 整个进程（Windows 上 0xC0000409），
+    // .NET 的 try/catch 与 UnhandledException 全都拦不住，用户看到的就是"点一下闪退"。
+    // 唯一可行的做法是调用前探测，所以这里验证：请求 Oodle 不会崩，且如实报告降级。
+    Console.WriteLine($"        OodleNative.IsAvailable = {OodleNative.IsAvailable}");
+    string oodlePak = Path.Combine(root, "oodle-fallback.pak");
+    ModifiedPakPackResult oodleResult = ModifiedPakPackService.Pack(new ModifiedPakRequest(
+        [new ModifiedPakFile(WriteTemp(root, "oodle/payload.bin", new byte[1024]), "test/payload.bin")],
+        oodlePak,
+        UseCompression: true,
+        Compression: UAssetAPI.PakCompression.Oodle));
+
+    Check(File.Exists(oodlePak) && new FileInfo(oodlePak).Length > 0,
+        "请求 Oodle 压缩时打包成功返回（进程没有 abort）");
+    Check(oodleResult.OodleRequestedButUnavailable == !OodleNative.IsAvailable,
+        $"降级标记与本机 Oodle 可用性一致（可用={OodleNative.IsAvailable}）");
+    if (oodleResult.OodleRequestedButUnavailable)
+    {
+        Check(oodleResult.Note is not null && oodleResult.Note.Contains("oo2core"),
+            "降级说明里点明了缺的是 oo2core_9_win64.dll");
+    }
+
+    // 不请求压缩时不应有任何降级标记
+    ModifiedPakPackResult plainResult = ModifiedPakPackService.Pack(new ModifiedPakRequest(
+        [new ModifiedPakFile(WriteTemp(root, "plain/payload.bin", new byte[1024]), "test/plain.bin")],
+        Path.Combine(root, "plain.pak")));
+    Check(!plainResult.OodleRequestedButUnavailable && plainResult.Note is null,
+        "不请求 Oodle 时不产生降级提示");
+
     Section("结果");
 }
 finally
