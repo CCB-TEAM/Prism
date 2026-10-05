@@ -43,6 +43,21 @@
                               IsChecked="{Binding AskBeforeReplace}" />
                     <CheckBox Content="界面过渡动画"
                               IsChecked="{Binding IsAnimationsEnabled}" />
+
+                    <!-- 主题：浅色主题在大屏上是一整片亮色，给一个不用改系统设置就能换的开关 -->
+                    <StackPanel Spacing="8" Margin="0,4,0,0">
+                        <TextBlock Text="主题"
+                                   FontSize="{DynamicResource Fs11}"
+                                   Foreground="{DynamicResource TextMutedBrush}" />
+                        <StackPanel Orientation="Horizontal" Spacing="18">
+                            <RadioButton GroupName="theme" Content="跟随系统"
+                                         IsChecked="{Binding IsThemeSystem}" />
+                            <RadioButton GroupName="theme" Content="浅色"
+                                         IsChecked="{Binding IsThemeLight}" />
+                            <RadioButton GroupName="theme" Content="深色"
+                                         IsChecked="{Binding IsThemeDark}" />
+                        </StackPanel>
+                    </StackPanel>
                 </StackPanel>
             </Border>
 

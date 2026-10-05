@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
+using Avalonia.Styling;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using PakTool.Core;
@@ -52,6 +53,7 @@ public partial class MainViewModel : ViewModelBase
         ConvertMergeAll = _settings.ConvertMergeAll;
         ConvertIncludeModFiles = _settings.ConvertIncludeModFiles;
         ConvertOutputPath = _settings.ConvertOutputPath;
+        ThemeMode = _settings.Theme;
         AesKey = _settings.AesKey;
         InitializeSettings();
         _loaded = true;
@@ -757,6 +759,7 @@ public partial class MainViewModel : ViewModelBase
         _settings.UseOodleCompression = UseOodleCompression;
         _settings.AskBeforeReplace = AskBeforeReplace;
         _settings.IsAnimationsEnabled = IsAnimationsEnabled;
+        _settings.Theme = ThemeMode;
         _settings.ExportDirectory = ExportDirectory;
         _settings.ExportDirectoryBookmark = OperatingSystem.IsAndroid() ? _exportDirectoryBookmark : string.Empty;
         _settings.PakPath = PakPath;
@@ -937,6 +940,58 @@ public partial class MainViewModel : ViewModelBase
 
     [RelayCommand]
     private void CloseHelp() => HelpTopic = string.Empty;
+
+    /// <summary>
+    /// 主题："system" / "light" / "dark"。
+    ///
+    /// 之所以给显式开关：浅色主题在 1920 屏幕上是一整片亮色，长时间看眼睛累，
+    /// 而"想用深色"不该被迫去改系统设置。
+    /// </summary>
+    [ObservableProperty]
+    public partial string ThemeMode { get; set; } = "system";
+
+    public bool IsThemeSystem
+    {
+        get => ThemeMode == "system";
+        set { if (value) { ThemeMode = "system"; } }
+    }
+
+    public bool IsThemeLight
+    {
+        get => ThemeMode == "light";
+        set { if (value) { ThemeMode = "light"; } }
+    }
+
+    public bool IsThemeDark
+    {
+        get => ThemeMode == "dark";
+        set { if (value) { ThemeMode = "dark"; } }
+    }
+
+    partial void OnThemeModeChanged(string value)
+    {
+        OnPropertyChanged(nameof(IsThemeSystem));
+        OnPropertyChanged(nameof(IsThemeLight));
+        OnPropertyChanged(nameof(IsThemeDark));
+        ApplyTheme(value);
+        SaveSettings();
+    }
+
+    /// <summary>把主题选择落到 Application.RequestedThemeVariant（Default 即跟随系统）。</summary>
+    private static void ApplyTheme(string mode)
+    {
+        if (Application.Current is null)
+        {
+            return;
+        }
+
+        Application.Current.RequestedThemeVariant = mode switch
+        {
+            "light" => ThemeVariant.Light,
+            "dark" => ThemeVariant.Dark,
+            _ => ThemeVariant.Default,
+        };
+    }
 
     /// <summary>
     /// 浏览页搜索框宽度：宽屏给足，避免占位提示被截断（原来写死 170 太窄）。

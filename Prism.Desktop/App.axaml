@@ -25,8 +25,8 @@
                     <SolidColorBrush x:Key="SurfaceBrush" Color="#1b1b1d" />
                     <SolidColorBrush x:Key="CardBrush" Color="#262629" />
                     <SolidColorBrush x:Key="DividerBrush" Color="#3a3a3d" />
-                    <SolidColorBrush x:Key="TextMutedBrush" Color="#a9a9ad" />
-                    <SolidColorBrush x:Key="TextPrimaryBrush" Color="#e4e4e2" />
+                    <SolidColorBrush x:Key="TextMutedBrush" Color="#b6b6ba" />
+                    <SolidColorBrush x:Key="TextPrimaryBrush" Color="#ffffff" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
 

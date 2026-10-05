@@ -781,6 +781,20 @@ try
             $"窄窗字号恢复原值（Fs11={FontResource("Fs11")}, Fs12={FontResource("Fs12")}）");
         Check(vm.ConvertContentMaxWidth == narrowMaxWidth, "窄窗内容列恢复原值");
 
+        // 主题切换：浅色主题在大屏上是一整片亮色，用户应能不依赖系统设置直接换深色。
+        Check(vm.ThemeMode == "system" && vm.IsThemeSystem, $"默认跟随系统（{vm.ThemeMode}）");
+        vm.IsThemeDark = true;
+        Check(vm.ThemeMode == "dark" && vm.IsThemeDark && !vm.IsThemeSystem,
+            "选「深色」后单选状态与主题值同步");
+        Check(Avalonia.Application.Current!.RequestedThemeVariant == Avalonia.Styling.ThemeVariant.Dark,
+            "深色已应用到应用主题");
+        vm.IsThemeLight = true;
+        Check(Avalonia.Application.Current!.RequestedThemeVariant == Avalonia.Styling.ThemeVariant.Light,
+            "浅色已应用到应用主题");
+        vm.IsThemeSystem = true;
+        Check(Avalonia.Application.Current!.RequestedThemeVariant == Avalonia.Styling.ThemeVariant.Default,
+            "回到「跟随系统」");
+
 
         // 主页「搜索 & 导出」入口应直达浏览标签，而不是和工作区入口落在同一个标签。
         var goBrowse = typeof(Prism.Desktop.ViewModels.MainViewModel).GetProperty("GoBrowseCommand");

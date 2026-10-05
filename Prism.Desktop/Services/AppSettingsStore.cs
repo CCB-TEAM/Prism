@@ -18,6 +18,14 @@ internal sealed class AppSettings
     /// <summary>界面过渡动画开关（低配设备或偏好静态界面的用户可关闭）。</summary>
     public bool IsAnimationsEnabled { get; set; } = true;
 
+    /// <summary>
+    /// 主题："system"（跟随系统）/ "light" / "dark"。
+    ///
+    /// 默认跟随系统。提供显式开关是因为浅色主题在大屏上是一整片亮色，
+    /// 长时间看容易累 —— 想用深色不该被迫改系统设置。
+    /// </summary>
+    public string Theme { get; set; } = "system";
+
     public string ExportDirectory { get; set; } = string.Empty;
 
     /// <summary>Android SAF 导出目录书签（重启后恢复目录权限，Windows 不使用）。</summary>
