@@ -14,10 +14,11 @@
             <ResourceDictionary.ThemeDictionaries>
                 <ResourceDictionary x:Key="Light">
                     <SolidColorBrush x:Key="PrimaryWashBrush" Color="#0d94881f" />
-                    <SolidColorBrush x:Key="SurfaceBrush" Color="#e8e8ea" />
-                    <SolidColorBrush x:Key="CardBrush" Color="#ffffff" />
-                    <SolidColorBrush x:Key="DividerBrush" Color="#dcdcdf" />
-                    <SolidColorBrush x:Key="TextMutedBrush" Color="#6b6a63" />
+                    <SolidColorBrush x:Key="SurfaceBrush" Color="#e4e3e0" />
+                    <SolidColorBrush x:Key="CardBrush" Color="#f4f3f0" />
+                    <SolidColorBrush x:Key="DividerBrush" Color="#d6d5d1" />
+                    <SolidColorBrush x:Key="TextMutedBrush" Color="#67665f" />
+                    <SolidColorBrush x:Key="TextPrimaryBrush" Color="#33322e" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Dark">
                     <SolidColorBrush x:Key="PrimaryWashBrush" Color="#0d948833" />
@@ -25,6 +26,7 @@
                     <SolidColorBrush x:Key="CardBrush" Color="#262629" />
                     <SolidColorBrush x:Key="DividerBrush" Color="#3a3a3d" />
                     <SolidColorBrush x:Key="TextMutedBrush" Color="#a9a9ad" />
+                    <SolidColorBrush x:Key="TextPrimaryBrush" Color="#e4e4e2" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
 

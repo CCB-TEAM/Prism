@@ -6,7 +6,8 @@
         Title="Prism"
         Width="1280"
         Height="820"
-        Background="{DynamicResource SurfaceBrush}">
+        Background="{DynamicResource SurfaceBrush}"
+        Foreground="{DynamicResource TextPrimaryBrush}">
 
     <views:MainView />
 </Window>
