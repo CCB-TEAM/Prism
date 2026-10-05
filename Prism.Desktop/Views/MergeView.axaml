@@ -54,7 +54,7 @@
                                 FontSize="11" />
                     </DockPanel>
 
-                    <TextBlock Text="列表顺序即覆盖优先级：越靠下优先级越高，路径冲突时覆盖上面的。第一项是主 Pak（基底）。"
+                    <TextBlock Text="越靠下优先级越高；第一项是主 Pak（基底）。"
                                FontSize="10"
                                Opacity="0.55"
                                TextWrapping="Wrap" />

@@ -789,6 +789,21 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     public partial bool ConvertIncludeModFiles { get; set; }
 
+    /// <summary>
+    /// 转换页「使用说明」浮层是否展开。
+    ///
+    /// 用页内浮层而不是独立 Window：Android 上 TopLevel 不一定是 Window，
+    /// ShowDialog 拿不到宿主；浮层两端行为一致。
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsConvertHelpVisible { get; set; }
+
+    [RelayCommand]
+    private void ShowConvertHelp() => IsConvertHelpVisible = true;
+
+    [RelayCommand]
+    private void CloseConvertHelp() => IsConvertHelpVisible = false;
+
     public bool CanConvertPak => IsPakOpen
         && ConvertSourcePath.Length > 0
         && HasConvertOutput
@@ -813,39 +828,31 @@ public partial class MainViewModel : ViewModelBase
         ? "映射文件：未选择"
         : $"映射：{PakTool.Core.MappingsLoader.DescribeFormat(UsmapPath)}";
 
-    /// <summary>
-    /// 是否需要提醒用户补映射文件：跨格式重编码要解出源纹理像素，
-    /// 未版本化资产必须有映射。未选映射时在转换页给出显式警告。
-    /// </summary>
+    /// <summary>是否需要提醒用户补映射文件：跨格式重编码要解出源纹理像素，
+    /// 未版本化资产必须有映射。未选映射时在转换页给出显式警告。</summary>
     public bool NeedsMappingsForConversion => string.IsNullOrWhiteSpace(UsmapPath);
 
-    /// <summary>本平台的编码路径说明。</summary>
-    public string ConvertPlatformNote => OperatingSystem.IsAndroid()
-        ? "Android：源纹理像素在应用进程内重新编码（libprism_codecs），无需外部工具。"
-        : "Windows：源纹理像素交由 UAssetCLI 重新编码；ASTC 需要 astcenc、BC7/DXT5 需要 texconv，"
-          + "可在设置页确认这些工具的探测状态。";
-
-    /// <summary>转换前置条件与工作方式说明。</summary>
+    /// <summary>
+    /// 转换前置条件：只报编码器可用性。
+    /// 工作方式的解释放在「使用说明」浮层里，页面上不重复。
+    /// </summary>
     public string ConvertServiceStatus
     {
         get
         {
             if (OperatingSystem.IsAndroid())
             {
-                return "工作方式：解出待转换 Pak 的纹理像素 → 按主 Pak 资产的格式重新编码写回 → 打包。"
-                     + "两侧格式相同时自动改为无损字节搬运（更快且不损失画质）。";
+                return "编码器：应用内（libprism_codecs）";
             }
 
             Services.UAssetCliRunner? runner = Services.UAssetCliRunner.CreateCached();
             if (runner is null)
             {
-                return "⚠ 未找到 UAssetCLI，桌面端无法重新编码纹理。"
-                     + "请先执行 dotnet build UAssetCLI（详见 README）。";
+                return "⚠ 未找到 UAssetCLI，桌面端无法重新编码纹理（详见 README 构建章节）";
             }
 
-            return $"工作方式：解像素 → 按主 Pak 格式重编码 → 写回 → 打包。"
-                 + $"编码器：UAssetCLI 可用 · astcenc {(runner.HasAstcenc ? "可用" : "缺失")}"
-                 + $" · texconv {(runner.HasTexconv ? "可用" : "缺失")}（DXT1 由内置编码器处理）。";
+            return $"编码器：UAssetCLI 可用 · astcenc {(runner.HasAstcenc ? "可用" : "缺失")}"
+                 + $" · texconv {(runner.HasTexconv ? "可用" : "缺失")}";
         }
     }
 

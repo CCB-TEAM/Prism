@@ -88,7 +88,7 @@
             <Border Classes="card" Padding="22" IsVisible="{Binding IsAndroid}">
                 <StackPanel Spacing="8">
                     <TextBlock Text="缓存" FontSize="12" FontWeight="SemiBold" Opacity="0.6" />
-                    <TextBlock Text="通过系统文件选择器选择的 Pak / Usmap / 合并 Pak 会复制到应用私有缓存。保持不变时下次启动继续使用；更换为新文件后，旧缓存会立即删除，未引用的临时缓存也会在启动时自动清理。"
+                    <TextBlock Text="选择的文件会复制到应用私有缓存；换新文件后旧缓存自动删除。"
                                FontSize="10"
                                Opacity="0.5"
                                TextWrapping="Wrap" />
@@ -136,7 +136,7 @@
             <Border Classes="card" Padding="22">
                 <StackPanel Spacing="14">
                     <TextBlock Text="Pak 转换" FontSize="12" FontWeight="SemiBold" Opacity="0.6" />
-                    <TextBlock Text="把「待转换 Pak」里的贴图，按主 Pak 的纹理格式重新编码后替换进主 Pak，再合成一个新 Pak。"
+                    <TextBlock Text="把另一个平台 Pak 的贴图按主 Pak 格式重编码后替换，再合成新 Pak。详见转换页的「使用说明」。"
                                FontSize="10"
                                Opacity="0.55"
                                TextWrapping="Wrap" />

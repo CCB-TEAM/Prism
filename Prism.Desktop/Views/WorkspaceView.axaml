@@ -359,7 +359,7 @@
                                                     Classes="ghost"
                                                     FontSize="11"
                                                     HorizontalAlignment="Left" />
-                                            <TextBlock Text="修改文本后按回车或失焦自动写回，然后构建补丁 Pak。「导出 JSON」保存当前编辑结果。"
+                                            <TextBlock Text="改完按回车写回，再构建补丁 Pak。"
                                                        FontSize="10"
                                                        Opacity="0.5" />
                                             <ListBox ItemsSource="{Binding SelectedPatchItem.FilteredLocresEntries}"
@@ -538,7 +538,7 @@
                                                     Classes="ghost"
                                                     FontSize="11"
                                                     HorizontalAlignment="Left" />
-                                            <TextBlock Text="修改文本后按回车或失焦自动写回，然后构建补丁 Pak。「导出 JSON」保存当前编辑结果。"
+                                            <TextBlock Text="改完按回车写回，再构建补丁 Pak。"
                                                        FontSize="10"
                                                        Opacity="0.5" />
                                             <ListBox ItemsSource="{Binding SelectedPatchItem.FilteredLocresEntries}"

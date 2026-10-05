@@ -657,6 +657,24 @@ try
         // 打开后才把源 Pak 的蓝图/本地化等双端通用文件一并塞进输出 Pak。
         Check(!vm.ConvertIncludeModFiles, "「并入模组文件」开关默认关闭（默认只转换贴图）");
 
+        // 「使用说明」浮层：默认收起，命令可开可关。
+        // 用页内浮层而非独立 Window，是为了 Android 上也能用（TopLevel 不一定是 Window）。
+        Check(!vm.IsConvertHelpVisible, "「使用说明」浮层默认收起");
+        if (typeof(Prism.Desktop.ViewModels.MainViewModel).GetProperty("ShowConvertHelpCommand")?.GetValue(vm)
+                is CommunityToolkit.Mvvm.Input.IRelayCommand showHelp
+            && typeof(Prism.Desktop.ViewModels.MainViewModel).GetProperty("CloseConvertHelpCommand")?.GetValue(vm)
+                is CommunityToolkit.Mvvm.Input.IRelayCommand closeHelp)
+        {
+            showHelp.Execute(null);
+            Check(vm.IsConvertHelpVisible, "ShowConvertHelpCommand 展开浮层");
+            closeHelp.Execute(null);
+            Check(!vm.IsConvertHelpVisible, "CloseConvertHelpCommand 收起浮层");
+        }
+        else
+        {
+            Check(false, "找不到使用说明的开合命令");
+        }
+
         // 主页「搜索 & 导出」入口应直达浏览标签，而不是和工作区入口落在同一个标签。
         var goBrowse = typeof(Prism.Desktop.ViewModels.MainViewModel).GetProperty("GoBrowseCommand");
         if (goBrowse?.GetValue(vm) is CommunityToolkit.Mvvm.Input.IRelayCommand browseRelay)
