@@ -6,47 +6,152 @@
              x:DataType="vm:MainViewModel">
 
     <!--
-        每个页面套一层 ViewTransitionHost：切换时做淡入 + 轻微上移。
-        用 Host 而不是 Transitions 的原因见 ViewTransitionHost 的注释
-        （页面切换是 IsVisible 显隐，Transitions 对布局移除不产生视觉效果）。
-        IsAnimationEnabled 绑定设置项，供低配设备或偏好静态界面的用户关闭。
+        应用外壳：左侧常驻导航（宽窗）+ 统一页头 + 底部状态栏 + 页面宿主。
+
+        为什么要这层壳：原先五个页面各自画一条顶栏、各自放返回箭头，主入口是主页那张
+        "五张大卡片"，其余页面都是它的二级页 —— 那是手机 App 的信息架构。窗口拉到
+        1440 宽之后，它依然只有一个居中窄条和一条返回箭头，所以看着像"把手机界面
+        拉大"，也就是"别扰"。现在宽窗改用桌面工具的常驻导航，页头与状态栏由外壳
+        统一渲染，页面自己只管内容；窄窗与手机仍走"主页 → 二级页 → 返回"。
+
+        页面切换的淡入由每个 ViewTransitionHost 负责，IsAnimationEnabled 绑定设置项，
+        供低配设备或偏好静态界面的用户关闭。
     -->
     <Panel>
-            <views:ViewTransitionHost IsVisible="{Binding IsHomeVisible}"
-                                      IsAnimationEnabled="{Binding IsAnimationsEnabled}"
-                                      OffsetY="0"
-                                      StartScale="0.985"
-                                      Duration="0:0:0.20">
-                <views:HomeView x:Name="HomeViewControl" />
-            </views:ViewTransitionHost>
+        <Grid ColumnDefinitions="Auto,*">
 
-            <views:ViewTransitionHost IsVisible="{Binding IsWorkspaceVisible}"
-                                      IsAnimationEnabled="{Binding IsAnimationsEnabled}"
-                                      OffsetY="6"
-                                      Duration="0:0:0.18">
-                <views:WorkspaceView x:Name="WorkspaceViewControl" DataContext="{Binding}" />
-            </views:ViewTransitionHost>
+            <!-- ═══ 侧边导航（宽窗）═══ -->
+            <Border Grid.Column="0"
+                    Width="216"
+                    Classes="sidebar"
+                    IsVisible="{Binding IsSidebarVisible}">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Top" Margin="18,20,18,18" Spacing="2">
+                        <TextBlock Text="Prism"
+                                   FontSize="{DynamicResource Fs20}"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource PrimaryBrush}" />
+                        <TextBlock Text="Pak 资产管理工具"
+                                   FontSize="{DynamicResource Fs10}"
+                                   Foreground="{DynamicResource TextMutedBrush}" />
+                    </StackPanel>
 
-            <views:ViewTransitionHost IsVisible="{Binding IsMergeVisible}"
-                                      IsAnimationEnabled="{Binding IsAnimationsEnabled}"
-                                      OffsetY="10"
-                                      Duration="0:0:0.18">
-                <views:MergeView x:Name="MergeViewControl" />
-            </views:ViewTransitionHost>
+                    <TextBlock DockPanel.Dock="Bottom"
+                               Text="{Binding VersionText, StringFormat='v{0}'}"
+                               FontSize="{DynamicResource Fs10}"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               Margin="18,0,18,14" />
 
-            <views:ViewTransitionHost IsVisible="{Binding IsConvertVisible}"
-                                      IsAnimationEnabled="{Binding IsAnimationsEnabled}"
-                                      OffsetY="10"
-                                      Duration="0:0:0.18">
-                <views:ConvertView x:Name="ConvertViewControl" />
-            </views:ViewTransitionHost>
+                    <StackPanel Margin="10,0" Spacing="2">
+                        <Button Classes="nav"
+                                Classes.active="{Binding IsHomeVisible}"
+                                Command="{Binding GoHomeCommand}"
+                                Content="概览" />
+                        <Button Classes="nav"
+                                Classes.active="{Binding IsWorkspaceVisible}"
+                                Command="{Binding GoWorkspaceCommand}"
+                                Content="解包 &amp; 模组" />
+                        <Button Classes="nav"
+                                Classes.active="{Binding IsMergeVisible}"
+                                Command="{Binding GoMergeCommand}"
+                                Content="Pak 合并" />
+                        <Button Classes="nav"
+                                Classes.active="{Binding IsConvertVisible}"
+                                Command="{Binding GoConvertCommand}"
+                                Content="Pak 转换" />
+                        <Button Classes="nav"
+                                Classes.active="{Binding IsSettingsVisible}"
+                                Command="{Binding GoSettingsCommand}"
+                                Content="设置" />
+                    </StackPanel>
+                </DockPanel>
+            </Border>
 
-            <views:ViewTransitionHost IsVisible="{Binding IsSettingsVisible}"
-                                      IsAnimationEnabled="{Binding IsAnimationsEnabled}"
-                                      OffsetY="10"
-                                      Duration="0:0:0.18">
-                <views:SettingsView x:Name="SettingsViewControl" />
-            </views:ViewTransitionHost>
+            <!-- ═══ 主区域 ═══ -->
+            <DockPanel Grid.Column="1">
+
+                <!-- 页头：标题与使用说明由外壳统一渲染，页面里不再各写一条 -->
+                <Border DockPanel.Dock="Top" Classes="page-header">
+                    <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+                        <Button Grid.Column="0"
+                                Content="←"
+                                Classes="back"
+                                Margin="0,0,8,0"
+                                IsVisible="{Binding IsSidebarVisible, Converter={x:Static BoolConverters.Not}}"
+                                Command="{Binding GoHomeCommand}" />
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding PageTitle}"
+                                   Classes="page-title" />
+                        <Button Grid.Column="3"
+                                Content="使用说明"
+                                Classes="ghost"
+                                FontSize="{DynamicResource Fs11}"
+                                VerticalAlignment="Center"
+                                IsVisible="{Binding HasPageHelp}"
+                                Command="{Binding OpenHelpCommand}"
+                                CommandParameter="{Binding PageHelpTopic}" />
+                    </Grid>
+                </Border>
+
+                <!-- 状态栏：底部常驻，替换原先飘在页面中央的"就绪" -->
+                <Border DockPanel.Dock="Bottom" Classes="statusbar">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Grid.Column="0"
+                                   Text="{Binding CurrentStatusText}"
+                                   FontSize="{DynamicResource Fs10}"
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip.Tip="{Binding CurrentStatusText}" />
+                        <ProgressBar Grid.Column="1"
+                                     Width="90"
+                                     Height="3"
+                                     IsIndeterminate="True"
+                                     IsVisible="{Binding IsBusy}"
+                                     VerticalAlignment="Center" />
+                    </Grid>
+                </Border>
+
+                <!-- 页面宿主 -->
+                <Panel>
+                    <views:ViewTransitionHost IsVisible="{Binding IsHomeVisible}"
+                                              IsAnimationEnabled="{Binding IsAnimationsEnabled}"
+                                              OffsetY="0"
+                                              StartScale="0.985"
+                                              Duration="0:0:0.20">
+                        <views:HomeView x:Name="HomeViewControl" />
+                    </views:ViewTransitionHost>
+
+                    <views:ViewTransitionHost IsVisible="{Binding IsWorkspaceVisible}"
+                                              IsAnimationEnabled="{Binding IsAnimationsEnabled}"
+                                              OffsetY="6"
+                                              Duration="0:0:0.18">
+                        <views:WorkspaceView x:Name="WorkspaceViewControl" DataContext="{Binding}" />
+                    </views:ViewTransitionHost>
+
+                    <views:ViewTransitionHost IsVisible="{Binding IsMergeVisible}"
+                                              IsAnimationEnabled="{Binding IsAnimationsEnabled}"
+                                              OffsetY="10"
+                                              Duration="0:0:0.18">
+                        <views:MergeView x:Name="MergeViewControl" />
+                    </views:ViewTransitionHost>
+
+                    <views:ViewTransitionHost IsVisible="{Binding IsConvertVisible}"
+                                              IsAnimationEnabled="{Binding IsAnimationsEnabled}"
+                                              OffsetY="10"
+                                              Duration="0:0:0.18">
+                        <views:ConvertView x:Name="ConvertViewControl" />
+                    </views:ViewTransitionHost>
+
+                    <views:ViewTransitionHost IsVisible="{Binding IsSettingsVisible}"
+                                              IsAnimationEnabled="{Binding IsAnimationsEnabled}"
+                                              OffsetY="10"
+                                              Duration="0:0:0.18">
+                        <views:SettingsView x:Name="SettingsViewControl" />
+                    </views:ViewTransitionHost>
+                </Panel>
+            </DockPanel>
+        </Grid>
 
             <!--
                 ═══ 使用说明浮层（各页共用）═══

@@ -30,10 +30,10 @@
             两边各留 270px 死白。现在网格能真正用满 1200。
         -->
         <StackPanel HorizontalAlignment="Stretch"
-                    VerticalAlignment="Center"
+                    VerticalAlignment="Top"
                     Margin="24,32"
                     Spacing="28">
-            <StackPanel Spacing="6">
+            <StackPanel Spacing="6" IsVisible="{Binding IsSidebarVisible, Converter={x:Static BoolConverters.Not}}">
                 <TextBlock Text="Prism"
                            FontSize="{DynamicResource Fs40}"
                            FontWeight="SemiBold"
@@ -49,6 +49,16 @@
                 宽屏：6 列网格。每张卡片跨 2 列，第 1 行 3 张、第 2 行 2 张居中，
                 这样 5 个入口比"一行 3 个大卡"更紧凑，也不会挤在一起。
             -->
+                        <!--
+                桌面档的引子。侧栏已经放着应用名，这里再竖直居中摆五张大卡片会显得空，
+                所以改成顶部对齐 + 一行说明，读起来像面板而不是"居中的启动页"。
+            -->
+            <TextBlock Text="选择一个功能开始"
+                       FontSize="{DynamicResource Fs13}"
+                       Foreground="{DynamicResource TextMutedBrush}"
+                       Margin="0,0,0,-10"
+                       IsVisible="{Binding IsSidebarVisible}" />
+
             <Grid x:Name="WideCards"
                   ColumnDefinitions="*,*,*,*,*,*"
                   RowDefinitions="Auto,Auto"
@@ -246,16 +256,6 @@
                     </Grid>
                 </Button>
             </StackPanel>
-
-            <TextBlock Text="{Binding StatusText}"
-                       FontSize="{DynamicResource Fs11_5}"
-                       Foreground="{DynamicResource TextMutedBrush}"
-                       HorizontalAlignment="Center"
-                       MaxWidth="520"
-                       TextAlignment="Center"
-                       TextTrimming="CharacterEllipsis"
-                       MaxLines="2"
-                       ToolTip.Tip="{Binding StatusText}" />
         </StackPanel>
     </ScrollViewer>
 </UserControl>

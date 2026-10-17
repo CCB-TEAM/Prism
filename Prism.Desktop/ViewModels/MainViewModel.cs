@@ -164,6 +164,11 @@ public partial class MainViewModel : ViewModelBase
         {
             IsWideLayout = wide;
         }
+
+        // 侧栏的开关与 IsLandscape 用同一个阈值（980），但它必须跟着窗口宽度
+        // 重新通知一次：侧栏显示/隐藏会改变内容区可用宽度，只通知 IsLandscape
+        // 不会刷新绑定在 IsSidebarVisible 上的可见性。
+        OnPropertyChanged(nameof(IsSidebarVisible));
     }
 
     [ObservableProperty]
@@ -184,6 +189,38 @@ public partial class MainViewModel : ViewModelBase
 
     public bool IsSettingsVisible => CurrentView == "Settings";
 
+    /// <summary>
+    /// 是否显示左侧导航栏。
+    ///
+    /// 这套界面原先按"手机 App"的信息架构写：主页是一屏大卡片，进二级页靠返回箭头。
+    /// 窗口拉宽到 1440 之后，它仍然只有一个居中的窄条内容 + 一个返回箭头 —— 于是像
+    /// "把手机界面拉伸到桌面上"。从 980 px 起改为常驻侧栏，返回箭头随之消失；
+    /// 窄窗与手机仍走"主页 → 二级页 → 返回"的老路径，行为不变。
+    /// </summary>
+    public bool IsSidebarVisible => WindowWidth >= 980;
+
+    /// <summary>页头标题：由当前视图决定，五个页面共用同一处渲染。</summary>
+    public string PageTitle => CurrentView switch
+    {
+        "Workspace" => "解包 & 模组",
+        "Merge" => "Pak 合并",
+        "Convert" => "Pak 转换",
+        "Settings" => "设置",
+        _ => "概览",
+    };
+
+    /// <summary>当前页对应的使用说明主题；概览页没有说明，返回空串。</summary>
+    public string PageHelpTopic => CurrentView switch
+    {
+        "Workspace" => "workspace",
+        "Merge" => "merge",
+        "Convert" => "convert",
+        "Settings" => "settings",
+        _ => string.Empty,
+    };
+
+    public bool HasPageHelp => PageHelpTopic.Length > 0;
+
     partial void OnCurrentViewChanged(string value)
     {
         OnPropertyChanged(nameof(IsHomeVisible));
@@ -191,6 +228,10 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsMergeVisible));
         OnPropertyChanged(nameof(IsConvertVisible));
         OnPropertyChanged(nameof(IsSettingsVisible));
+        OnPropertyChanged(nameof(PageTitle));
+        OnPropertyChanged(nameof(PageHelpTopic));
+        OnPropertyChanged(nameof(HasPageHelp));
+        OnPropertyChanged(nameof(CurrentStatusText));
     }
 
     [RelayCommand]
@@ -323,6 +364,16 @@ public partial class MainViewModel : ViewModelBase
 
     [ObservableProperty]
     public partial string StatusText { get; set; } = "就绪";
+
+    /// <summary>
+    /// 状态栏显示什么。转换页有自己的进度文案（<see cref="ConvertStatus"/>），
+    /// 其余页面共用 <see cref="StatusText"/> —— 外壳只有一条状态栏，不能各页各绑一个。
+    /// </summary>
+    public string CurrentStatusText => CurrentView == "Convert" ? ConvertStatus : StatusText;
+
+    partial void OnStatusTextChanged(string value) => OnPropertyChanged(nameof(CurrentStatusText));
+
+    partial void OnConvertStatusChanged(string value) => OnPropertyChanged(nameof(CurrentStatusText));
 
     [ObservableProperty]
     public partial bool IsBusy { get; set; }

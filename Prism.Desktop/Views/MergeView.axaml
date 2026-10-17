@@ -28,34 +28,7 @@
         原先这一页的顶栏在 ScrollViewer 内部，滚一下就跟着跑，是四个页面四种行为之一。
     -->
     <DockPanel>
-        <Border DockPanel.Dock="Top" Padding="12,10">
-            <Grid ColumnDefinitions="Auto,*,Auto,Auto">
-                <Button Grid.Column="0"
-                        Content="←"
-                        Classes="back"
-                        Command="{Binding GoHomeCommand}"
-                        Margin="0,0,10,0" />
-                <TextBlock Grid.Column="1"
-                           Text="Pak 合并"
-                           Classes="page-title" />
-                <Button Grid.Column="2"
-                        Content="使用说明"
-                        Command="{Binding OpenHelpCommand}"
-                        CommandParameter="merge"
-                        Classes="ghost"
-                        FontSize="{DynamicResource Fs11}"
-                        VerticalAlignment="Center"
-                        Margin="0,0,10,0" />
-                <TextBlock Grid.Column="3"
-                           Text="{Binding StatusText}"
-                           FontSize="{DynamicResource Fs11}"
-                           Foreground="{DynamicResource TextMutedBrush}"
-                           VerticalAlignment="Center"
-                           TextTrimming="CharacterEllipsis"
-                           MaxWidth="{Binding TopStatusMaxWidth}"
-                           ToolTip.Tip="{Binding StatusText}" />
-            </Grid>
-        </Border>
+            <!-- 顶栏与状态栏已上移到应用外壳 Views/MainView.axaml -->
 
         <ScrollViewer>
             <StackPanel MaxWidth="{Binding MergeContentMaxWidth}"
