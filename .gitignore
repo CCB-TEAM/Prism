@@ -451,3 +451,4 @@ reference/
 # Bink Audio 编码器（RAD 的 binka_encode.exe，GPL 三方二进制，不入库）：
 # 本地放到 tools/ 即可启用音频替换，来源见 tools/README.md。
 tools/binka_encode.exe
+tools/ffmpeg.exe

@@ -109,7 +109,9 @@ internal static class NativeBinkaDecoder
 
             var failures = new List<string>();
             nint handle = 0;
-            foreach (var candidate in GetLibraryCandidates("prism_codecs"))
+            // Android 用 libprism_codecs；桌面只有一段 BINKA 解码库（prism_binka.dll），
+            // 由 native/BinkaDll/build-win-x64.ps1 编出来。
+            foreach (var candidate in GetLibraryCandidates("prism_codecs").Concat(GetLibraryCandidates("prism_binka")))
             {
                 if (TryLoadNativeLibrary(candidate, out handle, failures) ||
                     TryDlopen(candidate, out handle, failures))

@@ -1083,6 +1083,54 @@ try
     }
 
     // ══════════════════════════════════════════════════════════════
+    Section("F11 · 视频预览（ffmpeg 探元数据 / 抽封面 / 预览尺寸）");
+
+    // 预览面板的视频播放靠 ffmpeg 出帧，这里验的是"能探出元数据、能抽封面、尺寸算对"。
+    // 片源现场用 ffmpeg 的 testsrc2 生成，不依赖仓库里的样本文件。
+    string? ffmpegExe = UAssetAudio.Core.ExternalToolLocator.Find(
+        Prism.Desktop.Services.Ffmpeg.ToolName, Path.Combine(repoRootForAudio, "tools"));
+    if (ffmpegExe is null)
+    {
+        Console.WriteLine($"        跳过（没找到 {Prism.Desktop.Services.Ffmpeg.ToolName}）");
+    }
+    else
+    {
+        string clip = Path.Combine(root, "preview-clip.mp4");
+        RunFfmpeg(ffmpegExe, [
+            "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=15:duration=2",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", clip,
+        ]);
+        Check(File.Exists(clip) && new FileInfo(clip).Length > 1024, "用 testsrc2 生成 2 秒测试片");
+
+        bool probed = Prism.Desktop.Services.Ffmpeg.TryProbe(clip, Path.Combine(repoRootForAudio, "tools"), out Prism.Desktop.Services.VideoProbeInfo probe);
+        Check(probed, "ffmpeg 能探出容器信息");
+        if (probed)
+        {
+            Check(probe.Width == 320 && probe.Height == 240, $"分辨率解析正确（{probe.DescribeSize}）");
+            Check(Math.Abs(probe.Seconds - 2) < 0.5, $"时长解析正确（{probe.Seconds:0.##} 秒）");
+            Check(probe.FrameRate is > 10 and < 20, $"帧率解析正确（{probe.FrameRate:0.##} fps）");
+        }
+
+        string poster = Path.Combine(root, "preview-poster.png");
+        Check(
+            Prism.Desktop.Services.Ffmpeg.TryExtractPoster(clip, poster, Path.Combine(repoRootForAudio, "tools"), TimeSpan.FromSeconds(0.5)) &&
+            new FileInfo(poster).Length > 512,
+            "抽得出封面帧（PNG 非空）");
+
+        (int scaledWidth, int scaledHeight) = Prism.Desktop.Services.Ffmpeg.ScaleToPreview(1920, 1080);
+        Check(scaledWidth == 720 && scaledHeight == 404, $"1080p 缩到预览尺寸（{scaledWidth}x{scaledHeight}）");
+        (int smallWidth, int smallHeight) = Prism.Desktop.Services.Ffmpeg.ScaleToPreview(320, 240);
+        Check(smallWidth == 320 && smallHeight == 240, "小于上限的片子不放大");
+
+        // 音频时长读取：预览要在播放前就把进度条填上
+        var probeWav = UAssetAudio.Core.WavCodec.Write16(new byte[48000], 24000, 1);
+        Check(
+            UAssetAudio.Core.WavCodec.TryReadSeconds(probeWav, out double probeSeconds) && Math.Abs(probeSeconds - 1) < 0.01,
+            $"WAV 头算时长（{probeSeconds:0.###} 秒）");
+    }
+
+    // ══════════════════════════════════════════════════════════════
     Section("F10 · 替换页流程（音频 / 视频，含真实编码）");
 
     // 这里驱动真实的 MainViewModel：打开 pak → 进目录 → 选中资产 → 加入替换 → 选素材。
@@ -1593,4 +1641,34 @@ static void EnterFolder(Prism.Desktop.ViewModels.MainViewModel vm, string name)
 
     vm.SelectedItem = entry;
     RunVmCommand(vm, vm.ActivateCommand);
+}
+/// <summary>跑一次 ffmpeg（测试里用来生成片源），退出码非零直接失败。</summary>
+static void RunFfmpeg(string ffmpeg, string[] arguments)
+{
+    System.Diagnostics.ProcessStartInfo start = new(ffmpeg)
+    {
+        UseShellExecute = false,
+        CreateNoWindow = true,
+        RedirectStandardError = true,
+        RedirectStandardOutput = true,
+    };
+    foreach (string argument in arguments)
+    {
+        start.ArgumentList.Add(argument);
+    }
+
+    using System.Diagnostics.Process process = System.Diagnostics.Process.Start(start)
+        ?? throw new InvalidOperationException("无法启动 ffmpeg");
+    string stderr = process.StandardError.ReadToEnd();
+    process.StandardOutput.ReadToEnd();
+    if (!process.WaitForExit(60_000))
+    {
+        process.Kill(entireProcessTree: true);
+        throw new TimeoutException("ffmpeg 超时（60s）");
+    }
+
+    if (process.ExitCode != 0)
+    {
+        throw new InvalidOperationException($"ffmpeg 退出码 {process.ExitCode}：{stderr}");
+    }
 }

@@ -14,6 +14,9 @@ Browse pak contents, preview textures / audio / 3D meshes / localization, export
 - File-manager style browsing, keyword search, and **direct path navigation** from the search box.
 - Groups related `.uasset` / `.uexp` / `.ubulk` into one asset entry.
 - Previews: textures (with thumbnails), audio (built-in player), 3D mesh wireframe, localization (`.locres`), blueprint pseudo-code.
+- **Audio preview**: play / pause / scrub. BINKA sounds decode on desktop too (via `prism_binka.dll`).
+- **Video preview**: embedded playback (ffmpeg decodes frames, `-re` paces them in real time), poster
+  frame, duration / resolution, timeline; without ffmpeg you still get "open in system player".
 - Export raw packages, PNG images, whole folders, or share to other apps.
 
 **Texture replacement**
@@ -269,10 +272,10 @@ A full repack needs temp space equal to the main pak.
 ## Verifying
 
 ```sh
-# Integration tests (225 assertions): mapping format detection, search-box path resolution,
+# Integration tests (234 assertions): mapping format detection, search-box path resolution,
 # pak conversion (both paths + all output modes), merge priority, locres <-> JSON round-trip,
 # non-ASCII pak path handling, headless UI loading and navigation, audio replacement
-# (BINKA round-trip through a real pak), media replacement, and the replace-page flow driven
+# (BINKA round-trip through a real pak), media replacement, the replace-page flow driven
 # through the real view-model,
 # and parity between the two copies of the texture-layout parser
 # (UAssetTexture.Core vs UAssetCLI — the latter needs its Release build; skipped without it)

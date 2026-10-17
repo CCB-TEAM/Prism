@@ -7,13 +7,14 @@ namespace Prism.Desktop.Models;
 /// <summary>扁平文件列表项（对应 Web 版的 Name/Type/Size 三列，可选缩略图）。</summary>
 public sealed partial class EntryItem : ObservableObject
 {
-    public EntryItem(string fullPath, string name, bool isDirectory, string kind, string sizeText)
+    public EntryItem(string fullPath, string name, bool isDirectory, string kind, string sizeText, long sizeBytes = 0)
     {
         FullPath = fullPath;
         Name = name;
         IsDirectory = isDirectory;
         Kind = kind;
         SizeText = sizeText;
+        SizeBytes = sizeBytes;
     }
 
     public string FullPath { get; }
@@ -25,6 +26,9 @@ public sealed partial class EntryItem : ObservableObject
     public string Kind { get; }
 
     public string SizeText { get; }
+
+    /// <summary>原始字节数（视频预览据此决定要不要先落盘）。</summary>
+    public long SizeBytes { get; }
 
     /// <summary>类型图标前缀（DIR/IMG/AUD/VID/3D/MAT/BP/LOC/UE/FILE）。</summary>
     public string KindIcon => IsDirectory ? "DIR" : Kind switch
@@ -59,7 +63,8 @@ public sealed partial class EntryItem : ObservableObject
         entry.Name,
         entry.IsDirectory,
         GuessKind(entry),
-        entry.IsDirectory ? string.Empty : FormatSize(entry.Size));
+        entry.IsDirectory ? string.Empty : FormatSize(entry.Size),
+        entry.Size);
 
     public static string GuessKind(ArchiveEntryDto entry)
     {

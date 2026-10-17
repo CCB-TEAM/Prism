@@ -30,6 +30,23 @@ public partial class PreviewPaneView : UserControl
         }
     }
 
+    /// <summary>拖动视频进度条期间不回写位置，松手后再 seek（否则每帧都会被拉回去）。</summary>
+    private void OnVideoSliderPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (DataContext is MainViewModel vm)
+        {
+            vm.IsVideoSeeking = true;
+        }
+    }
+
+    private void OnVideoSliderReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (DataContext is MainViewModel vm)
+        {
+            vm.IsVideoSeeking = false;
+            vm.SeekVideoCommand.Execute(null);
+        }
+    }
     /// <summary>长按预览抽屉底部的资源路径复制到剪贴板。</summary>
     private void OnSelectedPathHolding(object? sender, HoldingRoutedEventArgs e)
     {

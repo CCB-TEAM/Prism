@@ -633,8 +633,8 @@ public partial class MainViewModel : ViewModelBase
 
     public string AudioTimeText => $"{FormatAudioTime(AudioPosition)} / {FormatAudioTime(AudioDuration)}";
 
-    /// <summary>内置播放器进度条：Android 支持拖动定位；Windows 的 Win32 播放器不提供 seek。</summary>
-    public bool CanSeekAudio => HasAudioPreview && AudioDuration > 0 && OperatingSystem.IsAndroid();
+    /// <summary>内置播放器进度条：Android 走 MediaPlayer，桌面走 MCI，两边都能拖。</summary>
+    public bool CanSeekAudio => HasAudioPreview && AudioDuration > 0;
 
     partial void OnIsAudioPlayingChanged(bool value)
     {
@@ -671,6 +671,11 @@ public partial class MainViewModel : ViewModelBase
 
     private string? _audioTempFile;
 
+    /// <summary>桌面播放器（MCI）。Android 由壳里的 MediaPlayer 负责，这里不参与。</summary>
+    private readonly WindowsAudioPlayer _audioPlayer = new();
+
+    private Avalonia.Threading.DispatcherTimer? _audioProgressTimer;
+
     [RelayCommand]
     private async Task ToggleAudioPlayback()
     {
@@ -679,37 +684,82 @@ public partial class MainViewModel : ViewModelBase
             return;
         }
 
+        if (OperatingSystem.IsAndroid())
+        {
+            await ToggleAndroidAudioPlaybackAsync();
+            return;
+        }
+
+        // ── 桌面：MCI ──
+        if (IsAudioPlaying)
+        {
+            _audioPlayer.Pause();
+            IsAudioPlaying = false;
+            IsAudioPaused = true;
+            return;
+        }
+
+        if (IsAudioPaused && _audioPlayer.IsOpen)
+        {
+            _audioPlayer.Resume();
+            IsAudioPlaying = true;
+            IsAudioPaused = false;
+            StartAudioProgressTimer();
+            return;
+        }
+
+        if (!WindowsAudioPlayer.IsSupported)
+        {
+            StatusText = "当前系统不支持内置音频播放，可用「导出原始」拿文件。";
+            return;
+        }
+
+        if (!_audioPlayer.IsOpen && !_audioPlayer.Open(_audioTempFile))
+        {
+            StatusText = "音频播放失败：系统播放设备打不开这个文件。";
+            return;
+        }
+
+        var length = _audioPlayer.LengthMs;
+        if (length > 0)
+        {
+            AudioDuration = length / 1000d;
+        }
+
+        _audioPlayer.Seek((long)(Math.Clamp(AudioPosition, 0, AudioDuration) * 1000));
+        _audioPlayer.Play();
+        IsAudioPlaying = true;
+        IsAudioPaused = false;
+        StartAudioProgressTimer();
+    }
+
+    /// <summary>Android：暂停/继续/播放都由壳里的 MediaPlayer 完成，进度靠回调推进。</summary>
+    private async Task ToggleAndroidAudioPlaybackAsync()
+    {
         if (IsAudioPlaying)
         {
             // 暂停，保留进度；再次点击继续播放。
-            if (OperatingSystem.IsAndroid())
+            if (NativeAudioSetPausedAsync is not null)
             {
-                if (NativeAudioSetPausedAsync is not null)
+                try
                 {
-                    try
-                    {
-                        await NativeAudioSetPausedAsync(true);
-                        IsAudioPlaying = false;
-                        IsAudioPaused = true;
-                        return;
-                    }
-                    catch (Exception ex)
-                    {
-                        StatusText = "音频暂停失败：" + ex.Message;
-                        IsAudioPlaying = false;
-                        IsAudioPaused = false;
-                        return;
-                    }
+                    await NativeAudioSetPausedAsync(true);
+                    IsAudioPlaying = false;
+                    IsAudioPaused = true;
+                    return;
                 }
-
-                if (NativeAudioStopAsync is not null)
+                catch (Exception ex)
                 {
-                    await NativeAudioStopAsync();
+                    StatusText = "音频暂停失败：" + ex.Message;
+                    IsAudioPlaying = false;
+                    IsAudioPaused = false;
+                    return;
                 }
             }
-            else
+
+            if (NativeAudioStopAsync is not null)
             {
-                Win32PlaySound.Stop();
+                await NativeAudioStopAsync();
             }
 
             IsAudioPlaying = false;
@@ -717,64 +767,123 @@ public partial class MainViewModel : ViewModelBase
             return;
         }
 
-        if (OperatingSystem.IsAndroid() && IsAudioPaused)
+        if (IsAudioPaused && NativeAudioSetPausedAsync is not null)
         {
-            if (NativeAudioSetPausedAsync is not null)
-            {
-                IsAudioPlaying = true;
-                IsAudioPaused = false;
-                try
-                {
-                    await NativeAudioSetPausedAsync(false);
-                }
-                catch (Exception ex)
-                {
-                    IsAudioPlaying = false;
-                    StatusText = "音频继续播放失败：" + ex.Message;
-                }
-
-                return;
-            }
-        }
-
-        IsAudioPlaying = true;
-        IsAudioPaused = false;
-        if (OperatingSystem.IsAndroid())
-        {
-            if (NativeAudioPlayAsync is null)
-            {
-                IsAudioPlaying = false;
-                StatusText = "音频播放服务未就绪，请重新打开应用后重试。";
-                return;
-            }
-
+            IsAudioPlaying = true;
+            IsAudioPaused = false;
             try
             {
-                // 内置播放器支持拖动进度后从指定位置开始播放。
-                await NativeAudioPlayAsync(_audioTempFile, AudioPosition);
+                await NativeAudioSetPausedAsync(false);
             }
             catch (Exception ex)
             {
                 IsAudioPlaying = false;
-                StatusText = "音频播放失败：" + ex.Message;
+                StatusText = "音频继续播放失败：" + ex.Message;
             }
+
+            return;
         }
-        else
+
+        IsAudioPlaying = true;
+        IsAudioPaused = false;
+        if (NativeAudioPlayAsync is null)
         {
+            IsAudioPlaying = false;
+            StatusText = "音频播放服务未就绪，请重新打开应用后重试。";
+            return;
+        }
+
+        try
+        {
+            // 内置播放器支持拖动进度后从指定位置开始播放。
+            await NativeAudioPlayAsync(_audioTempFile!, AudioPosition);
+        }
+        catch (Exception ex)
+        {
+            IsAudioPlaying = false;
+            StatusText = "音频播放失败：" + ex.Message;
+        }
+    }
+
+    private void StartAudioProgressTimer()
+    {
+        if (OperatingSystem.IsAndroid())
+        {
+            return; // Android 的进度由 MediaPlayer 回调推进
+        }
+
+        _audioProgressTimer ??= new Avalonia.Threading.DispatcherTimer(
+            TimeSpan.FromMilliseconds(200),
+            Avalonia.Threading.DispatcherPriority.Normal,
+            (_, _) => OnAudioProgressTick());
+        _audioProgressTimer.Start();
+    }
+
+    private void OnAudioProgressTick()
+    {
+        if (!_audioPlayer.IsOpen)
+        {
+            _audioProgressTimer?.Stop();
+            return;
+        }
+
+        if (IsAudioSeeking)
+        {
+            return;
+        }
+
+        var length = _audioPlayer.LengthMs;
+        if (length > 0)
+        {
+            AudioDuration = length / 1000d;
+        }
+
+        var position = _audioPlayer.PositionMs;
+        if (position >= 0)
+        {
+            AudioPosition = Math.Clamp(position / 1000d, 0, AudioDuration > 0 ? AudioDuration : position / 1000d);
+        }
+
+        // 放完了：MCI 自己会变成 stopped，这里复位成"未播放"，下次点击从头开始。
+        if (IsAudioPlaying && _audioPlayer.Mode == "stopped")
+        {
+            _audioPlayer.StopAndRewind();
+            IsAudioPlaying = false;
+            IsAudioPaused = false;
             AudioPosition = 0;
-            Win32PlaySound.PlayFile(_audioTempFile);
+            _audioProgressTimer?.Stop();
         }
     }
 
     [RelayCommand]
     private async Task SeekAudioAsync()
     {
-        if (!CanSeekAudio || NativeAudioSeekAsync is null)
+        if (!CanSeekAudio)
         {
             return;
         }
 
-        await NativeAudioSeekAsync(Math.Clamp(AudioPosition, 0, AudioDuration));
+        var seconds = Math.Clamp(AudioPosition, 0, AudioDuration);
+        if (OperatingSystem.IsAndroid())
+        {
+            if (NativeAudioSeekAsync is not null)
+            {
+                await NativeAudioSeekAsync(seconds);
+            }
+
+            return;
+        }
+
+        if (!_audioPlayer.IsOpen)
+        {
+            return;
+        }
+
+        _audioPlayer.Seek((long)(seconds * 1000));
+        if (IsAudioPlaying)
+        {
+            _audioPlayer.Play();
+        }
     }
 
     /// <summary>供 Android MediaPlayer 定时回传播放进度。</summary>
@@ -816,6 +925,416 @@ public partial class MainViewModel : ViewModelBase
         return time.TotalHours >= 1
             ? time.ToString(@"h\:mm\:ss")
             : time.ToString(@"mm\:ss");
+    }
+
+    /// <summary>把预览载荷当图片解；不是图片（或解码器报错）就返回 false，不要抛。</summary>
+    private static bool TryDecodePreviewImage(byte[] data, out Bitmap? image)
+    {
+        image = null;
+        try
+        {
+            using MemoryStream stream = new(data);
+            image = Bitmap.DecodeToWidth(stream, 1280);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    // ============ 视频预览 ============
+
+    /// <summary>内嵌视频预览的落地文件上限：超过就只提示用「导出原始」。</summary>
+    private const long MaxVideoPreviewBytes = 256L * 1024 * 1024;
+
+    [ObservableProperty]
+    public partial bool HasVideoPreview { get; set; }
+
+    [ObservableProperty]
+    public partial Bitmap? VideoPoster { get; set; }
+
+    [ObservableProperty]
+    public partial Bitmap? VideoFrame { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsVideoPlaying { get; set; }
+
+    [ObservableProperty]
+    public partial string VideoStatus { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial double VideoDuration { get; set; }
+
+    [ObservableProperty]
+    public partial double VideoPosition { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsVideoSeeking { get; set; }
+
+    [ObservableProperty]
+    public partial bool CanPlayVideo { get; set; }
+
+    public string VideoTimeText => $"{FormatAudioTime(VideoPosition)} / {FormatAudioTime(VideoDuration)}";
+
+    public string VideoButtonText => IsVideoPlaying ? "暂停" : "播放";
+
+    public bool CanSeekVideo => HasVideoPreview && VideoDuration > 0;
+
+    /// <summary>画布内容：播放中贴解码帧，暂停/未播贴封面帧。</summary>
+    public Bitmap? VideoSurface => VideoFrame ?? VideoPoster;
+
+    public bool HasVideoSurface => VideoSurface is not null;
+
+    private string? _videoTempFile;
+    private VideoProbeInfo? _videoProbe;
+    private readonly FfmpegVideoPlayer _videoPlayer = new();
+    private WriteableBitmap[]? _videoBuffers;
+    private int _videoBufferIndex;
+    private readonly System.Diagnostics.Stopwatch _videoClock = new();
+    private double _videoStartSeconds;
+    private Avalonia.Threading.DispatcherTimer? _videoProgressTimer;
+
+    partial void OnVideoFrameChanged(Bitmap? value) => NotifyVideoSurface();
+
+    partial void OnVideoPosterChanged(Bitmap? value) => NotifyVideoSurface();
+
+    partial void OnIsVideoPlayingChanged(bool value)
+    {
+        OnPropertyChanged(nameof(VideoButtonText));
+        OnPropertyChanged(nameof(VideoSurface));
+    }
+
+    partial void OnVideoDurationChanged(double value)
+    {
+        OnPropertyChanged(nameof(CanSeekVideo));
+        OnPropertyChanged(nameof(VideoTimeText));
+    }
+
+    partial void OnVideoPositionChanged(double value) => OnPropertyChanged(nameof(VideoTimeText));
+
+    partial void OnHasVideoPreviewChanged(bool value) => OnPropertyChanged(nameof(CanSeekVideo));
+
+    private void NotifyVideoSurface()
+    {
+        OnPropertyChanged(nameof(VideoSurface));
+        OnPropertyChanged(nameof(HasVideoSurface));
+    }
+
+    /// <summary>选中一个视频文件后：落地 → 探元数据 → 抽封面。全部在后台，不卡 UI。</summary>
+    private async Task PrepareVideoPreviewAsync(EntryItem item)
+    {
+        StopVideoPreview();
+        HasVideoPreview = true;
+        VideoStatus = "准备中…";
+
+        if (Ffmpeg.Find(ToolsDirectory) is null)
+        {
+            VideoStatus = $"视频预览需要 {Ffmpeg.ToolName}（放进 tools 目录即可）；现在可以「导出原始」后用系统播放器看。";
+            return;
+        }
+
+        if (item.SizeBytes > MaxVideoPreviewBytes)
+        {
+            VideoStatus = $"文件 {item.SizeBytes / (1024 * 1024)} MB 超过内嵌预览上限（{MaxVideoPreviewBytes / (1024 * 1024)} MB），请用「导出原始」。";
+            return;
+        }
+
+        string? path = await EnsureVideoFileAsync(item.FullPath);
+        if (path is null)
+        {
+            VideoStatus = "视频解到临时目录失败。";
+            return;
+        }
+
+        var (probe, poster) = await Task.Run(() =>
+        {
+            if (!Ffmpeg.TryProbe(path, ToolsDirectory, out VideoProbeInfo info))
+                return ((VideoProbeInfo?)null, (Bitmap?)null);
+
+            Bitmap? bitmap = null;
+            string posterPath = Path.ChangeExtension(path, ".poster.png");
+            // 封面取靠前但不在第一帧的位置：很多片子第一帧是黑的
+            var at = TimeSpan.FromSeconds(Math.Clamp(info.Seconds * 0.15, 0.2, 3));
+            if (Ffmpeg.TryExtractPoster(path, posterPath, ToolsDirectory, at))
+            {
+                try
+                {
+                    bitmap = LoadImage(posterPath, Ffmpeg.PreviewMaxWidth);
+                }
+                catch
+                {
+                    bitmap = null;
+                }
+            }
+
+            return (info, bitmap);
+        });
+
+        if (probe is null)
+        {
+            VideoStatus = "无法解析这个视频（ffmpeg 认不出容器或编码）。";
+            return;
+        }
+
+        _videoProbe = probe.Value;
+        VideoDuration = probe.Value.Seconds;
+        VideoPoster = poster;
+        CanPlayVideo = true;
+        VideoStatus = $"{probe.Value.DescribeSize} · {probe.Value.DescribeDuration} · 静音预览";
+    }
+
+    /// <summary>把 Pak 里的视频解到临时目录（同一路径只解一次）。</summary>
+    private async Task<string?> EnsureVideoFileAsync(string pakPath)
+    {
+        if (_videoTempFile is not null && File.Exists(_videoTempFile))
+            return _videoTempFile;
+
+        byte[] data;
+        await _gate.WaitAsync();
+        try
+        {
+            data = await _session.ReadFileAsync(pakPath);
+        }
+        catch
+        {
+            return null;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+
+        string directory = Path.Combine(Path.GetTempPath(), "prism-desktop-video", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string path = Path.Combine(directory, Path.GetFileName(pakPath));
+        await File.WriteAllBytesAsync(path, data);
+        _videoTempFile = path;
+        return path;
+    }
+
+    [RelayCommand]
+    private void ToggleVideoPlayback()
+    {
+        if (!HasVideoPreview)
+        {
+            return;
+        }
+
+        if (IsVideoPlaying)
+        {
+            _videoPlayer.Stop();
+            IsVideoPlaying = false;
+            _videoProgressTimer?.Stop();
+            VideoStatus = "已暂停";
+            return;
+        }
+
+        if (!CanPlayVideo)
+        {
+            return; // VideoStatus 已经说明了为什么
+        }
+
+        string? path = _videoTempFile;
+        if (path is null || _videoProbe is null)
+        {
+            VideoStatus = "视频还没准备好。";
+            return;
+        }
+
+        StartVideoPlayback(path);
+    }
+
+    private void StartVideoPlayback(string path)
+    {
+        VideoProbeInfo probe = _videoProbe!.Value;
+        (int width, int height) = Ffmpeg.ScaleToPreview(probe.Width, probe.Height);
+        _videoStartSeconds = VideoPosition;
+        _videoClock.Restart();
+
+        _videoPlayer.Frame -= OnVideoFrame;
+        _videoPlayer.Finished -= OnVideoFinished;
+        _videoPlayer.Frame += OnVideoFrame;
+        _videoPlayer.Finished += OnVideoFinished;
+
+        // 换位置就重建画布：尺寸可能和上一部片子不同
+        if (_videoBuffers is null ||
+            _videoBuffers[0].PixelSize.Width != width ||
+            _videoBuffers[0].PixelSize.Height != height)
+        {
+            _videoBuffers = null;
+        }
+
+        if (!_videoPlayer.Start(path, width, height, VideoPosition, ToolsDirectory, out string error))
+        {
+            VideoStatus = error;
+            IsVideoPlaying = false;
+            return;
+        }
+
+        IsVideoPlaying = true;
+        VideoStatus = $"播放中 · {probe.DescribeSize}（静音）";
+        StartVideoProgressTimer();
+    }
+
+    private void OnVideoFrame(byte[] frame)
+    {
+        int width = _videoPlayer.FrameWidth;
+        int height = _videoPlayer.FrameHeight;
+        if (width <= 0 || height <= 0)
+        {
+            return;
+        }
+
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            _videoBuffers ??= CreateVideoBuffers(width, height);
+            WriteableBitmap target = _videoBuffers[_videoBufferIndex];
+            _videoBufferIndex ^= 1;
+            CopyFrame(frame, target, width, height);
+            VideoFrame = target;
+        });
+    }
+
+    private void OnVideoFinished()
+    {
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            if (!IsVideoPlaying)
+            {
+                return;
+            }
+
+            IsVideoPlaying = false;
+            _videoProgressTimer?.Stop();
+            VideoPosition = 0;
+            VideoFrame = null;
+            VideoStatus = "播放结束";
+        });
+    }
+
+    private static WriteableBitmap[] CreateVideoBuffers(int width, int height) =>
+    [
+        new WriteableBitmap(new PixelSize(width, height), new Vector(96, 96), Avalonia.Platform.PixelFormat.Bgra8888, Avalonia.Platform.AlphaFormat.Opaque),
+        new WriteableBitmap(new PixelSize(width, height), new Vector(96, 96), Avalonia.Platform.PixelFormat.Bgra8888, Avalonia.Platform.AlphaFormat.Opaque),
+    ];
+
+    private static void CopyFrame(byte[] source, WriteableBitmap target, int width, int height)
+    {
+        using Avalonia.Platform.ILockedFramebuffer buffer = target.Lock();
+        int rowBytes = width * 4;
+        if (buffer.RowBytes == rowBytes)
+        {
+            System.Runtime.InteropServices.Marshal.Copy(source, 0, buffer.Address, Math.Min(source.Length, rowBytes * height));
+            return;
+        }
+
+        for (int y = 0; y < height; y++)
+        {
+            System.Runtime.InteropServices.Marshal.Copy(source, y * rowBytes, buffer.Address + (y * buffer.RowBytes), rowBytes);
+        }
+    }
+
+    private void StartVideoProgressTimer()
+    {
+        _videoProgressTimer ??= new Avalonia.Threading.DispatcherTimer(
+            TimeSpan.FromMilliseconds(200),
+            Avalonia.Threading.DispatcherPriority.Normal,
+            (_, _) => OnVideoProgressTick());
+        _videoProgressTimer.Start();
+    }
+
+    private void OnVideoProgressTick()
+    {
+        if (!IsVideoPlaying || _videoProbe is null)
+        {
+            _videoProgressTimer?.Stop();
+            return;
+        }
+
+        if (IsVideoSeeking)
+        {
+            return;
+        }
+
+        // 用挂钟而不是"帧数 / fps"：ffmpeg 起进程有几帧的启动延迟，按帧算会一直落后
+        double position = _videoStartSeconds + _videoClock.Elapsed.TotalSeconds;
+        if (VideoDuration > 0)
+        {
+            position = Math.Min(position, VideoDuration);
+        }
+
+        VideoPosition = position;
+    }
+
+    [RelayCommand]
+    private void SeekVideo()
+    {
+        if (!CanSeekVideo)
+        {
+            return;
+        }
+
+        bool wasPlaying = IsVideoPlaying;
+        _videoPlayer.Stop();
+        IsVideoPlaying = false;
+        _videoProgressTimer?.Stop();
+        VideoPosition = Math.Clamp(VideoPosition, 0, VideoDuration);
+
+        if (wasPlaying && _videoTempFile is not null && _videoProbe is not null)
+        {
+            StartVideoPlayback(_videoTempFile);
+        }
+    }
+
+    /// <summary>用系统播放器打开当前视频（没有 ffmpeg 时这就是唯一的"看片"方式）。</summary>
+    [RelayCommand]
+    private async Task OpenVideoExternallyAsync()
+    {
+        if (!HasVideoPreview || SelectedPathText.Length == 0)
+        {
+            return;
+        }
+
+        string? path = await EnsureVideoFileAsync(SelectedPathText);
+        if (path is null)
+        {
+            return;
+        }
+
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            StatusText = "打开系统播放器失败：" + ex.Message;
+        }
+    }
+
+    private void StopVideoPreview()
+    {
+        _videoPlayer.Stop();
+        _videoProgressTimer?.Stop();
+        IsVideoPlaying = false;
+        HasVideoPreview = false;
+        CanPlayVideo = false;
+        VideoFrame = null;
+        VideoPoster = null;
+        VideoPosition = 0;
+        VideoDuration = 0;
+        VideoStatus = string.Empty;
+        _videoProbe = null;
+        _videoBuffers = null;
+        _videoClock.Reset();
+
+        string? temp = _videoTempFile;
+        _videoTempFile = null;
+        if (temp is not null)
+        {
+            TryDeleteFile(temp);
+            TryDeleteDirectory(Path.GetDirectoryName(temp));
+        }
     }
 
     // ============ 替换（Patch） ============
@@ -1561,10 +2080,12 @@ public partial class MainViewModel : ViewModelBase
             PreviewText = preview.Text ?? string.Empty;
             PreviewImage = null;
             ModelPreview = null;
-            if (preview.Data is { Length: > 0 })
+            // 音视频的 Data 是原始载荷（mp4/wav 字节），拿去当图片解会炸在 Skia 里，
+            // 之前的"选中视频报 NRE"就是这么来的。只对真图片解，解不出来就算了。
+            bool isMediaPayload = preview.Kind is "video" or "audio";
+            if (!isMediaPayload && preview.Data is { Length: > 0 } imageData && TryDecodePreviewImage(imageData, out Bitmap? previewImage))
             {
-                using MemoryStream ms = new(preview.Data);
-                PreviewImage = Bitmap.DecodeToWidth(ms, 1280);
+                PreviewImage = previewImage;
             }
 
             List<DetailItem> details = preview.Details.Select(d => new DetailItem(d.Label, d.Value)).ToList();
@@ -1584,17 +2105,33 @@ public partial class MainViewModel : ViewModelBase
             StopAudioPreview();
             AudioDuration = 0;
             AudioPosition = 0;
-            if (string.Equals(preview.Kind, "audio", StringComparison.OrdinalIgnoreCase) || preview.CanPlay)
+            if (string.Equals(preview.Kind, "audio", StringComparison.OrdinalIgnoreCase))
             {
                 try
                 {
-                    AudioPayloadDto audio = await ReadAudioPayloadAsync(item.FullPath);
-                    if (audio.Data is { Length: > 0 })
+                    // 预览里的 Data 已经是解好的 WAV（BINKA 等交给解码库解过）；
+                    // ReadAudioPayloadAsync 返回的是原始载荷（BINKA 裸流），拿去当 WAV 放没有声音。
+                    byte[]? playable = preview.Data is { Length: > 0 } decoded ? decoded : null;
+                    string format = "wav";
+                    if (playable is null)
+                    {
+                        AudioPayloadDto audio = await ReadAudioPayloadAsync(item.FullPath);
+                        playable = audio.Data;
+                        format = audio.Format;
+                    }
+
+                    if (playable is { Length: > 0 })
                     {
                         _audioTempFile = Path.Combine(Path.GetTempPath(), "prism-desktop-audio", $"{Guid.NewGuid():N}.wav");
                         Directory.CreateDirectory(Path.GetDirectoryName(_audioTempFile)!);
-                        await File.WriteAllBytesAsync(_audioTempFile, audio.Data);
-                        AudioStatus = $"{audio.Format}  ·  点击播放";
+                        await File.WriteAllBytesAsync(_audioTempFile, playable);
+                        // 先把进度条填上：只读 WAV 头算时长，不用整段解一遍
+                        if (WavCodec.TryReadSeconds(playable, out var audioSeconds))
+                        {
+                            AudioDuration = audioSeconds;
+                        }
+
+                        AudioStatus = $"{format}  ·  {FormatSize(playable.Length)}";
                         HasAudioPreview = true;
                     }
                 }
@@ -1609,10 +2146,10 @@ public partial class MainViewModel : ViewModelBase
                 HasAudioPreview = false;
             }
 
-            // 视频：暂不支持播放
+            // 视频：解到临时目录后用 ffmpeg 出封面帧并内嵌播放
             if (string.Equals(preview.Kind, "video", StringComparison.OrdinalIgnoreCase))
             {
-                PreviewEmptyText = "视频暂不支持播放，可用「导出原始」获取文件";
+                await PrepareVideoPreviewAsync(item);
             }
 
             PreviewDetails = new ObservableCollection<DetailItem>(details);
@@ -1813,7 +2350,8 @@ public partial class MainViewModel : ViewModelBase
         }
         else
         {
-            Win32PlaySound.Stop();
+            _audioProgressTimer?.Stop();
+            _audioPlayer.Close();
             IsAudioPlaying = false;
             if (oldAudioFile is not null)
             {
@@ -4419,6 +4957,7 @@ public partial class MainViewModel : ViewModelBase
     private void ClearPreview()
     {
         StopAudioPreview();
+        StopVideoPreview();
         PreviewImage = null;
         PreviewTitle = string.Empty;
         PreviewText = string.Empty;
@@ -4442,7 +4981,8 @@ public partial class MainViewModel : ViewModelBase
         catch (Exception ex)
         {
             StatusText = $"错误：{ex.Message}";
-            AddLog($"错误：{ex.Message}");
+            // 日志里带堆栈：这类 NRE 光看消息根本定位不到
+            AddLog($"错误：{ex}");
         }
         finally
         {

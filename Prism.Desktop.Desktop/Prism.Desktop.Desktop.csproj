@@ -131,4 +131,31 @@
              Text="未找到 Oodle 原生库（third_party/lib/win-x64/oo2core_9_win64.dll）。发布包将不带 Oodle，勾选「Oodle 压缩」时会自动降级为不压缩。" />
   </Target>
 
+  <!--
+    BINKA 解码库：桌面上没有 prism_codecs.dll，音频预览里的 BINKA 音频
+    就只能"导出原始"。prism_binka.dll 由 native/BinkaDll/build-win-x64.ps1
+    从同一份 prism_codecs.cpp 编出来（只带解码）。
+  -->
+  <Target Name="CopyBinkaNative" AfterTargets="Build">
+    <ItemGroup>
+      <_BinkaWinFiles Include="$(_OodleWinDir)prism_binka.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_BinkaWinFiles)"
+          DestinationFolder="$(OutDir)"
+          SkipUnchangedFiles="true"
+          ContinueOnError="true" />
+    <Message Condition="'@(_BinkaWinFiles)' != ''"
+             Importance="high"
+             Text="已带上 BINKA 解码库：@(_BinkaWinFiles->'%(Filename)%(Extension)')" />
+  </Target>
+
+  <Target Name="CopyBinkaNativeForPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <_BinkaWinPublishFiles Include="$(_OodleWinDir)prism_binka.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_BinkaWinPublishFiles)"
+          DestinationFolder="$(PublishDir)"
+          SkipUnchangedFiles="true"
+          ContinueOnError="true" />
+  </Target>
 </Project>

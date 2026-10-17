@@ -111,7 +111,7 @@
                     <TextBlock Text="未选择文件"
                                FontSize="{DynamicResource Fs14}"
                                HorizontalAlignment="Center" />
-                    <TextBlock Text="在左侧列表里点一个文件查看预览；贴图、模型、音频与蓝图都能读"
+                    <TextBlock Text="在左侧列表里点一个文件查看预览；贴图、模型、音频、视频与蓝图都能读"
                                FontSize="{DynamicResource Fs11}"
                                Foreground="{DynamicResource TextMutedBrush}"
                                TextAlignment="Center"
@@ -142,8 +142,7 @@
 
                         <Grid Grid.Row="1"
                               ColumnDefinitions="*,Auto"
-                              ColumnSpacing="10"
-                              IsVisible="{Binding IsAndroid}">
+                              ColumnSpacing="10">
                             <Slider Grid.Column="0"
                                     Minimum="0"
                                     Maximum="{Binding AudioDuration}"
@@ -159,6 +158,51 @@
                                        VerticalAlignment="Center" />
                         </Grid>
                     </Grid>
+                </Border>
+
+                <!-- 视频预览：ffmpeg 把帧吐进画布；没有 ffmpeg 就只给系统播放器入口 -->
+                <Border Classes="card" Padding="12" IsVisible="{Binding HasVideoPreview}">
+                    <StackPanel Spacing="10">
+                        <Panel MinHeight="120">
+                            <Image Source="{Binding VideoSurface}"
+                                   Stretch="Uniform"
+                                   MaxHeight="320"
+                                   HorizontalAlignment="Center" />
+                            <TextBlock Text="没有画面"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       FontSize="{DynamicResource Fs11}"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       IsVisible="{Binding HasVideoSurface, Converter={x:Static BoolConverters.Not}}" />
+                        </Panel>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Content="{Binding VideoButtonText}"
+                                    Command="{Binding ToggleVideoPlaybackCommand}"
+                                    Classes="accent"
+                                    MinWidth="70" />
+                            <Button Content="用系统播放器打开"
+                                    Command="{Binding OpenVideoExternallyCommand}"
+                                    Classes="ghost" />
+                        </StackPanel>
+                        <TextBlock Text="{Binding VideoStatus}"
+                                   FontSize="{DynamicResource Fs11}"
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   TextWrapping="Wrap" />
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                            <Slider Minimum="0"
+                                    Maximum="{Binding VideoDuration}"
+                                    Value="{Binding VideoPosition, Mode=TwoWay}"
+                                    IsEnabled="{Binding CanSeekVideo}"
+                                    VerticalAlignment="Center"
+                                    PointerPressed="OnVideoSliderPressed"
+                                    PointerReleased="OnVideoSliderReleased" />
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding VideoTimeText}"
+                                       FontSize="{DynamicResource Fs10}"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       VerticalAlignment="Center" />
+                        </Grid>
+                    </StackPanel>
                 </Border>
 
                 <ItemsControl ItemsSource="{Binding PreviewDetails}"

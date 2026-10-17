@@ -148,4 +148,58 @@ public static class WavCodec
 
     public static byte[] Write16(byte[] pcm16, int sampleRate, int channels) =>
         Write16(new PcmAudio(pcm16, sampleRate, channels));
+
+    /// <summary>
+    /// 只读文件头算时长，不复制 PCM —— 预览面板要在播放前就把进度条填上，
+    /// 为此整段解一遍太浪费。
+    /// </summary>
+    public static bool TryReadSeconds(byte[] data, out double seconds)
+    {
+        seconds = 0;
+        if (data.Length < 12 ||
+            !data.AsSpan(0, 4).SequenceEqual("RIFF"u8) ||
+            !data.AsSpan(8, 4).SequenceEqual("WAVE"u8))
+        {
+            return false;
+        }
+
+        var sampleRate = 0;
+        var channels = 0;
+        var bitsPerSample = 0;
+        var dataLength = -1;
+
+        var position = 12;
+        while (position + 8 <= data.Length)
+        {
+            var chunkId = data.AsSpan(position, 4);
+            var chunkSize = BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan(position + 4, 4));
+            var body = position + 8;
+            if (chunkSize < 0)
+                return false;
+
+            if (chunkId.SequenceEqual("fmt "u8) && chunkSize >= 16 && body + 16 <= data.Length)
+            {
+                channels = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(body + 2));
+                sampleRate = BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan(body + 4));
+                bitsPerSample = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(body + 14));
+            }
+            else if (chunkId.SequenceEqual("data"u8))
+            {
+                dataLength = chunkSize > 0 && body + chunkSize <= data.Length ? chunkSize : data.Length - body;
+                break;
+            }
+
+            position = body + chunkSize + (chunkSize & 1);
+        }
+
+        if (sampleRate <= 0 || channels <= 0 || bitsPerSample <= 0 || dataLength <= 0)
+            return false;
+
+        var bytesPerFrame = channels * (bitsPerSample / 8);
+        if (bytesPerFrame <= 0)
+            return false;
+
+        seconds = dataLength / (double)bytesPerFrame / sampleRate;
+        return seconds > 0;
+    }
 }
