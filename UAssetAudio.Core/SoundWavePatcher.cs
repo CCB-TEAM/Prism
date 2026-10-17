@@ -75,7 +75,8 @@ public static class SoundWavePatcher
             SampleRate: sampleRate,
             Seconds: seconds,
             AudioBytes: audioBytes,
-            MaxChunkBytes: maxChunkBytes)
+            MaxChunkBytes: maxChunkBytes,
+            DataChunkCount: dataChunks.Count)
         {
             Problem = DescribeProblem(layout),
         };

@@ -45,6 +45,8 @@ internal static class UiCapture
             ("workspace-browse", "GoWorkspace", 1),
             ("workspace-replace-audio", "GoWorkspace", 2),
             ("workspace-replace-media", "GoWorkspace", 2),
+            ("preview-audio", "GoWorkspace", 1),
+            ("preview-video", "GoWorkspace", 1),
             ("merge", "GoMerge", 0),
             ("convert", "GoConvert", 0),
             ("settings", "GoSettings", 0),
@@ -70,6 +72,12 @@ internal static class UiCapture
                     if (pageLabel.StartsWith("workspace-replace", StringComparison.Ordinal))
                     {
                         SeedPatchDemo(vm, selectMedia: pageLabel.EndsWith("media", StringComparison.Ordinal));
+                    }
+
+                    // 预览栏的内置播放器 / 视频画面：同样造一份示例状态
+                    if (pageLabel.StartsWith("preview-", StringComparison.Ordinal))
+                    {
+                        SeedPreviewDemo(vm, video: pageLabel.EndsWith("video", StringComparison.Ordinal));
                     }
 
                     string name = $"{theme}-{viewportLabel}-{pageLabel}.png";
@@ -144,7 +152,7 @@ internal static class UiCapture
                 workDirectory: Path.GetTempPath(),
                 inputUassetPath: string.Empty)
             {
-                Detail = "2 声道 / 48,000 Hz · 2.53 秒 · 原始 12 KB",
+                Detail = "2 声道 / 48,000 Hz · 2.53 秒 · 1 块（最大 11.9 KB） · 原始 11.9 KB",
                 AudioQuality = 4,
                 Status = "已替换",
                 ReplacementName = "arrow_loop.wav",
@@ -176,6 +184,77 @@ internal static class UiCapture
             ? vm.PatchItems.FirstOrDefault(item => item.IsMedia)
             : vm.PatchItems.FirstOrDefault(item => item.IsAudio);
         Pump();
+    }
+
+    /// <summary>
+    /// 给预览栏塞一份"已选中媒体文件"的示例状态：音频播放器 / 视频画面 + 进度条。
+    /// 只用公开可见属性拼状态，不碰播放器本身（截图不需要真的出声）。
+    /// </summary>
+    private static void SeedPreviewDemo(MainViewModel vm, bool video)
+    {
+        // 同一视口里页面是连着截的，先把上一种预览状态清掉，免得两张卡叠在一起
+        vm.HasAudioPreview = false;
+        vm.HasVideoPreview = false;
+        vm.VideoPoster = null;
+
+        vm.HasPreview = true;
+        vm.SelectedPathText = video
+            ? "Kards/Content/Movies/Preview_Sample.mp4"
+            : "Kards/Content/Audio/AU_Arrow_morse_loop_01.uasset";
+        vm.PreviewTitle = video ? "Preview_Sample.mp4" : "AU_Arrow_morse_loop_01";
+        vm.PreviewDetails = new System.Collections.ObjectModel.ObservableCollection<Prism.Desktop.Models.DetailItem>(
+        [
+            new("Export", video ? "FileMediaSource" : "SoundWave"),
+            new("Format", video ? "MP4" : "BINKA"),
+            new("Size", video ? "597.55 KB" : "474.75 KB"),
+        ]);
+
+        if (video)
+        {
+            vm.HasVideoPreview = true;
+            vm.CanPlayVideo = true;
+            vm.VideoDuration = 6;
+            vm.VideoPosition = 2.4;
+            vm.VideoStatus = "640×360 · 0:06.0 · 静音预览";
+            vm.VideoPoster = LoadDemoPoster();
+        }
+        else
+        {
+            vm.HasAudioPreview = true;
+            vm.AudioStatus = "wav  ·  474.75 KB";
+            vm.AudioDuration = 2.53;
+            vm.AudioPosition = 1.1;
+            vm.AudioButtonText = "暂停";
+            vm.IsAudioPlaying = true;
+        }
+
+        Pump();
+    }
+
+    /// <summary>示例封面帧：仓库里的 artifacts/e2e/poster.png（没有就不放图，卡片会显示占位）。</summary>
+    private static Avalonia.Media.Imaging.Bitmap? LoadDemoPoster()
+    {
+        DirectoryInfo? dir = new(AppContext.BaseDirectory);
+        for (var i = 0; i < 8 && dir is not null; i++)
+        {
+            string candidate = Path.Combine(dir.FullName, "artifacts", "e2e", "poster.png");
+            if (File.Exists(candidate))
+            {
+                try
+                {
+                    using FileStream stream = File.OpenRead(candidate);
+                    return Avalonia.Media.Imaging.Bitmap.DecodeToWidth(stream, 640);
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+
+            dir = dir.Parent;
+        }
+
+        return null;
     }
 
     private static (MainViewModel Vm, MainWindow Window) CreateShell(double width, double height, string theme, bool collapsed)    {

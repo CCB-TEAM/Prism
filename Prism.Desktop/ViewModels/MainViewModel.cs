@@ -3320,7 +3320,7 @@ public partial class MainViewModel : ViewModelBase
             workDirectory: workDir,
             inputUassetPath: inputUassetPath)
         {
-            Detail = $"{info.DescribeChannels} · {info.DescribeSeconds} · {info.ChunkCount} 块（最大 {FormatSize(info.MaxChunkBytes)}） · 原始 {FormatSize(info.AudioBytes)}",
+            Detail = $"{info.DescribeChannels} · {info.DescribeSeconds} · {Math.Max(1, info.DataChunkCount)} 块（最大 {FormatSize(info.MaxChunkBytes)}） · 原始 {FormatSize(info.AudioBytes)}",
         };
 
         // 预览已经把原始音频解码成可播放的 WAV，这里不需要再读一次
