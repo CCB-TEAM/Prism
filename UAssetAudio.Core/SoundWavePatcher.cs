@@ -41,6 +41,9 @@ public static class SoundWavePatcher
         var sampleRate = GetInt(export, "SampleRate");
         var seconds = (double)GetFloat(export, "Duration");
         var audioBytes = layout.Chunks.Sum(chunk => Math.Max(chunk.DataSize, 0));
+        // 每块最大字节数：真实资产通常被零填充到烤制时的 MaxChunkSize，
+        // 摊给 UI 看就能对照游戏自己的规格（而不是我们凭空的 256 KB 闸门）。
+        var maxChunkBytes = layout.Chunks.Count == 0 ? 0 : layout.Chunks.Max(chunk => Math.Max(chunk.DataSize, 0));
 
         // 属性缺失时退回到 ABEU 头里的值（头是音频自身的真值时更可信）
         if (layout.Header is { Length: >= BinkaEncoder.HeaderSize })
@@ -68,7 +71,8 @@ public static class SoundWavePatcher
             Channels: channels,
             SampleRate: sampleRate,
             Seconds: seconds,
-            AudioBytes: audioBytes)
+            AudioBytes: audioBytes,
+            MaxChunkBytes: maxChunkBytes)
         {
             Problem = DescribeProblem(layout),
         };

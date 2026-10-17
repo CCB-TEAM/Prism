@@ -30,7 +30,8 @@ public sealed record SoundWaveInfo(
     int Channels,
     int SampleRate,
     double Seconds,
-    int AudioBytes)
+    int AudioBytes,
+    int MaxChunkBytes = 0)
 {
     /// <summary>可替换时为 null，否则是给人看的原因。</summary>
     public string? Problem { get; init; }
