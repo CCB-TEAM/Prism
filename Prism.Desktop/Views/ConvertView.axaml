@@ -26,34 +26,72 @@
                     <!-- ═══ 输入 ═══ -->
                     <Border Classes="card" Padding="18">
                         <StackPanel Spacing="12">
+                            <TextBlock Text="输入与输出" Classes="card-title" />
+
                             <Grid ColumnDefinitions="110,*,Auto" ColumnSpacing="10">
                                 <TextBlock Grid.Column="0" Text="主 Pak" FontSize="{DynamicResource Fs12}" Foreground="{DynamicResource TextMutedBrush}"
                                            VerticalAlignment="Center" />
-                                <TextBlock Grid.Column="1" Text="{Binding PakPath}" FontSize="{DynamicResource Fs12}" Foreground="{DynamicResource TextMutedBrush}"
-                                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                                           ToolTip.Tip="{Binding PakPath}" />
-                                <Button Grid.Column="2" Content="选择" Command="{Binding BrowsePakCommand}"
-                                        Classes="ghost" />
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding PakPath}"
+                                           FontSize="{DynamicResource Fs12}"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"
+                                           ToolTip.Tip="{Binding PakPath}"
+                                           IsVisible="{Binding PakPath, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                <TextBlock Grid.Column="1"
+                                           Text="未选择"
+                                           FontSize="{DynamicResource Fs12}"
+                                           Foreground="{DynamicResource TextMutedBrush}"
+                                           VerticalAlignment="Center"
+                                           IsVisible="{Binding PakPath, Converter={x:Static StringConverters.IsNullOrEmpty}}" />
+                                <Button Grid.Column="2"
+                                        Content="选择"
+                                        Command="{Binding BrowsePakCommand}"
+                                        Classes="link" />
                             </Grid>
 
                             <Grid ColumnDefinitions="110,*,Auto" ColumnSpacing="10">
                                 <TextBlock Grid.Column="0" Text="待转换 Pak" FontSize="{DynamicResource Fs12}" Foreground="{DynamicResource TextMutedBrush}"
                                            VerticalAlignment="Center" />
-                                <TextBlock Grid.Column="1" Text="{Binding ConvertSourcePath}" FontSize="{DynamicResource Fs12}" Foreground="{DynamicResource TextMutedBrush}"
-                                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                                           ToolTip.Tip="{Binding ConvertSourcePath}" />
-                                <Button Grid.Column="2" Content="选择" Command="{Binding BrowseConvertSourceCommand}"
-                                        Classes="ghost" />
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding ConvertSourcePath}"
+                                           FontSize="{DynamicResource Fs12}"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"
+                                           ToolTip.Tip="{Binding ConvertSourcePath}"
+                                           IsVisible="{Binding ConvertSourcePath, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                <TextBlock Grid.Column="1"
+                                           Text="未选择"
+                                           FontSize="{DynamicResource Fs12}"
+                                           Foreground="{DynamicResource TextMutedBrush}"
+                                           VerticalAlignment="Center"
+                                           IsVisible="{Binding ConvertSourcePath, Converter={x:Static StringConverters.IsNullOrEmpty}}" />
+                                <Button Grid.Column="2"
+                                        Content="选择"
+                                        Command="{Binding BrowseConvertSourceCommand}"
+                                        Classes="link" />
                             </Grid>
 
                             <Grid ColumnDefinitions="110,*,Auto" ColumnSpacing="10">
                                 <TextBlock Grid.Column="0" Text="输出" FontSize="{DynamicResource Fs12}" Foreground="{DynamicResource TextMutedBrush}"
                                            VerticalAlignment="Center" />
-                                <TextBlock Grid.Column="1" Text="{Binding ConvertOutputPath}" FontSize="{DynamicResource Fs12}" Foreground="{DynamicResource TextMutedBrush}"
-                                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                                           ToolTip.Tip="{Binding ConvertOutputPath}" />
-                                <Button Grid.Column="2" Content="选择" Command="{Binding BrowseConvertOutputCommand}"
-                                        Classes="ghost" />
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding ConvertOutputPath}"
+                                           FontSize="{DynamicResource Fs12}"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"
+                                           ToolTip.Tip="{Binding ConvertOutputPath}"
+                                           IsVisible="{Binding ConvertOutputPath, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                <TextBlock Grid.Column="1"
+                                           Text="未选择"
+                                           FontSize="{DynamicResource Fs12}"
+                                           Foreground="{DynamicResource TextMutedBrush}"
+                                           VerticalAlignment="Center"
+                                           IsVisible="{Binding ConvertOutputPath, Converter={x:Static StringConverters.IsNullOrEmpty}}" />
+                                <Button Grid.Column="2"
+                                        Content="选择"
+                                        Command="{Binding BrowseConvertOutputCommand}"
+                                        Classes="link" />
                             </Grid>
 
                             <TextBlock Text="未选择主 Pak，请先选择后再回到本页。"
@@ -61,7 +99,11 @@
                                        Foreground="{DynamicResource DangerBrush}"
                                        IsVisible="{Binding IsPakPathEmpty}" />
 
-                            <StackPanel Spacing="8" Margin="0,4,0,0">
+                            <Border Height="1" Background="{DynamicResource DividerBrush}" Margin="0,4" />
+
+                            <TextBlock Text="选项" Classes="card-title" />
+
+                            <StackPanel Spacing="8" Margin="0,0,0,0">
                                 <CheckBox Content="并入模组的其他文件（蓝图 / 本地化等）"
                                           IsChecked="{Binding ConvertIncludeModFiles}" />
                                 <CheckBox Content="输出完整整包"

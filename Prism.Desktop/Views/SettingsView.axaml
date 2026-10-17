@@ -19,7 +19,7 @@
             <!-- 通用 -->
             <Border Classes="card" Padding="22" Margin="{Binding CardGapMargin}">
                 <StackPanel Spacing="14">
-                    <TextBlock Text="通用" FontSize="{DynamicResource Fs12}" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" />
+                    <TextBlock Text="通用" Classes="card-title" />
                     <CheckBox Content="显示纹理缩略图"
                               IsChecked="{Binding ShowThumbnails}" />
                     <CheckBox Content="替换时使用 Oodle 压缩"
@@ -49,7 +49,7 @@
             <!-- 路径 -->
             <Border Classes="card" Padding="22" Margin="{Binding CardGapMargin}">
                 <StackPanel Spacing="14">
-                    <TextBlock Text="路径" FontSize="{DynamicResource Fs12}" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" />
+                    <TextBlock Text="路径" Classes="card-title" />
                     <StackPanel Spacing="6">
                         <TextBlock Text="Pak 文件" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}" />
                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
@@ -98,7 +98,7 @@
             <!-- 合并 -->
             <Border Classes="card" Padding="22" Margin="{Binding CardGapMargin}">
                 <StackPanel Spacing="14">
-                    <TextBlock Text="合并" FontSize="{DynamicResource Fs12}" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" />
+                    <TextBlock Text="合并" Classes="card-title" />
 
                     <!-- 合并输入已改为列表（支持多选 + 拖动排序），这里只显示摘要 -->
                     <StackPanel Spacing="6">
@@ -135,15 +135,20 @@
             <!-- Pak 转换 -->
             <Border Classes="card" Padding="22" Margin="{Binding CardGapMargin}">
                 <StackPanel Spacing="14">
-                    <TextBlock Text="Pak 转换" FontSize="{DynamicResource Fs12}" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" />
+                    <TextBlock Text="Pak 转换" Classes="card-title" />
 
                     <StackPanel Spacing="6">
                         <TextBlock Text="主 Pak" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}" />
                         <TextBlock Text="{Binding PakPath}"
                                    FontSize="{DynamicResource Fs12}"
-                                   Foreground="{DynamicResource TextMutedBrush}"
                                    TextTrimming="CharacterEllipsis"
-                                   ToolTip.Tip="{Binding PakPath}" />
+                                   ToolTip.Tip="{Binding PakPath}"
+                                   IsVisible="{Binding PakPath, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                        <TextBlock Text="未选择 —— 在「解包 &amp; 模组」页选主 Pak"
+                                   FontSize="{DynamicResource Fs12}"
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   TextWrapping="Wrap"
+                                   IsVisible="{Binding PakPath, Converter={x:Static StringConverters.IsNullOrEmpty}}" />
                     </StackPanel>
                     <StackPanel Spacing="6">
                         <TextBlock Text="待转换 Pak" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}" />
@@ -165,7 +170,7 @@
             <!-- AES -->
             <Border Classes="card" Padding="22" Margin="{Binding CardGapMargin}">
                 <StackPanel Spacing="8">
-                    <TextBlock Text="AES 密钥" FontSize="{DynamicResource Fs12}" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" />
+                    <TextBlock Text="AES 密钥" Classes="card-title" />
                     <TextBox Text="{Binding AesKey}"
                              PlaceholderText="如需解密请填写" />
                     <TextBlock Text="密钥明文保存在本地配置文件，注意不要外发。"
@@ -178,7 +183,7 @@
             <!-- 信息 -->
             <Border Classes="card" Padding="22" Margin="{Binding CardGapMargin}">
                 <StackPanel Spacing="12">
-                    <TextBlock Text="信息" FontSize="{DynamicResource Fs12}" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" />
+                    <TextBlock Text="信息" Classes="card-title" />
                     <StackPanel Orientation="Horizontal" Spacing="12">
                         <TextBlock Text="版本" FontSize="{DynamicResource Fs11}" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
                         <TextBlock Text="{Binding VersionText}" FontSize="{DynamicResource Fs13}" />
@@ -201,7 +206,7 @@
             <Border Classes="card" Padding="22" Margin="{Binding CardGapMargin}">
                 <StackPanel Spacing="10">
                     <DockPanel>
-                        <TextBlock Text="日志" FontSize="{DynamicResource Fs12}" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
+                        <TextBlock Text="日志" Classes="card-title" VerticalAlignment="Center" />
                         <Button DockPanel.Dock="Right"
                                 Content="导出日志"
                                 Command="{Binding ExportLogCommand}"
@@ -223,7 +228,7 @@
             <!-- 缓存（仅 Android 显示说明，桌面直接使用原路径） -->
             <Border Classes="card" Padding="22" Margin="{Binding CardGapMargin}" IsVisible="{Binding IsAndroid}">
                 <StackPanel Spacing="8">
-                    <TextBlock Text="缓存" FontSize="{DynamicResource Fs12}" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" />
+                    <TextBlock Text="缓存" Classes="card-title" />
                     <TextBlock Text="选择的文件会复制到应用私有缓存；换新文件后旧缓存自动删除。"
                                FontSize="{DynamicResource Fs10}"
                                Foreground="{DynamicResource TextMutedBrush}"

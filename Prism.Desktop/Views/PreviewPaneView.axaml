@@ -49,10 +49,21 @@
             </Panel>
         </Border>
 
-        <TextBlock Text="{Binding PreviewEmptyText}"
-                   FontSize="{DynamicResource Fs12}"
-                   Foreground="{DynamicResource TextMutedBrush}"
-                   IsVisible="{Binding HasPreview, Converter={x:Static BoolConverters.Not}}" />
+        <!-- 空状态：不是一句浮在左上角的小字，而是一块安静居中的提示 -->
+        <StackPanel Spacing="8"
+                    Margin="0,90,0,0"
+                    HorizontalAlignment="Center"
+                    IsVisible="{Binding HasPreview, Converter={x:Static BoolConverters.Not}}">
+            <TextBlock Text="未选择文件"
+                       FontSize="{DynamicResource Fs14}"
+                       HorizontalAlignment="Center" />
+            <TextBlock Text="在左侧列表里点一个文件查看预览；贴图、模型、音频与蓝图都能读"
+                       FontSize="{DynamicResource Fs11}"
+                       Foreground="{DynamicResource TextMutedBrush}"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap"
+                       MaxWidth="320" />
+        </StackPanel>
 
         <!-- 内置音频播放器：播放/停止 + Android 进度条拖动定位 -->
         <Border Classes="card"

@@ -82,10 +82,10 @@
                     Padding="14,8"
                     Background="{DynamicResource SurfaceBrush}">
                 <Grid ColumnDefinitions="*,90,70">
-                    <TextBlock Text="Name" FontSize="{DynamicResource Fs11}" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" />
-                    <TextBlock Grid.Column="1" Text="Type" FontSize="{DynamicResource Fs11}" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" />
+                    <TextBlock Text="名称" FontSize="{DynamicResource Fs11}" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" />
+                    <TextBlock Grid.Column="1" Text="类型" FontSize="{DynamicResource Fs11}" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" />
                     <TextBlock Grid.Column="2"
-                               Text="Size"
+                               Text="大小"
                                FontSize="{DynamicResource Fs11}"
                                FontWeight="SemiBold"
                                Foreground="{DynamicResource TextMutedBrush}"

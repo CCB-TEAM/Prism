@@ -165,7 +165,7 @@
             <Panel IsVisible="{Binding IsBrowseTab}">
                     <!-- 横屏：左列表 + 右详情 -->
                     <Grid x:Name="LandscapeLayout"
-                          ColumnDefinitions="420,*">
+                          ColumnDefinitions="2*,3*">
                         <views:FileBrowserView />
                         <Border Grid.Column="1"
                                 BorderBrush="{DynamicResource DividerBrush}"

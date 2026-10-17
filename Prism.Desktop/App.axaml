@@ -147,6 +147,7 @@
         <!-- 标签页 -->
         <Style Selector="Button.tab">
             <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
             <Setter Property="CornerRadius" Value="8" />
             <Setter Property="Padding" Value="14,7" />
@@ -177,6 +178,7 @@
         <!-- 按钮：强调（浅色底） -->
         <Style Selector="Button.accent">
             <Setter Property="Background" Value="{DynamicResource PrimaryWashBrush}" />
+            <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
             <Setter Property="CornerRadius" Value="8" />
             <Setter Property="Padding" Value="12,7" />
@@ -191,6 +193,7 @@
         <!-- 按钮：幽灵（无底） -->
         <Style Selector="Button.ghost">
             <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
             <Setter Property="CornerRadius" Value="8" />
             <Setter Property="Padding" Value="10,7" />
@@ -199,6 +202,21 @@
         <Style Selector="Button.ghost:pointerover /template/ ContentPresenter">
             <Setter Property="Background" Value="{DynamicResource PrimaryWashBrush}" />
             <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+        </Style>
+
+        <!--
+            禁用态的次级按钮：Fluent 会给它们画一块实心灰底，在「什么都没打开」的初态下
+            整排按钮都变成灰药丸，比可用状态还抢眼。这里让 ghost / accent / link 禁用时
+            只保留文字（变淡），底色仍是透明。
+        -->
+        <Style Selector="Button.ghost:disabled /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.accent:disabled /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.link:disabled /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
         </Style>
 
         <!-- 卡片 -->
@@ -272,6 +290,13 @@
         <Style Selector="Button.nav.active:pointerover /template/ ContentPresenter">
             <Setter Property="Background" Value="{DynamicResource PrimaryWashBrush}" />
             <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+        </Style>
+
+        <!-- 卡片内小节标签：字距放开、弱化下去，靠"标签 + 内容"分节，而不是靠大字号喊 -->
+        <Style Selector="TextBlock.card-title">
+            <Setter Property="FontSize" Value="{DynamicResource Fs10}" />
+            <Setter Property="LetterSpacing" Value="1.2" />
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
         </Style>
 
         <Style Selector="Border.page-header">
