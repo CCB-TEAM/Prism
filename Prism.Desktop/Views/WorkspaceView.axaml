@@ -102,7 +102,7 @@
                                     <TextBox Grid.Column="0"
                                              Text="{Binding PakPath}"
                                              IsReadOnly="True"
-                                             Watermark="未选择"
+                                             PlaceholderText="未选择"
                                              ToolTip.Tip="{Binding PakPath}" />
                                     <Button Grid.Column="1"
                                             Content="选择"
@@ -116,7 +116,7 @@
                                     <TextBox Grid.Column="0"
                                              Text="{Binding UsmapPath}"
                                              IsReadOnly="True"
-                                             Watermark="未选择（可选）"
+                                             PlaceholderText="未选择（可选）"
                                              ToolTip.Tip="{Binding UsmapPath}" />
                                     <Button Grid.Column="1"
                                             Content="选择"

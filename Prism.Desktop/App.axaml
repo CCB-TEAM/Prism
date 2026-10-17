@@ -144,6 +144,42 @@
             <Setter Property="Background" Value="{DynamicResource PrimaryWashBrush}" />
         </Style>
 
+        <!--
+            ═══ 微交互 ═══
+            按钮/列表项的底色与应用内其它动画统一：Fluent 默认是"瞬切"，鼠标扫过一排按钮
+            时视觉很硬。这里给模板里的 ContentPresenter 加 140ms 过渡，hover / 选中 /
+            按下都在同一套节奏里淡入淡出。
+
+            注意位置：必须作用于 Button 模板内的 ContentPresenter —— 指针悬停样式改的
+            就是它的 Background，改 Button.Background 本身没有视觉效果。
+        -->
+        <Style Selector="Button /template/ ContentPresenter">
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="Background" Duration="0:0:0.14" />
+                    <BrushTransition Property="BorderBrush" Duration="0:0:0.14" />
+                </Transitions>
+            </Setter>
+        </Style>
+
+        <Style Selector="ListBoxItem /template/ ContentPresenter">
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="Background" Duration="0:0:0.14" />
+                </Transitions>
+            </Setter>
+        </Style>
+
+        <!-- 卡片描边在 hover 时淡入，而不是"啪"地变色 -->
+        <Style Selector="Border.card">
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="BorderBrush" Duration="0:0:0.14" />
+                    <BrushTransition Property="Background" Duration="0:0:0.18" />
+                </Transitions>
+            </Setter>
+        </Style>
+
         <!-- 标签页 -->
         <Style Selector="Button.tab">
             <Setter Property="Background" Value="Transparent" />

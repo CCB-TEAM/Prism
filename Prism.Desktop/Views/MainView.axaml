@@ -21,6 +21,12 @@
         <Grid ColumnDefinitions="Auto,*">
 
             <!-- ═══ 侧边导航（宽窗）═══ -->
+            <!--
+                折叠用 IsVisible 直接显隐，不做宽度过渡。
+                试过把 Width 从 216 过渡到 0：宽度是布局属性，过渡期间渲染宽度与布局列宽
+                会对不上（侧栏画到一半、内容却按全宽排），页头和标签页直接压在侧栏上。
+                布局类属性不该拿来做动画。
+            -->
             <Border Grid.Column="0"
                     Width="216"
                     Classes="sidebar"
@@ -137,35 +143,35 @@
                                               IsAnimationEnabled="{Binding IsAnimationsEnabled}"
                                               OffsetY="0"
                                               StartScale="0.985"
-                                              Duration="0:0:0.20">
+                                              Duration="0:0:0.28">
                         <views:HomeView x:Name="HomeViewControl" />
                     </views:ViewTransitionHost>
 
                     <views:ViewTransitionHost IsVisible="{Binding IsWorkspaceVisible}"
                                               IsAnimationEnabled="{Binding IsAnimationsEnabled}"
-                                              OffsetY="6"
-                                              Duration="0:0:0.18">
+                                              OffsetY="12"
+                                              Duration="0:0:0.24">
                         <views:WorkspaceView x:Name="WorkspaceViewControl" DataContext="{Binding}" />
                     </views:ViewTransitionHost>
 
                     <views:ViewTransitionHost IsVisible="{Binding IsMergeVisible}"
                                               IsAnimationEnabled="{Binding IsAnimationsEnabled}"
-                                              OffsetY="10"
-                                              Duration="0:0:0.18">
+                                              OffsetY="16"
+                                              Duration="0:0:0.24">
                         <views:MergeView x:Name="MergeViewControl" />
                     </views:ViewTransitionHost>
 
                     <views:ViewTransitionHost IsVisible="{Binding IsConvertVisible}"
                                               IsAnimationEnabled="{Binding IsAnimationsEnabled}"
-                                              OffsetY="10"
-                                              Duration="0:0:0.18">
+                                              OffsetY="16"
+                                              Duration="0:0:0.24">
                         <views:ConvertView x:Name="ConvertViewControl" />
                     </views:ViewTransitionHost>
 
                     <views:ViewTransitionHost IsVisible="{Binding IsSettingsVisible}"
                                               IsAnimationEnabled="{Binding IsAnimationsEnabled}"
-                                              OffsetY="10"
-                                              Duration="0:0:0.18">
+                                              OffsetY="16"
+                                              Duration="0:0:0.24">
                         <views:SettingsView x:Name="SettingsViewControl" />
                     </views:ViewTransitionHost>
                 </Panel>
