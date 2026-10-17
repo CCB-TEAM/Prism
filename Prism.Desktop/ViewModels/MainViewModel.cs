@@ -282,10 +282,14 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>
     /// 搜索框提示语：输入看起来像 Pak 内路径时切换文案，
     /// 让"可以直接输入路径跳转"这一能力可被发现。
+    ///
+    /// 文案要短：搜索框本身只有 230 px（宽屏 360 px），原先那句
+    /// "搜索关键词，或直接输入 Pak 内路径（如 Game/Content/UI）" 会被截成
+    /// "…（如 Game/Conte"，恰好把示例剪断，比不写还难看。示例挪到 ToolTip。
     /// </summary>
     public string SearchPlaceholder => LooksLikePackagePath(SearchQuery)
         ? "按回车跳转到该路径"
-        : "搜索关键词，或直接输入 Pak 内路径（如 Game/Content/UI）";
+        : "搜索关键词，或输入 Pak 内路径";
 
     partial void OnSearchQueryChanged(string value) => OnPropertyChanged(nameof(SearchPlaceholder));
 

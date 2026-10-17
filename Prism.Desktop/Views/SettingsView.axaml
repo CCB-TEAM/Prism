@@ -4,30 +4,42 @@
              x:Class="Prism.Desktop.Views.SettingsView"
              x:DataType="vm:MainViewModel">
 
-    <ScrollViewer>
-        <StackPanel MaxWidth="{Binding SettingsContentMaxWidth}"
-                    HorizontalAlignment="Stretch"
-                    Margin="16,20"
-                    Spacing="20">
-            <StackPanel Orientation="Horizontal" Spacing="12">
-                <Button Content="←"
-                        FontSize="{DynamicResource Fs16}"
-                        Foreground="{DynamicResource TextMutedBrush}"
-                        Background="Transparent"
-                        Command="{Binding GoHomeCommand}" />
-                <TextBlock Text="设置"
-                           FontSize="{DynamicResource Fs20}"
-                           FontWeight="SemiBold"
-                           VerticalAlignment="Center" />
-                <Button Content="使用说明"
+    <!-- 顶栏固定，不随内容滚动（与另外三页一致） -->
+    <DockPanel>
+        <Border DockPanel.Dock="Top" Padding="12,10">
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                <Button Grid.Column="0"
+                        Content="←"
+                        Classes="back"
+                        Command="{Binding GoHomeCommand}"
+                        Margin="0,0,10,0" />
+                <TextBlock Grid.Column="1"
+                           Text="设置"
+                           Classes="page-title" />
+                <Button Grid.Column="2"
+                        Content="使用说明"
                         Command="{Binding OpenHelpCommand}"
                         CommandParameter="settings"
                         Classes="ghost"
                         FontSize="{DynamicResource Fs11}"
                         VerticalAlignment="Center"
-                        Margin="4,0,0,0" />
-            </StackPanel>
+                        Margin="0,0,10,0" />
+                <TextBlock Grid.Column="3"
+                           Text="{Binding StatusText}"
+                           FontSize="{DynamicResource Fs11}"
+                           Foreground="{DynamicResource TextMutedBrush}"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           MaxWidth="{Binding TopStatusMaxWidth}"
+                           ToolTip.Tip="{Binding StatusText}" />
+            </Grid>
+        </Border>
 
+        <ScrollViewer>
+            <StackPanel MaxWidth="{Binding SettingsContentMaxWidth}"
+                        HorizontalAlignment="Stretch"
+                        Margin="16,20"
+                        Spacing="20">
             <!-- 宽屏两列：用宽度换高度，一屏能看到全部卡片 -->
             <UniformGrid Columns="{Binding SettingsColumns}">
 
@@ -74,7 +86,7 @@
                             <Button Grid.Column="1"
                                     Content="浏览"
                                     Command="{Binding BrowsePakCommand}"
-                                    Classes="ghost" />
+                                    Classes="link" />
                         </Grid>
                     </StackPanel>
                     <StackPanel Spacing="6">
@@ -87,7 +99,7 @@
                             <Button Grid.Column="1"
                                     Content="浏览"
                                     Command="{Binding BrowseUsmapCommand}"
-                                    Classes="ghost" />
+                                    Classes="link" />
                         </Grid>
                     </StackPanel>
                     <StackPanel Spacing="6">
@@ -99,7 +111,7 @@
                             <Button Grid.Column="1"
                                     Content="浏览"
                                     Command="{Binding BrowseExportDirCommand}"
-                                    Classes="ghost" />
+                                    Classes="link" />
                         </Grid>
                         <TextBlock Text="Android 使用系统目录授权保存，不会申请“所有文件”权限。"
                                    FontSize="{DynamicResource Fs10}"
@@ -141,7 +153,7 @@
                             <Button Grid.Column="1"
                                     Content="浏览"
                                     Command="{Binding BrowseMergeOutputCommand}"
-                                    Classes="ghost" />
+                                    Classes="link" />
                         </Grid>
                     </StackPanel>
                 </StackPanel>
@@ -246,6 +258,7 @@
                 </StackPanel>
             </Border>
             </UniformGrid>
-        </StackPanel>
-    </ScrollViewer>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
 </UserControl>

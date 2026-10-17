@@ -19,6 +19,9 @@
                     <SolidColorBrush x:Key="DividerBrush" Color="#d6d5d1" />
                     <SolidColorBrush x:Key="TextMutedBrush" Color="#67665f" />
                     <SolidColorBrush x:Key="TextPrimaryBrush" Color="#33322e" />
+                    <!-- 输入面：比卡片略亮，读起来是"可以打字的地方"，而不是和卡片同一块面 -->
+                    <SolidColorBrush x:Key="FieldBrush" Color="#ffffff" />
+                    <SolidColorBrush x:Key="FieldBorderBrush" Color="#cdccc7" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Dark">
                     <SolidColorBrush x:Key="PrimaryWashBrush" Color="#0d948833" />
@@ -27,6 +30,12 @@
                     <SolidColorBrush x:Key="DividerBrush" Color="#3a3a3d" />
                     <SolidColorBrush x:Key="TextMutedBrush" Color="#b6b6ba" />
                     <SolidColorBrush x:Key="TextPrimaryBrush" Color="#ffffff" />
+                    <!--
+                        深色下 Fluent 默认把 TextBox 画成纯黑，压在 #262629 的卡片上像挖了个洞。
+                        这里把它抬到比卡片高一档的灰，边界用更亮的描边，才像控件而不像缺口。
+                    -->
+                    <SolidColorBrush x:Key="FieldBrush" Color="#313135" />
+                    <SolidColorBrush x:Key="FieldBorderBrush" Color="#4a4a4f" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
 
@@ -76,6 +85,64 @@
 
     <Application.Styles>
         <FluentTheme />
+
+        <!--
+            ═══ 统一控件底座 ═══
+            这些是"所有页面都必须长一样"的部分：圆角、输入面、默认按钮形态。
+            原先圆角是散的（卡片 12、自定义按钮 8、Fluent 默认按钮与输入框各按自己的），
+            输入框在深色下还是纯黑，压在卡片上像挖了个洞。
+        -->
+        <Style Selector="Button">
+            <Setter Property="CornerRadius" Value="8" />
+        </Style>
+
+        <Style Selector="TextBox">
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Background" Value="{DynamicResource FieldBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource FieldBorderBrush}" />
+            <Setter Property="MinHeight" Value="34" />
+            <Setter Property="Padding" Value="10,6" />
+        </Style>
+        <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
+            <Setter Property="BorderBrush" Value="{DynamicResource PrimaryBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+
+        <!-- 顶栏：返回按钮与页面标题。四个业务页原本各写一套，
+             结果合并页成了灰色方块、标题字号 15/18/20 三种。 -->
+        <Style Selector="Button.back">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+            <Setter Property="Padding" Value="7,3" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="FontSize" Value="{DynamicResource Fs16}" />
+            <Setter Property="CornerRadius" Value="8" />
+        </Style>
+        <Style Selector="Button.back:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource PrimaryWashBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+        </Style>
+
+        <Style Selector="TextBlock.page-title">
+            <Setter Property="FontSize" Value="{DynamicResource Fs18}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+
+        <!-- 次要动作（"浏览""选择""清空"）：用主色描出可点，而不是和正文同色的死文本 -->
+        <Style Selector="Button.link">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+            <Setter Property="Padding" Value="8,5" />
+            <Setter Property="FontSize" Value="{DynamicResource Fs11}" />
+            <Setter Property="CornerRadius" Value="8" />
+        </Style>
+        <Style Selector="Button.link:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource PrimaryWashBrush}" />
+        </Style>
 
         <!-- 标签页 -->
         <Style Selector="Button.tab">
@@ -152,6 +219,24 @@
         </Style>
         <Style Selector="Button.card:pointerover /template/ ContentPresenter">
             <Setter Property="BorderBrush" Value="{DynamicResource PrimaryLightBrush}" />
+        </Style>
+
+        <!--
+            主页入口的图标底座。原先五个入口各是一个裸 emoji，粗细、色彩、视觉重量
+            全随系统字体变化，摆在一起像五个不同年代的表情符号。套一个同尺寸的浅色
+            方块之后，大小与位置立刻对齐，换成别的图标也不会散。
+        -->
+        <Style Selector="Border.icon-chip">
+            <Setter Property="Width" Value="44" />
+            <Setter Property="Height" Value="44" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="Background" Value="{DynamicResource PrimaryWashBrush}" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Border.icon-chip.small">
+            <Setter Property="Width" Value="36" />
+            <Setter Property="Height" Value="36" />
+            <Setter Property="CornerRadius" Value="10" />
         </Style>
     </Application.Styles>
 </Application>
