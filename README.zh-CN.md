@@ -248,6 +248,10 @@ Prism **不**分发 Oodle。若你在本地或私有构建中放入 Oodle 相关
 # 后者需要先有 Release 产物，没有则跳过该组）
 dotnet run --project test/Prism.FeatureTests
 
+# 界面截图：每个页面 × 浅色/深色 × 紧凑/宽屏，由 Skia 渲染成 PNG
+# （用于审美评审与改版前后对比，输出到指定目录）
+dotnet run --project test/Prism.FeatureTests -- --capture artifacts/ui
+
 # 针对真实 pak 的冒烟测试：打开 -> 搜索 -> 贴图预览，并自检外部依赖
 Prism.Desktop.Desktop/bin/Debug/net10.0/Prism.Desktop.Desktop.exe --smoke <pak> [映射文件]
 ```

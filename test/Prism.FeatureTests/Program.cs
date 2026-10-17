@@ -5,6 +5,14 @@ using Avalonia;
 using Avalonia.Controls;
 using UAssetAPI.UnrealTypes;
 
+// 截图模式必须在任何 Avalonia 初始化之前分流：常规测试用 UseHeadlessDrawing = true
+// （不绘制），截图要挂 Skia 真正光栅化，两者不能在同一进程共存。
+if (args.Length > 0 && args[0] == "--capture")
+{
+    return Prism.FeatureTests.UiCapture.Run(
+        args.Length > 1 ? args[1] : Path.Combine(AppContext.BaseDirectory, "ui-capture"));
+}
+
 // 新功能集成测试：映射格式识别 / 搜索路径解析 / Pak 转换 / 合并优先级。
 // 直接引用生产程序集，验证真实行为而非复制逻辑。
 

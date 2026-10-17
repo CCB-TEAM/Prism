@@ -20,5 +20,7 @@
     <ProjectReference Include="..\..\Prism.Desktop\Prism.Desktop.csproj" />
     <!-- UI 验证：headless 后端可在无显示器环境实例化窗口，且不残留原生事件循环。 -->
     <PackageReference Include="Avalonia.Headless" Version="12.1.1" />
+    <!-- 截图模式（capture 开关）要真正光栅化，需要 Skia 渲染后端。 -->
+    <PackageReference Include="Avalonia.Skia" Version="12.1.1" />
   </ItemGroup>
 </Project>

@@ -263,6 +263,10 @@ A full repack needs temp space equal to the main pak.
 # (UAssetTexture.Core vs UAssetCLI — the latter needs its Release build; skipped without it)
 dotnet run --project test/Prism.FeatureTests
 
+# UI screenshots: every page × light/dark × compact/wide, rendered by Skia to PNG
+# (useful for design review and before/after comparisons; writes to the given folder)
+dotnet run --project test/Prism.FeatureTests -- --capture artifacts/ui
+
 # Smoke test against a real pak: open -> search -> texture preview, plus dependency self-check
 Prism.Desktop.Desktop/bin/Debug/net10.0/Prism.Desktop.Desktop.exe --smoke <pak> [mapping]
 ```
