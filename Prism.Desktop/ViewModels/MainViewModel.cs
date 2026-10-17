@@ -2065,9 +2065,34 @@ public partial class MainViewModel : ViewModelBase
     /// </param>
     private async Task NavigateToAsync(string folder, string? returnTo = null)
     {
+        // 记住"正要离开哪个目录"：回到上一级时要把这一项选中并滚到可见处，
+        // 否则列表会停在原来的滚动位置，用户得自己滑半天找回刚出来的那个文件夹。
+        string leaving = CurrentFolder;
+
         IReadOnlyList<ArchiveEntryDto> entries = await ListFolderAsync(folder);
         Entries = new ObservableCollection<EntryItem>(entries.Select(EntryItem.Create));
         CurrentFolder = folder;
+
+        EntryItem? cameFrom = null;
+        if (!string.IsNullOrEmpty(leaving) && PathsEqual(ParentOf(leaving), folder))
+        {
+            cameFrom = Entries.FirstOrDefault(entry => entry.IsDirectory && PathsEqual(entry.FullPath, leaving));
+        }
+
+        // 选中/滚动都得等列表把新条目装好：直接设 SelectedItem，ListBox 重建容器后
+        // 会把它重置成 null（双向绑定再写回来），选中项和滚动位置一起丢掉。
+        EntryItem? target = cameFrom;
+        Avalonia.Threading.Dispatcher.UIThread.Post(
+            () =>
+            {
+                if (target is not null)
+                {
+                    SelectedItem = target;
+                }
+
+                RequestScrollToEntry(target);
+            },
+            Avalonia.Threading.DispatcherPriority.Loaded);
         CurrentPathText = "/" + folder;
         _returnFolder = returnTo;
         ClearPreview();
@@ -2086,6 +2111,23 @@ public partial class MainViewModel : ViewModelBase
         {
             _gate.Release();
         }
+    }
+
+    /// <summary>
+    /// 列表需要滚到某一项（null = 滚回顶部）。由 <c>FileBrowserView</c> 订阅：
+    /// 视图模型不碰控件，滚动交给视图做。
+    /// </summary>
+    public event Action<EntryItem?>? ScrollToEntryRequested;
+
+    private void RequestScrollToEntry(EntryItem? item) => ScrollToEntryRequested?.Invoke(item);
+
+    /// <summary>Pak 内路径比较：忽略大小写与首尾斜杠。</summary>
+    private static bool PathsEqual(string? left, string? right)
+    {
+        static string Normalize(string? value) =>
+            string.IsNullOrEmpty(value) ? string.Empty : value.Replace('\\', '/').Trim('/');
+
+        return string.Equals(Normalize(left), Normalize(right), StringComparison.OrdinalIgnoreCase);
     }
 
     private static string ParentOf(string folder)

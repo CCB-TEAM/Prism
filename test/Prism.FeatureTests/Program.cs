@@ -1203,6 +1203,33 @@ try
             Console.WriteLine("        跳过视频流程断言（测试 pak 未生成）");
         }
 
+        // 返回上一级时：选中"刚离开的那个目录"，并请求把它滚到可见处；
+        // 进入目录时：请求回到列表顶部（否则会停在上一个目录的滚动位置）。
+        if (File.Exists(mediaPak))
+        {
+            var scrollVm = new Prism.Desktop.ViewModels.MainViewModel { PakPath = mediaPak };
+            var scrollRequests = new List<Prism.Desktop.Models.EntryItem?>();
+            scrollVm.ScrollToEntryRequested += item => scrollRequests.Add(item);
+
+            RunVmCommand(scrollVm, scrollVm.OpenPakCommand);
+            EnterFolder(scrollVm, "Kards");
+            EnterFolder(scrollVm, "Content");
+            EnterFolder(scrollVm, "Movies");
+            Prism.FeatureTests.UiFixture.RunJobs();
+            scrollRequests.Clear();
+
+            RunVmCommand(scrollVm, scrollVm.UpCommand);
+            Prism.FeatureTests.UiFixture.RunJobs();
+            Check(scrollVm.SelectedItem?.Name == "Movies", $"回上一级会选中刚离开的目录（{scrollVm.SelectedItem?.Name}）");
+            Check(scrollRequests.Count == 1 && scrollRequests[0]?.Name == "Movies",
+                $"并请求把该项滚到可见处（{scrollRequests.Count} 次请求）");
+
+            scrollRequests.Clear();
+            EnterFolder(scrollVm, "Movies");
+            Prism.FeatureTests.UiFixture.RunJobs();
+            Check(scrollRequests.Count == 1 && scrollRequests[0] is null,
+                $"进入目录时请求回到列表顶部（{scrollRequests.Count} 次请求）");
+        }
         if (hasAudioFixture && audioUsmap is not null && hasBinkaEncoder)
         {
             // 用原始 fixture 现场打一个 pak，走"替换真资产"的真实路径

@@ -7,9 +7,49 @@ namespace Prism.Desktop.Views;
 
 public partial class FileBrowserView : UserControl
 {
+    private MainViewModel? _boundViewModel;
+
     public FileBrowserView()
     {
         InitializeComponent();
+    }
+
+    protected override void OnDataContextChanged(EventArgs e)
+    {
+        if (_boundViewModel is not null)
+        {
+            _boundViewModel.ScrollToEntryRequested -= OnScrollToEntryRequested;
+        }
+
+        _boundViewModel = DataContext as MainViewModel;
+        if (_boundViewModel is not null)
+        {
+            _boundViewModel.ScrollToEntryRequested += OnScrollToEntryRequested;
+        }
+
+        base.OnDataContextChanged(e);
+    }
+
+    /// <summary>
+    /// 把列表滚到指定项（null = 回到顶部）。用 Loaded 优先级延后一拍：
+    /// 目录切换时容器还没生成，立刻滚会滚到一个旧位置。
+    /// </summary>
+    private void OnScrollToEntryRequested(Models.EntryItem? item)
+    {
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            if (item is null)
+            {
+                if (FileList.ItemCount > 0)
+                {
+                    FileList.ScrollIntoView(0);
+                }
+
+                return;
+            }
+
+            FileList.ScrollIntoView(item);
+        }, Avalonia.Threading.DispatcherPriority.Loaded);
     }
 
     /// <summary>

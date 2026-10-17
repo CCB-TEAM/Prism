@@ -92,6 +92,7 @@
             </StackPanel>
 
             <ListBox Grid.Row="1"
+                     x:Name="FileList"
                      Classes="browser-list"
                      ItemsSource="{Binding Entries}"
                      SelectedItem="{Binding SelectedItem}"
