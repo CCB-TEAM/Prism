@@ -9,15 +9,15 @@
             <!-- 顶栏与状态栏已上移到应用外壳 Views/MainView.axaml -->
 
         <ScrollViewer>
-            <StackPanel MaxWidth="{Binding SettingsContentMaxWidth}"
+            <StackPanel MaxWidth="760"
                         HorizontalAlignment="Stretch"
                         Margin="16,20"
                         Spacing="20">
             <!-- 宽屏两列：用宽度换高度，一屏能看到全部卡片 -->
-            <UniformGrid Columns="{Binding SettingsColumns}">
+            <StackPanel Spacing="16">
 
             <!-- 通用 -->
-            <Border Classes="card" Padding="22" Margin="{Binding CardGapMargin}">
+            <Border Classes="card" Padding="22">
                 <StackPanel Spacing="14">
                     <TextBlock Text="通用" Classes="card-title" />
                     <CheckBox Content="显示纹理缩略图"
@@ -47,7 +47,7 @@
             </Border>
 
             <!-- 路径 -->
-            <Border Classes="card" Padding="22" Margin="{Binding CardGapMargin}">
+            <Border Classes="card" Padding="22">
                 <StackPanel Spacing="14">
                     <TextBlock Text="路径" Classes="card-title" />
                     <StackPanel Spacing="6">
@@ -96,7 +96,7 @@
 
 
             <!-- 合并 -->
-            <Border Classes="card" Padding="22" Margin="{Binding CardGapMargin}">
+            <Border Classes="card" Padding="22">
                 <StackPanel Spacing="14">
                     <TextBlock Text="合并" Classes="card-title" />
 
@@ -133,7 +133,7 @@
             </Border>
 
             <!-- Pak 转换 -->
-            <Border Classes="card" Padding="22" Margin="{Binding CardGapMargin}">
+            <Border Classes="card" Padding="22">
                 <StackPanel Spacing="14">
                     <TextBlock Text="Pak 转换" Classes="card-title" />
 
@@ -168,7 +168,7 @@
             </Border>
 
             <!-- AES -->
-            <Border Classes="card" Padding="22" Margin="{Binding CardGapMargin}">
+            <Border Classes="card" Padding="22">
                 <StackPanel Spacing="8">
                     <TextBlock Text="AES 密钥" Classes="card-title" />
                     <TextBox Text="{Binding AesKey}"
@@ -181,7 +181,7 @@
             </Border>
 
             <!-- 信息 -->
-            <Border Classes="card" Padding="22" Margin="{Binding CardGapMargin}">
+            <Border Classes="card" Padding="22">
                 <StackPanel Spacing="12">
                     <TextBlock Text="信息" Classes="card-title" />
                     <StackPanel Orientation="Horizontal" Spacing="12">
@@ -203,7 +203,7 @@
             </Border>
 
             <!-- 日志 -->
-            <Border Classes="card" Padding="22" Margin="{Binding CardGapMargin}">
+            <Border Classes="card" Padding="22">
                 <StackPanel Spacing="10">
                     <DockPanel>
                         <TextBlock Text="日志" Classes="card-title" VerticalAlignment="Center" />
@@ -226,7 +226,7 @@
                 </StackPanel>
             </Border>
             <!-- 缓存（仅 Android 显示说明，桌面直接使用原路径） -->
-            <Border Classes="card" Padding="22" Margin="{Binding CardGapMargin}" IsVisible="{Binding IsAndroid}">
+            <Border Classes="card" Padding="22" IsVisible="{Binding IsAndroid}">
                 <StackPanel Spacing="8">
                     <TextBlock Text="缓存" Classes="card-title" />
                     <TextBlock Text="选择的文件会复制到应用私有缓存；换新文件后旧缓存自动删除。"
@@ -235,7 +235,7 @@
                                TextWrapping="Wrap" />
                 </StackPanel>
             </Border>
-            </UniformGrid>
+            </StackPanel>
             </StackPanel>
         </ScrollViewer>
     </DockPanel>
