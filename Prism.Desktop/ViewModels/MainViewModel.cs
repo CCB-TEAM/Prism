@@ -181,6 +181,12 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(ShowWelcomeBranding));
         OnPropertyChanged(nameof(ShowWideCards));
         OnPropertyChanged(nameof(ShowNarrowCards));
+
+        // 窄窗没有侧栏：宽度归零，内容边距随之消失
+        if (!_sidebarAnimating)
+        {
+            SidebarWidth = value >= 980 && !IsSidebarCollapsed ? SidebarExpandedWidth : 0d;
+        }
     }
 
     [ObservableProperty]
@@ -239,15 +245,109 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     public partial bool IsSidebarCollapsed { get; set; }
 
+    /// <summary>
+    /// 侧栏当前宽度（像素）。折叠时是 0 而不是把元素隐藏 —— 元素留在可视树里，
+    /// 宽度才能逐帧变化，从而带动内容区一起平移。
+    /// </summary>
+    [ObservableProperty]
+    public partial double SidebarWidth { get; set; } = 216;
+
+    partial void OnSidebarWidthChanged(double value) => OnPropertyChanged(nameof(ContentMargin));
+
+    private const double SidebarExpandedWidth = 216d;
+
+    /// <summary>
+    /// 内容区的左外边距，与侧栏宽度同源。
+    ///
+    /// 为什么不用 Grid 的 Auto 列：实测把侧栏 Width 从 216 改到 0 之后，Auto 列没有
+    /// 重新测量 —— 内容按 0 排、侧栏却仍画在 216 的位置，页头与标签页直接压在侧栏上。
+    /// 改成"内容自己带左边距 + 侧栏绝对靠左"，两者都由 SidebarWidth 驱动，逐帧一致。
+    /// </summary>
+    public Thickness ContentMargin => new(SidebarWidth, 0d, 0d, 0d);
+
+    private const int SidebarAnimationMs = 200;
+
+    /// <summary>动画进行中：此时不要按 IsSidebarCollapsed 直接吸附宽度。</summary>
+    private bool _sidebarAnimating;
+
+    private CancellationTokenSource? _sidebarAnimationCts;
+
     partial void OnIsSidebarCollapsedChanged(bool value)
     {
         OnPropertyChanged(nameof(IsSidebarVisible));
         OnPropertyChanged(nameof(ShowSidebarToggle));
+
+        // 非动画路径（读设置、截图）直接到位；动画路径由 ToggleSidebarAsync 自己逐帧写宽度。
+        if (!_sidebarAnimating)
+        {
+            SidebarWidth = value ? 0d : SidebarExpandedWidth;
+        }
+
         SaveSettings();
     }
 
+    /// <summary>
+    /// 折叠 / 展开侧栏。
+    ///
+    /// 为什么不用 XAML 的过渡动画：宽度是<b>布局属性</b>。用 DoubleTransition 做 216→0 时，
+    /// 渲染宽度走了动画而布局列宽不跟着走，结果侧栏画到一半、内容按全宽排，页头和标签页
+    /// 直接压在侧栏上（实测过一次，是那个"整页错位"的 bug）。
+    /// 这里改成在视图模型里逐帧写 SidebarWidth：每帧都是一次真实的属性变更，布局每帧
+    /// 都会重算，渲染与布局始终一致。
+    /// </summary>
     [RelayCommand]
-    private void ToggleSidebar() => IsSidebarCollapsed = !IsSidebarCollapsed;
+    private async Task ToggleSidebarAsync()
+    {
+        bool target = !IsSidebarCollapsed;
+
+        _sidebarAnimationCts?.Cancel();
+        _sidebarAnimationCts?.Dispose();
+        _sidebarAnimationCts = null;
+
+        double to = target ? 0d : SidebarExpandedWidth;
+        double from = SidebarWidth;
+
+        if (!IsAnimationsEnabled || !CanCollapseSidebar)
+        {
+            _sidebarAnimating = false;
+            SidebarWidth = to;
+            IsSidebarCollapsed = target;
+            return;
+        }
+
+        var cts = new CancellationTokenSource();
+        _sidebarAnimationCts = cts;
+        _sidebarAnimating = true;
+
+        try
+        {
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            while (true)
+            {
+                double t = Math.Clamp(watch.ElapsedMilliseconds / (double)SidebarAnimationMs, 0d, 1d);
+                double eased = 1d - Math.Pow(1d - t, 3d); // CubicEaseOut
+                SidebarWidth = from + ((to - from) * eased);
+
+                if (t >= 1d)
+                {
+                    break;
+                }
+
+                await Task.Delay(16, cts.Token);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // 被下一次切换打断：由新的调用接管，这里不再改状态。
+            return;
+        }
+
+        SidebarWidth = to;
+        _sidebarAnimating = false;
+        IsSidebarCollapsed = target;
+        _sidebarAnimationCts = null;
+        cts.Dispose();
+    }
 
     /// <summary>页头标题：由当前视图决定，五个页面共用同一处渲染。</summary>
     public string PageTitle => CurrentView switch

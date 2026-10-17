@@ -18,7 +18,7 @@
         供低配设备或偏好静态界面的用户关闭。
     -->
     <Panel>
-        <Grid ColumnDefinitions="Auto,*">
+        <Panel>
 
             <!-- ═══ 侧边导航（宽窗）═══ -->
             <!--
@@ -27,10 +27,12 @@
                 会对不上（侧栏画到一半、内容却按全宽排），页头和标签页直接压在侧栏上。
                 布局类属性不该拿来做动画。
             -->
-            <Border Grid.Column="0"
-                    Width="216"
+            <Border HorizontalAlignment="Left"
+                    ZIndex="1"
+                    Width="{Binding SidebarWidth}"
                     Classes="sidebar"
-                    IsVisible="{Binding IsSidebarVisible}">
+                    ClipToBounds="True"
+                    IsVisible="{Binding CanCollapseSidebar}">
                 <DockPanel>
                     <DockPanel DockPanel.Dock="Top" Margin="18,18,10,14">
                         <Button DockPanel.Dock="Right"
@@ -82,7 +84,7 @@
             </Border>
 
             <!-- ═══ 主区域 ═══ -->
-            <DockPanel Grid.Column="1">
+            <DockPanel Margin="{Binding ContentMargin}">
 
                 <!-- 页头：标题与使用说明由外壳统一渲染，页面里不再各写一条 -->
                 <Border DockPanel.Dock="Top" Classes="page-header">
@@ -176,7 +178,7 @@
                     </views:ViewTransitionHost>
                 </Panel>
             </DockPanel>
-        </Grid>
+        </Panel>
 
             <!--
                 ═══ 使用说明浮层（各页共用）═══
