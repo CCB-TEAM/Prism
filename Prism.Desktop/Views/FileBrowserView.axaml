@@ -74,7 +74,7 @@
                         Margin="0,80,0,0"
                         HorizontalAlignment="Center"
                         VerticalAlignment="Top"
-                        IsVisible="{Binding IsPakOpen, Converter={x:Static BoolConverters.Not}}">
+                        IsVisible="{Binding ShowPakEmptyState}">
                 <TextBlock Text="还没有打开 Pak"
                            FontSize="{DynamicResource Fs13}"
                            HorizontalAlignment="Center" />

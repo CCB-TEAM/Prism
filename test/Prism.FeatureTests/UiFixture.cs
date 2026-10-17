@@ -81,6 +81,26 @@ internal static class UiFixture
         return null;
     }
 
+    /// <summary>按文本内容找一个 TextBlock（回归断言用：验证某段提示是否随状态显隐）。</summary>
+    public static TextBlock? FindTextBlock(Visual root, string text)
+    {
+        foreach (Visual child in root.GetVisualChildren())
+        {
+            if (child is TextBlock block && string.Equals(block.Text, text, StringComparison.Ordinal))
+            {
+                return block;
+            }
+
+            TextBlock? deeper = FindTextBlock(child, text);
+            if (deeper is not null)
+            {
+                return deeper;
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>收集可视树中的控件类型名（诊断用）。</summary>
     public static void CollectTypes(Visual root, List<string> seen)
     {

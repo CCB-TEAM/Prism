@@ -217,6 +217,7 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>桌面但侧栏被折叠：页头左侧显示展开按钮。</summary>
     public bool ShowSidebarToggle => CanCollapseSidebar && !IsSidebarVisible;
 
+
     /// <summary>
     /// 欢迎页有两种形态，按宽度切换，而不是同一份内容做两种排版：
     ///   桌面（≥980px）—— 纯文字说明，导航由左侧常驻侧栏提供；
@@ -434,6 +435,14 @@ public partial class MainViewModel : ViewModelBase
     public partial EntryItem? SelectedItem { get; set; }
 
     private bool IsPakOpen => PakPath.Length > 0;
+
+    /// <summary>
+    /// 文件列表是否显示"还没有打开 Pak"的空状态。
+    ///
+    /// 单独做成会通知的公开属性，而不是在 XAML 里直接绑 IsPakOpen —— 后者是私有计算属性、
+    /// 不发变更通知，绑定只会在加载时求值一次，于是打开 Pak 之后空状态仍压在列表上。
+    /// </summary>
+    public bool ShowPakEmptyState => !IsPakOpen;
 
     public bool CanUp => !string.IsNullOrEmpty(CurrentFolder);
 
@@ -781,6 +790,7 @@ public partial class MainViewModel : ViewModelBase
 
     partial void OnPakPathChanged(string value)
     {
+        OnPropertyChanged(nameof(ShowPakEmptyState));
         ExportRawCommand.NotifyCanExecuteChanged();
         ShareRawCommand.NotifyCanExecuteChanged();
         AddSelectedToPatchCommand.NotifyCanExecuteChanged();

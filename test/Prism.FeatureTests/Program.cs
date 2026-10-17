@@ -728,6 +728,14 @@ try
         var returning = new Prism.Desktop.ViewModels.MainViewModel();
         Check(returning.IsWorkspaceVisible, "再次启动直接进「解包 & 模组」（欢迎页只出现一次）");
 
+        // 回归：文件列表的空状态原先绑在 private 的 IsPakOpen 上 —— 它不发变更通知，
+        // 绑定只在加载时求值一次，于是打开 Pak 之后「还没有打开 Pak」仍然压在列表上。
+        // 现在由会通知的 ShowPakEmptyState 驱动，这里验证它确实随状态翻转。
+        Check(vm.ShowPakEmptyState, "未打开 Pak 时显示列表空状态");
+        vm.PakPath = @"C:\fake\game.pak";
+        Check(!vm.ShowPakEmptyState, "打开 Pak 后列表空状态消失（属性可通知）");
+        vm.PakPath = string.Empty;
+
         foreach ((string property, Func<bool> visible, string label) in new (string, Func<bool>, string)[]
                  {
                      ("GoWorkspaceCommand", () => vm.IsWorkspaceVisible, "解包 & 模组"),
