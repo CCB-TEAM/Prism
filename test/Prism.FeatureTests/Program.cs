@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using PakTool.Core;
 using UAssetTexture.Core;
 using Avalonia;
@@ -930,6 +931,66 @@ try
     Check(!plainResult.OodleRequestedButUnavailable && plainResult.Note is null,
         "不请求 Oodle 时不产生降级提示");
 
+    Section("纹理解析双副本一致性（UAssetTexture.Core ↔ UAssetCLI）");
+
+    // 贴图替换/转换的纹理布局解析器有两份：
+    //   UAssetTexture.Core —— 桌面端进程内、Android 进程内替换、双端转换都走它；
+    //   UAssetCLI          —— AOT 单文件，刻意不引用 CUE4Parse，故自带一份副本。
+    // 两份之间没有任何编译期约束，README 只写了"改一处要改两处"这句口头约定。
+    //
+    // 代价已经付过一次：2600b0d（尺寸不能写死在固定偏移）就是同一个 bug 在两边各修
+    // 一遍才收工。所以这里用同一份真实资产分别走两条链路，把 format/尺寸/mip 数/
+    // 每一级 mip 的 (尺寸, 字节数, 存储位置, 偏移) 全部对齐比对 —— 只改一边就会红。
+    //
+    // 需要 UAssetCLI 产物（Release AOT 发布优先）。没有就跳过，与真实资产缺失的处理一致。
+    string? cliPath = FindUAssetCli(realAssetDir);
+    Console.WriteLine($"        UAssetCLI 产物: {cliPath ?? "未找到"}");
+    if (!hasRealTexture || cliPath is null)
+    {
+        Console.WriteLine("        !! 缺真实资产或 UAssetCLI 产物，跳过双副本一致性断言");
+    }
+    else
+    {
+        TextureAssetInfo coreTexture = TextureAssetParser.Load(realUasset, EngineVersion.VER_UE5_6, null);
+        string cliOutput = RunCliInspectTexture(cliPath, realUasset, "VER_UE5_6");
+
+        string cliFormat = FieldOf(cliOutput, "Format");
+        Check(string.Equals(coreTexture.Format.Name, cliFormat, StringComparison.OrdinalIgnoreCase),
+            $"像素格式一致（Core={coreTexture.Format.Name} / CLI={cliFormat}）");
+
+        string cliSize = FieldOf(cliOutput, "Size");
+        Check(cliSize == $"{coreTexture.Width}x{coreTexture.Height}",
+            $"纹理尺寸一致（Core={coreTexture.Width}x{coreTexture.Height} / CLI={cliSize}）");
+
+        int cliExternalMips = int.Parse(FieldOf(cliOutput, "External mips"));
+        Check(coreTexture.ExternalMipCount == cliExternalMips,
+            $"外部 mip（.ubulk）数量一致（Core={coreTexture.ExternalMipCount} / CLI={cliExternalMips}）");
+
+        int cliInlineMips = int.Parse(FieldOf(cliOutput, "Inline mips"));
+        Check(coreTexture.InlineMips.Count == cliInlineMips,
+            $"内联 mip（.uexp）数量一致（Core={coreTexture.InlineMips.Count} / CLI={cliInlineMips}）");
+
+        List<(int Index, int Width, int Height, int ByteLength, string Storage, int Offset)> cliMips =
+            ParseMipLines(cliOutput);
+        Check(coreTexture.MipPlacements.Count == cliMips.Count,
+            $"mip 总数一致（Core={coreTexture.MipPlacements.Count} / CLI={cliMips.Count}）");
+
+        // 逐 mip 比对：任何一级的尺寸/字节数/偏移错位，都是替换时会写坏贴图的那种偏差。
+        foreach (TextureMipPlacement placement in coreTexture.MipPlacements)
+        {
+            var cliMip = cliMips.FirstOrDefault(m => m.Index == placement.Index);
+            bool same = cliMip.Index == placement.Index
+                && cliMip.Width == placement.Width
+                && cliMip.Height == placement.Height
+                && cliMip.ByteLength == placement.ByteLength
+                && cliMip.Storage == placement.Storage.ToString()
+                && cliMip.Offset == placement.Offset;
+            Check(same,
+                $"mip {placement.Index} 布局一致（{placement.Width}x{placement.Height}, " +
+                $"{placement.ByteLength} 字节, {placement.Storage}, 偏移 {placement.Offset}）");
+        }
+    }
+
     Section("结果");
 }
 finally
@@ -1013,4 +1074,106 @@ static string WriteTemp(string root, string pakPath, byte[] content)
     string path = Path.Combine(dir, Path.GetFileName(pakPath));
     File.WriteAllBytes(path, content);
     return path;
+}
+
+// ── 双副本一致性用到的辅助 ──
+
+/// <summary>
+/// 找可用的 UAssetCLI 产物，优先 Release AOT 发布（README 推荐的发布形态），
+/// 其次桌面端输出目录里被复制过去的那份。找不到返回 null（该组断言跳过）。
+/// </summary>
+static string? FindUAssetCli(string repoRoot)
+{
+    string[] candidates =
+    [
+        Path.Combine(repoRoot, "UAssetCLI", "bin", "Release", "net10.0", "win-x64", "publish", "UAssetCLI.exe"),
+        Path.Combine(repoRoot, "UAssetCLI", "bin", "Release", "net10.0", "publish", "UAssetCLI.exe"),
+        Path.Combine(repoRoot, "Prism.Desktop.Desktop", "bin", "Debug", "net10.0", "UAssetCLI", "UAssetCLI.exe"),
+        Path.Combine(repoRoot, "Prism.Desktop.Desktop", "bin", "Release", "net10.0", "UAssetCLI", "UAssetCLI.exe"),
+        Path.Combine(repoRoot, "UAssetCLI", "bin", "Debug", "net10.0", "win-x64", "UAssetCLI.exe"),
+        Path.Combine(repoRoot, "UAssetCLI", "bin", "Debug", "net10.0", "UAssetCLI.exe"),
+    ];
+
+    return candidates.FirstOrDefault(File.Exists);
+}
+
+/// <summary>跑 <c>UAssetCLI inspect-texture</c>，返回 stdout。非零退出码抛异常（测试应显式失败）。</summary>
+static string RunCliInspectTexture(string cliPath, string assetPath, string engine)
+{
+    System.Diagnostics.ProcessStartInfo startInfo = new()
+    {
+        FileName = cliPath,
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+        UseShellExecute = false,
+        CreateNoWindow = true,
+    };
+    startInfo.ArgumentList.Add("inspect-texture");
+    startInfo.ArgumentList.Add("--asset");
+    startInfo.ArgumentList.Add(assetPath);
+    startInfo.ArgumentList.Add("--engine");
+    startInfo.ArgumentList.Add(engine);
+
+    using System.Diagnostics.Process process = System.Diagnostics.Process.Start(startInfo)
+        ?? throw new InvalidOperationException("无法启动 UAssetCLI"); 
+    string stdout = process.StandardOutput.ReadToEnd();
+    string stderr = process.StandardError.ReadToEnd();
+
+    if (!process.WaitForExit(120_000))
+    {
+        process.Kill(entireProcessTree: true);
+        throw new TimeoutException("UAssetCLI inspect-texture 超时（120s）");
+    }
+
+    if (process.ExitCode != 0)
+    {
+        throw new InvalidOperationException($"UAssetCLI inspect-texture 退出码 {process.ExitCode}：{stderr}");
+    }
+
+    return stdout;
+}
+
+/// <summary>取 <c>inspect-texture</c> 输出的单行字段（形如 <c>Format: PF_DXT1</c>）。</summary>
+static string FieldOf(string output, string name)
+{
+    foreach (string line in output.Split('\n'))
+    {
+        string trimmed = line.Trim();
+        if (trimmed.StartsWith(name + ": ", StringComparison.Ordinal))
+        {
+            return trimmed[(name.Length + 2)..].Trim();
+        }
+    }
+
+    throw new InvalidOperationException($"UAssetCLI 输出里找不到字段 “{name}”");
+}
+
+/// <summary>解析 <c>mip 3: 128x128, 8192 bytes, Ubulk, offset 688128</c> 这类行。</summary>
+static List<(int Index, int Width, int Height, int ByteLength, string Storage, int Offset)> ParseMipLines(string output)
+{
+    List<(int, int, int, int, string, int)> mips = [];
+    foreach (string line in output.Split('\n'))
+    {
+        string trimmed = line.Trim();
+        if (!trimmed.StartsWith("mip ", StringComparison.Ordinal))
+        {
+            continue;
+        }
+
+        Match match = Regex.Match(trimmed, @"^mip (\d+): (\d+)x(\d+), (\d+) bytes, (\w+), offset (\d+)$");
+        if (!match.Success)
+        {
+            throw new InvalidOperationException($"无法解析 UAssetCLI 的 mip 行：“{trimmed}”");
+        }
+
+        mips.Add((
+            int.Parse(match.Groups[1].Value),
+            int.Parse(match.Groups[2].Value),
+            int.Parse(match.Groups[3].Value),
+            int.Parse(match.Groups[4].Value),
+            match.Groups[5].Value,
+            int.Parse(match.Groups[6].Value)));
+    }
+
+    return mips;
 }

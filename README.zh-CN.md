@@ -242,8 +242,10 @@ Prism **不**分发 Oodle。若你在本地或私有构建中放入 Oodle 相关
 ## 验证
 
 ```sh
-# 集成测试（158 条断言）：映射格式识别、搜索框路径解析、pak 转换（两条路径 + 全部输出模式）、
-# 合并优先级、locres <-> JSON 往返、非 ASCII pak 路径处理、无头 UI 加载与导航
+# 集成测试（178 条断言）：映射格式识别、搜索框路径解析、pak 转换（两条路径 + 全部输出模式）、
+# 合并优先级、locres <-> JSON 往返、非 ASCII pak 路径处理、无头 UI 加载与导航，
+# 以及纹理解析器两份副本的一致性（UAssetTexture.Core vs UAssetCLI，
+# 后者需要先有 Release 产物，没有则跳过该组）
 dotnet run --project test/Prism.FeatureTests
 
 # 针对真实 pak 的冒烟测试：打开 -> 搜索 -> 贴图预览，并自检外部依赖

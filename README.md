@@ -256,9 +256,11 @@ A full repack needs temp space equal to the main pak.
 ## Verifying
 
 ```sh
-# Integration tests (158 assertions): mapping format detection, search-box path resolution,
+# Integration tests (178 assertions): mapping format detection, search-box path resolution,
 # pak conversion (both paths + all output modes), merge priority, locres <-> JSON round-trip,
-# non-ASCII pak path handling, headless UI loading and navigation
+# non-ASCII pak path handling, headless UI loading and navigation,
+# and parity between the two copies of the texture-layout parser
+# (UAssetTexture.Core vs UAssetCLI — the latter needs its Release build; skipped without it)
 dotnet run --project test/Prism.FeatureTests
 
 # Smoke test against a real pak: open -> search -> texture preview, plus dependency self-check
