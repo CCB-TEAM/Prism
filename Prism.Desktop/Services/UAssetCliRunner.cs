@@ -46,18 +46,27 @@ public sealed class UAssetCliRunner
 
     /// <summary>探测本机 UAssetCLI 与编码器，找不到返回 null。</summary>
     public static UAssetCliRunner? TryCreate()
-    {        string baseDir = AppContext.BaseDirectory;
+    {
+        string baseDir = AppContext.BaseDirectory;
+
+        // 开发布局：应用输出在 <repo>/Prism.Desktop.Desktop/bin/<配置>/net10.0[/<rid>]/，
+        // 带 RID 的产物多一层，所以仓库根可能是往上 4 层也可能 5 层，两档都试。
+        //
+        // 历史坑：原先一律按 5 层写死。但 dotnet build 的 Debug 产物没有 RID 子目录，
+        // 5 层正好越过仓库根落到仓库外 —— 所有开发布局候选一个都不存在。应用当时看似
+        // 正常，只是因为 csproj 已经把 CLI 复制进了输出目录（候选一）。一旦复制目标
+        // 失效（构建警告过的那种情况），这个兜底本该接手，却永远接不上。
+        string up4 = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", ".."));
+        string up5 = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", ".."));
+
         string[] cliCandidates =
         [
             Path.Combine(baseDir, "UAssetCLI", "UAssetCLI.exe"),
             Path.Combine(baseDir, "UAssetCLI", "UAssetCLI.dll"),
             Path.Combine(baseDir, "UAssetCLI", "win-x64", "UAssetCLI.exe"),
             Path.Combine(baseDir, "UAssetCLI", "win-x64", "UAssetCLI.dll"),
-            // 开发布局：prism/UAssetCLI/bin/{Debug,Release}/net10.0[/win-x64]
-            Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "UAssetCLI", "bin", "Debug", "net10.0", "UAssetCLI.exe")),
-            Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "UAssetCLI", "bin", "Debug", "net10.0", "win-x64", "UAssetCLI.exe")),
-            Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "UAssetCLI", "bin", "Release", "net10.0", "UAssetCLI.exe")),
-            Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "UAssetCLI", "bin", "Release", "net10.0", "win-x64", "UAssetCLI.exe")),
+            ..DevLayoutCliCandidates(up4),
+            ..DevLayoutCliCandidates(up5),
         ];
 
         string? cli = cliCandidates.FirstOrDefault(File.Exists);
@@ -69,7 +78,8 @@ public sealed class UAssetCliRunner
         string[] encoderCandidates =
         [
             Path.Combine(baseDir, "tools"),
-            Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "UAssetTextureWeb", "tools")),
+            Path.Combine(up4, "tools"),
+            Path.Combine(up5, "tools"),
         ];
 
         string? Find(string fileName) => encoderCandidates.Select(p => Path.Combine(p, fileName)).FirstOrDefault(File.Exists);
@@ -189,4 +199,18 @@ public sealed class UAssetCliRunner
 
         public static CliResult Fail(string message) => new(1, string.Empty, message);
     }
+
+    /// <summary>
+    /// 开发布局下的 UAssetCLI 产物候选。优先 AOT 发布（README 推荐的发布形态，
+    /// 体积小且不需要 .NET 运行时），其次普通构建产物。
+    /// </summary>
+    private static string[] DevLayoutCliCandidates(string repoRoot) =>
+    [
+        Path.Combine(repoRoot, "UAssetCLI", "bin", "Release", "net10.0", "win-x64", "publish", "UAssetCLI.exe"),
+        Path.Combine(repoRoot, "UAssetCLI", "bin", "Release", "net10.0", "publish", "UAssetCLI.exe"),
+        Path.Combine(repoRoot, "UAssetCLI", "bin", "Release", "net10.0", "win-x64", "UAssetCLI.exe"),
+        Path.Combine(repoRoot, "UAssetCLI", "bin", "Release", "net10.0", "UAssetCLI.exe"),
+        Path.Combine(repoRoot, "UAssetCLI", "bin", "Debug", "net10.0", "win-x64", "UAssetCLI.exe"),
+        Path.Combine(repoRoot, "UAssetCLI", "bin", "Debug", "net10.0", "UAssetCLI.exe"),
+    ];
 }
