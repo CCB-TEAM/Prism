@@ -33,7 +33,7 @@
                     VerticalAlignment="Top"
                     Margin="24,32"
                     Spacing="28">
-            <StackPanel Spacing="6" IsVisible="{Binding IsSidebarVisible, Converter={x:Static BoolConverters.Not}}">
+            <StackPanel Spacing="6" IsVisible="{Binding ShowWelcomeBranding}">
                 <TextBlock Text="Prism"
                            FontSize="{DynamicResource Fs40}"
                            FontWeight="SemiBold"
@@ -49,16 +49,7 @@
                 宽屏：6 列网格。每张卡片跨 2 列，第 1 行 3 张、第 2 行 2 张居中，
                 这样 5 个入口比"一行 3 个大卡"更紧凑，也不会挤在一起。
             -->
-                        <!--
-                桌面档的引子。侧栏已经放着应用名，这里再竖直居中摆五张大卡片会显得空，
-                所以改成顶部对齐 + 一行说明，读起来像面板而不是"居中的启动页"。
-            -->
-            <TextBlock Text="选择一个功能开始"
-                       FontSize="{DynamicResource Fs13}"
-                       Foreground="{DynamicResource TextMutedBrush}"
-                       Margin="0,0,0,-10"
-                       IsVisible="{Binding IsSidebarVisible}" />
-
+            
             <Grid x:Name="WideCards"
                   ColumnDefinitions="*,*,*,*,*,*"
                   RowDefinitions="Auto,Auto"
@@ -66,7 +57,7 @@
                   RowSpacing="10"
                   MaxWidth="{Binding HomeGridMaxWidth}"
                   HorizontalAlignment="Stretch"
-                  IsVisible="{Binding IsCompact, Converter={x:Static BoolConverters.Not}}">
+                  IsVisible="{Binding ShowWideCards}">
 
                 <Button Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2"
                         Command="{Binding GoWorkspaceCommand}"
@@ -184,7 +175,7 @@
                         MaxWidth="420"
                         HorizontalAlignment="Center"
                         Spacing="10"
-                        IsVisible="{Binding IsCompact}">
+                        IsVisible="{Binding ShowNarrowCards}">
                 <Button Command="{Binding GoWorkspaceCommand}" Classes="card home-entry narrow">
                     <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
                         <Border Classes="icon-chip small" VerticalAlignment="Center">
@@ -255,6 +246,68 @@
                         </StackPanel>
                     </Grid>
                 </Button>
+            </StackPanel>
+            <!--
+                桌面（≥980px）的欢迎页：只放文字。
+                窄窗/手机的入口卡片在上面，两种宽度各用各的形态，不是同一份内容的两种排版。
+            -->
+            <StackPanel Spacing="22"
+                        MaxWidth="780"
+                        HorizontalAlignment="Left"
+                        IsVisible="{Binding CanCollapseSidebar}">
+                <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs14}">
+                    <Run Text="Prism 把 UE 的 " />
+                    <Run Text=".pak" FontFamily="Consolas, Courier New" />
+                    <Run Text=" 当成文件系统来用：打开、浏览、预览、导出，也可以直接在包里做贴图替换、多 Pak 合并、跨平台转换与本地化编辑。当前版本 " />
+                    <Run Text="{Binding VersionText}" />
+                    <Run Text="。" />
+                </TextBlock>
+
+                <StackPanel Spacing="10">
+                    <TextBlock Text="四个工作区"
+                               FontSize="{DynamicResource Fs12}"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextMutedBrush}" />
+                    <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs12}">
+                        <Run Text="解包 &amp; 模组" FontWeight="SemiBold" />
+                        <Run Text="　浏览包内文件、预览贴图与模型、导出资源；把选中的资产加入替换列表后，可以换贴图、改本地化，再构建补丁 Pak。" />
+                    </TextBlock>
+                    <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs12}">
+                        <Run Text="Pak 合并" FontWeight="SemiBold" />
+                        <Run Text="　把多个 Pak 合成一个，列表里越靠上的优先级越高。给出原版 .locres 作基准时，同名本地化文件会逐条三路合并，而不是整份覆盖。" />
+                    </TextBlock>
+                    <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs12}">
+                        <Run Text="Pak 转换" FontWeight="SemiBold" />
+                        <Run Text="　把另一个平台 Pak 里的同路径贴图搬到本平台：解出源像素，按主 Pak 的纹理格式重新编码，再打成新 Pak。" />
+                    </TextBlock>
+                    <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs12}">
+                        <Run Text="设置" FontWeight="SemiBold" />
+                        <Run Text="　Pak 与映射文件路径、AES 密钥、导出目录、主题，以及日志与诊断报告。" />
+                    </TextBlock>
+                </StackPanel>
+
+                <StackPanel Spacing="10">
+                    <TextBlock Text="开始之前"
+                               FontSize="{DynamicResource Fs12}"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextMutedBrush}" />
+                    <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs12}" Foreground="{DynamicResource TextMutedBrush}">
+                        <Run Text="映射文件（.usmap / .jmap）" FontWeight="SemiBold" />
+                        <Run Text="　只有读取蓝图属性与跨平台转换需要；在「设置」里选一次即可，两个平台导出的映射通用。" />
+                    </TextBlock>
+                    <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs12}" Foreground="{DynamicResource TextMutedBrush}">
+                        <Run Text="AES 密钥" FontWeight="SemiBold" />
+                        <Run Text="　只有加密 Pak 需要。密钥以明文保存在本机设置文件里，分享截图时注意避开。" />
+                    </TextBlock>
+                    <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs12}" Foreground="{DynamicResource TextMutedBrush}">
+                        <Run Text="编码器" FontWeight="SemiBold" />
+                        <Run Text="　桌面端的贴图替换与转换依赖 UAssetCLI 与 astcenc / texconv，发行包已随附；Android 端在应用内完成编码。" />
+                    </TextBlock>
+                </StackPanel>
+
+                <TextBlock Text="从左侧「解包 &amp; 模组」开始。"
+                           FontSize="{DynamicResource Fs12}"
+                           Foreground="{DynamicResource PrimaryBrush}" />
             </StackPanel>
         </StackPanel>
     </ScrollViewer>

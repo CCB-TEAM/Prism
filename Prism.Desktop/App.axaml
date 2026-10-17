@@ -281,6 +281,7 @@
             <Setter Property="Padding" Value="20,12" />
         </Style>
 
+
         <Style Selector="Border.statusbar">
             <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
             <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}" />

@@ -76,6 +76,20 @@ internal sealed class AppSettings
     public double WindowWidth { get; set; } = 1280;
 
     public double WindowHeight { get; set; } = 820;
+
+    /// <summary>
+    /// 左侧导航是否被用户折叠。折叠后内容区多出 216 px，窄屏笔记本上能多放一列。
+    /// </summary>
+    public bool SidebarCollapsed { get; set; }
+
+    /// <summary>
+    /// 是否已经进入过主界面。
+    ///
+    /// 首次启动落在「欢迎」页（选择一个功能开始）；之后每次直接落在「解包 &amp; 模组」——
+    /// 那才是真正干活的地方。用持久化标记而不是看配置文件是否存在：配置文件在第一次
+    /// 保存窗口尺寸时就会生成，用它判断"首次"会把第二次启动也当成第一次。
+    /// </summary>
+    public bool WelcomeShown { get; set; }
 }
 
 internal static class AppSettingsStore

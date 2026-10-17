@@ -31,10 +31,11 @@ internal static class UiCapture
             .WithInterFont()
             .SetupWithoutStarting();
 
-        (string Label, double Width, double Height)[] viewports =
+        (string Label, double Width, double Height, bool Collapsed)[] viewports =
         [
-            ("compact", 430, 900),
-            ("wide", 1440, 900),
+            ("compact", 430, 900, false),
+            ("wide", 1440, 900, false),
+            ("wide-collapsed", 1440, 900, true),
         ];
 
         (string Label, string Navigate, int Tab)[] pages =
@@ -48,13 +49,18 @@ internal static class UiCapture
         ];
 
         int written = 0;
-        foreach ((string viewportLabel, double width, double height) in viewports)
+        foreach ((string viewportLabel, double width, double height, bool collapsed) in viewports)
         {
+            // 折叠态只需要比一页，两套主题各一张就够说明问题，不必全量渲染。
+            (string Label, string Navigate, int Tab)[] forViewport = collapsed
+                ? [("workspace-browse", "GoWorkspace", 1)]
+                : pages;
+
             foreach (string theme in new[] { "light", "dark" })
             {
-                (MainViewModel vm, MainWindow window) = CreateShell(width, height, theme);
+                (MainViewModel vm, MainWindow window) = CreateShell(width, height, theme, collapsed);
 
-                foreach ((string pageLabel, string command, int tab) in pages)
+                foreach ((string pageLabel, string command, int tab) in forViewport)
                 {
                     Navigate(vm, command, tab);
                     string name = $"{theme}-{viewportLabel}-{pageLabel}.png";
@@ -65,13 +71,16 @@ internal static class UiCapture
                     }
                 }
 
-                // 浮层单独截一张（它覆盖在页面之上，且是各页共用的同一个实现）。
-                Navigate(vm, "GoConvert", 0);
-                vm.OpenHelpCommand.Execute("convert");
-                if (Capture(window, Path.Combine(outputDirectory, $"{theme}-{viewportLabel}-help.png")))
+                if (!collapsed)
                 {
-                    written++;
-                    Console.WriteLine($"  {theme}-{viewportLabel}-help.png");
+                    // 浮层单独截一张（它覆盖在页面之上，且是各页共用的同一个实现）。
+                    Navigate(vm, "GoConvert", 0);
+                    vm.OpenHelpCommand.Execute("convert");
+                    if (Capture(window, Path.Combine(outputDirectory, $"{theme}-{viewportLabel}-help.png")))
+                    {
+                        written++;
+                        Console.WriteLine($"  {theme}-{viewportLabel}-help.png");
+                    }
                 }
 
                 window.Close();
@@ -107,7 +116,7 @@ internal static class UiCapture
         }
     }
 
-    private static (MainViewModel Vm, MainWindow Window) CreateShell(double width, double height, string theme)
+    private static (MainViewModel Vm, MainWindow Window) CreateShell(double width, double height, string theme, bool collapsed)
     {
         var vm = new MainViewModel
         {
@@ -116,6 +125,7 @@ internal static class UiCapture
             IsAnimationsEnabled = false,
             WindowWidth = width,
             WindowHeight = height,
+            IsSidebarCollapsed = collapsed,
         };
 
         if (Application.Current is { } app)

@@ -708,11 +708,25 @@ try
 
     try
     {
+        // 首次启动落在「欢迎」页，之后每次直接进「解包 & 模组」。
+        //
+        // 顺序很重要：App.OnFrameworkInitializationCompleted 在 Avalonia 初始化时就会
+        // 自建一个 MainViewModel，而那一次构造会把 welcomeShown=true 写进设置文件。
+        // 所以必须先完成初始化、再写"没进过主界面"的设置，否则测到的永远是"第二次启动"。
+        Prism.FeatureTests.UiFixture.EnsureInitialized();
+
+        string settingsFile = Path.Combine(AppContext.BaseDirectory, "Prism.Desktop.settings.json");
+        File.WriteAllText(settingsFile, "{ \"welcomeShown\": false }");
+
         (Prism.Desktop.Views.MainWindow window, Prism.Desktop.ViewModels.MainViewModel vm) = Prism.FeatureTests.UiFixture.CreateShell();
 
         Check(window is not null, "MainWindow + 全部视图在运行时成功加载（模板已展开）");
-        Check(vm.IsHomeVisible, "初始显示主页");
+        Check(vm.IsHomeVisible, "首次启动落在欢迎页");
         Check(!vm.IsConvertVisible, "初始不显示 Pak 转换页");
+
+        // 再建一个视图模型：此时设置文件里已记下"进过主界面"，应直接落回干活的那页。
+        var returning = new Prism.Desktop.ViewModels.MainViewModel();
+        Check(returning.IsWorkspaceVisible, "再次启动直接进「解包 & 模组」（欢迎页只出现一次）");
 
         foreach ((string property, Func<bool> visible, string label) in new (string, Func<bool>, string)[]
                  {

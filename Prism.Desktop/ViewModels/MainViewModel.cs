@@ -42,6 +42,12 @@ public partial class MainViewModel : ViewModelBase
         UseOodleCompression = _settings.UseOodleCompression;
         AskBeforeReplace = _settings.AskBeforeReplace;
         IsAnimationsEnabled = _settings.IsAnimationsEnabled;
+        IsSidebarCollapsed = _settings.SidebarCollapsed;
+
+        // 首次启动落在欢迎页，之后直接进「解包 & 模组」——那才是干活的地方。
+        // 侧栏还留着「欢迎」入口，随时能回到这里。
+        CurrentView = _settings.WelcomeShown ? "Workspace" : "Home";
+        _settings.WelcomeShown = true;
         ExportDirectory = _settings.ExportDirectory;
         _exportDirectoryBookmark = _settings.ExportDirectoryBookmark;
         PakPath = _settings.PakPath;
@@ -168,7 +174,13 @@ public partial class MainViewModel : ViewModelBase
         // 侧栏的开关与 IsLandscape 用同一个阈值（980），但它必须跟着窗口宽度
         // 重新通知一次：侧栏显示/隐藏会改变内容区可用宽度，只通知 IsLandscape
         // 不会刷新绑定在 IsSidebarVisible 上的可见性。
+        OnPropertyChanged(nameof(CanCollapseSidebar));
         OnPropertyChanged(nameof(IsSidebarVisible));
+        OnPropertyChanged(nameof(ShowBackButton));
+        OnPropertyChanged(nameof(ShowSidebarToggle));
+        OnPropertyChanged(nameof(ShowWelcomeBranding));
+        OnPropertyChanged(nameof(ShowWideCards));
+        OnPropertyChanged(nameof(ShowNarrowCards));
     }
 
     [ObservableProperty]
@@ -197,7 +209,44 @@ public partial class MainViewModel : ViewModelBase
     /// "把手机界面拉伸到桌面上"。从 980 px 起改为常驻侧栏，返回箭头随之消失；
     /// 窄窗与手机仍走"主页 → 二级页 → 返回"的老路径，行为不变。
     /// </summary>
-    public bool IsSidebarVisible => WindowWidth >= 980;
+    public bool CanCollapseSidebar => WindowWidth >= 980;
+
+    /// <summary>窄窗/手机：页头左侧显示返回箭头（没有侧栏可折叠）。</summary>
+    public bool ShowBackButton => !CanCollapseSidebar;
+
+    /// <summary>桌面但侧栏被折叠：页头左侧显示展开按钮。</summary>
+    public bool ShowSidebarToggle => CanCollapseSidebar && !IsSidebarVisible;
+
+    /// <summary>
+    /// 欢迎页有两种形态，按宽度切换，而不是同一份内容做两种排版：
+    ///   桌面（≥980px）—— 纯文字说明，导航由左侧常驻侧栏提供；
+    ///   窄窗/手机   —— 入口卡片，因为那里没有侧栏可点。
+    /// </summary>
+    public bool ShowWelcomeBranding => !CanCollapseSidebar;
+
+    public bool ShowWideCards => !CanCollapseSidebar && !IsCompact;
+
+    public bool ShowNarrowCards => !CanCollapseSidebar && IsCompact;
+
+
+    public bool IsSidebarVisible => CanCollapseSidebar && !IsSidebarCollapsed;
+
+    /// <summary>
+    /// 用户手动折叠侧栏（持久化）。折叠后内容区多出 216 px，窄屏笔记本上一个窗口
+    /// 能多放一列；宽窗下侧栏本来就占着位置，愿意常驻展开还是收起由用户决定。
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsSidebarCollapsed { get; set; }
+
+    partial void OnIsSidebarCollapsedChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsSidebarVisible));
+        OnPropertyChanged(nameof(ShowSidebarToggle));
+        SaveSettings();
+    }
+
+    [RelayCommand]
+    private void ToggleSidebar() => IsSidebarCollapsed = !IsSidebarCollapsed;
 
     /// <summary>页头标题：由当前视图决定，五个页面共用同一处渲染。</summary>
     public string PageTitle => CurrentView switch
@@ -206,7 +255,7 @@ public partial class MainViewModel : ViewModelBase
         "Merge" => "Pak 合并",
         "Convert" => "Pak 转换",
         "Settings" => "设置",
-        _ => "概览",
+        _ => "欢迎",
     };
 
     /// <summary>当前页对应的使用说明主题；概览页没有说明，返回空串。</summary>
@@ -829,6 +878,7 @@ public partial class MainViewModel : ViewModelBase
         _settings.UseOodleCompression = UseOodleCompression;
         _settings.AskBeforeReplace = AskBeforeReplace;
         _settings.IsAnimationsEnabled = IsAnimationsEnabled;
+        _settings.SidebarCollapsed = IsSidebarCollapsed;
         _settings.Theme = ThemeMode;
         _settings.ExportDirectory = ExportDirectory;
         _settings.ExportDirectoryBookmark = OperatingSystem.IsAndroid() ? _exportDirectoryBookmark : string.Empty;

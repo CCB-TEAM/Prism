@@ -26,15 +26,23 @@
                     Classes="sidebar"
                     IsVisible="{Binding IsSidebarVisible}">
                 <DockPanel>
-                    <StackPanel DockPanel.Dock="Top" Margin="18,20,18,18" Spacing="2">
-                        <TextBlock Text="Prism"
-                                   FontSize="{DynamicResource Fs20}"
-                                   FontWeight="SemiBold"
-                                   Foreground="{DynamicResource PrimaryBrush}" />
-                        <TextBlock Text="Pak 资产管理工具"
-                                   FontSize="{DynamicResource Fs10}"
-                                   Foreground="{DynamicResource TextMutedBrush}" />
-                    </StackPanel>
+                    <DockPanel DockPanel.Dock="Top" Margin="18,18,10,14">
+                        <Button DockPanel.Dock="Right"
+                                Content="«"
+                                Classes="back"
+                                VerticalAlignment="Top"
+                                ToolTip.Tip="折叠导航"
+                                Command="{Binding ToggleSidebarCommand}" />
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="Prism"
+                                       FontSize="{DynamicResource Fs20}"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource PrimaryBrush}" />
+                            <TextBlock Text="Pak 资产管理工具"
+                                       FontSize="{DynamicResource Fs10}"
+                                       Foreground="{DynamicResource TextMutedBrush}" />
+                        </StackPanel>
+                    </DockPanel>
 
                     <TextBlock DockPanel.Dock="Bottom"
                                Text="{Binding VersionText, StringFormat='v{0}'}"
@@ -46,7 +54,7 @@
                         <Button Classes="nav"
                                 Classes.active="{Binding IsHomeVisible}"
                                 Command="{Binding GoHomeCommand}"
-                                Content="概览" />
+                                Content="欢迎" />
                         <Button Classes="nav"
                                 Classes.active="{Binding IsWorkspaceVisible}"
                                 Command="{Binding GoWorkspaceCommand}"
@@ -73,12 +81,22 @@
                 <!-- 页头：标题与使用说明由外壳统一渲染，页面里不再各写一条 -->
                 <Border DockPanel.Dock="Top" Classes="page-header">
                     <Grid ColumnDefinitions="Auto,Auto,*,Auto">
-                        <Button Grid.Column="0"
-                                Content="←"
-                                Classes="back"
-                                Margin="0,0,8,0"
-                                IsVisible="{Binding IsSidebarVisible, Converter={x:Static BoolConverters.Not}}"
-                                Command="{Binding GoHomeCommand}" />
+                        <StackPanel Grid.Column="0"
+                                    Orientation="Horizontal"
+                                    Margin="0,0,8,0"
+                                    VerticalAlignment="Center">
+                            <!-- 窄窗/手机：返回主页（没有侧栏） -->
+                            <Button Content="←"
+                                    Classes="back"
+                                    IsVisible="{Binding ShowBackButton}"
+                                    Command="{Binding GoHomeCommand}" />
+                            <!-- 桌面：侧栏被折叠后从这里展开 -->
+                            <Button Content="☰"
+                                    Classes="back"
+                                    IsVisible="{Binding ShowSidebarToggle}"
+                                    ToolTip.Tip="展开导航"
+                                    Command="{Binding ToggleSidebarCommand}" />
+                        </StackPanel>
                         <TextBlock Grid.Column="1"
                                    Text="{Binding PageTitle}"
                                    Classes="page-title" />
@@ -92,6 +110,7 @@
                                 CommandParameter="{Binding PageHelpTopic}" />
                     </Grid>
                 </Border>
+
 
                 <!-- 状态栏：底部常驻，替换原先飘在页面中央的"就绪" -->
                 <Border DockPanel.Dock="Bottom" Classes="statusbar">
