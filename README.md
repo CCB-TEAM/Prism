@@ -30,6 +30,8 @@ Browse pak contents, preview textures / audio / 3D meshes / localization, export
 - Video (or any raw file in the pak) is replaced byte for byte: select the `.mp4` / `.bk2`, supply a new
   file. Selecting a `UFileMediaSource` asset resolves to the video it points at.
 - Both live on the same rail: add to replace list -> choose the clip -> build a patch pak.
+- Longer clips are split into multiple streaming chunks automatically (each ≤ 256 KB, mirroring how
+  the game itself chunks them), so the old "about a minute" ceiling is gone.
 - Audio encoding needs `tools/binka_encode.exe` (a third-party binary, not committed — see
   [tools/README.md](tools/README.md)).
 - **Desktop only for audio**: the encoder is a Windows binary (RAD ships static libs for
@@ -272,7 +274,7 @@ A full repack needs temp space equal to the main pak.
 ## Verifying
 
 ```sh
-# Integration tests (234 assertions): mapping format detection, search-box path resolution,
+# Integration tests (239 assertions): mapping format detection, search-box path resolution,
 # pak conversion (both paths + all output modes), merge priority, locres <-> JSON round-trip,
 # non-ASCII pak path handling, headless UI loading and navigation, audio replacement
 # (BINKA round-trip through a real pak), media replacement, the replace-page flow driven

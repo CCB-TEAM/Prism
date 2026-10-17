@@ -833,6 +833,40 @@ try
         Check(patchedInfo.Channels == fixturePcm.Channels && patchedInfo.SampleRate == fixturePcm.SampleRate,
             "声道数与采样率属性与素材一致");
 
+        // 多块：长素材必须被切成多个流式块（每块 ≤ 256 KB），而不是报错拒绝
+        {
+            var longPcm = new byte[44100L * 2 * 2 * 60];
+            for (var i = 0; i < longPcm.Length / 2; i++)
+            {
+                var sample = (short)(Math.Sin(i * 0.02) * 9000);
+                longPcm[i * 2] = (byte)sample;
+                longPcm[i * 2 + 1] = (byte)(sample >> 8);
+            }
+
+            byte[] longBinka = UAssetAudio.Core.BinkaEncoder.Encode(
+                new UAssetAudio.Core.PcmAudio(longPcm, 44100, 2), 0, toolsDir); // 质量 0 = 体积最大，确保超一块
+            Console.WriteLine($"        长素材编码：{longBinka.Length:N0} 字节");
+            UAssetAudio.Core.SoundWaveReplacement longReplacement =
+                UAssetAudio.Core.SoundWavePatcher.Replace(audioStem + ".uasset", longBinka, audioUsmap);
+
+            string longDir = Path.Combine(root, "audio-long");
+            Directory.CreateDirectory(longDir);
+            string longStem = Path.Combine(longDir, "AU_Long");
+            File.WriteAllBytes(longStem + ".uasset", longReplacement.Uasset);
+            File.WriteAllBytes(longStem + ".uexp", longReplacement.Uexp);
+            File.WriteAllBytes(longStem + ".ubulk", longReplacement.Ubulk);
+
+            UAssetAudio.Core.SoundWaveInfo longInfo =
+                UAssetAudio.Core.SoundWavePatcher.Inspect(longStem + ".uasset", audioUsmap);
+            Check(longInfo.ChunkCount > 2, $"长素材被切成多个流式块（{longInfo.ChunkCount} 块）");
+            Check(longInfo.MaxChunkBytes <= UAssetAudio.Core.SoundWavePatcher.MaxDataChunkBytes,
+                $"每块都不超过上限（最大 {longInfo.MaxChunkBytes:N0} ≤ {UAssetAudio.Core.SoundWavePatcher.MaxDataChunkBytes:N0}）");
+            Check(longInfo.AudioBytes == longReplacement.Ubulk.Length,
+                $"块字节数之和等于 ubulk 长度（{longInfo.AudioBytes:N0}）");
+            Check(longInfo.CanReplace, "多块结果仍能被同一条解析路径接受");
+            Check(Math.Abs(longInfo.Seconds - longPcm.Length / 4d / 44100) < 0.1,
+                $"多块结果时长正确（{longInfo.Seconds:0.##} 秒）");
+        }
         // 打进 Pak 再用 CUE4Parse 读回：整条链路（导出表 / data resource / 内联块）都要对得上
         string audioPak = Path.Combine(root, "audio.pak");
         const string audioPakAsset = "Kards/Content/Audio/AU_Replaced.uasset";

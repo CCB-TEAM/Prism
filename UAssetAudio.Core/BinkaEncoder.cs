@@ -119,11 +119,12 @@ public static class BinkaEncoder
         var sampleCount = BinaryPrimitives.ReadInt32LittleEndian(binka[12..]);
         var outputSize = BinaryPrimitives.ReadInt32LittleEndian(binka[20..]);
         var seekEntries = BinaryPrimitives.ReadUInt16LittleEndian(binka[24..]);
+        var blocksPerSeek = BinaryPrimitives.ReadUInt16LittleEndian(binka[26..]);
 
         if (channels <= 0 || sampleRate <= 0 || sampleCount <= 0)
             throw new InvalidDataException("BINKA 头里的声道/采样率/采样数非法。");
 
-        return new BinkaAudioInfo(channels, sampleRate, sampleCount, seekEntries, outputSize);
+        return new BinkaAudioInfo(channels, sampleRate, sampleCount, seekEntries, outputSize, Math.Max(1, (int)blocksPerSeek));
     }
 
     private static string FirstLine(string text)

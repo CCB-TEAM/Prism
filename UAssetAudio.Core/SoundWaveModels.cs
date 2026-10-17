@@ -14,7 +14,8 @@ public sealed record BinkaAudioInfo(
     int SampleRate,
     int SampleCount,
     int SeekEntryCount,
-    int OutputFileSize)
+    int OutputFileSize,
+    int BlocksPerSeek = 1)
 {
     public double Seconds => SampleRate <= 0 ? 0 : SampleCount / (double)SampleRate;
 }
@@ -56,3 +57,6 @@ public sealed record SoundWaveReplacement(
 
     public int SampleRate => Audio.SampleRate;
 }
+
+/// <summary>一个流式数据块（占一个 data resource）：内容、起始帧号、包含多少组块。</summary>
+public sealed record StreamedDataChunk(byte[] Bytes, uint StartFrames, int GroupCount);

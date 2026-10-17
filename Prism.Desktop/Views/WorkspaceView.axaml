@@ -405,7 +405,7 @@
                                                               SelectedItem="{Binding SelectedPatchItem.AudioQuality}"
                                                               HorizontalAlignment="Left"
                                                               MinWidth="180" />
-                                                    <TextBlock Text="0 最好也最占空间，9 最省。编码后超过 256 KB 就放不进单个流式块。"
+                                                    <TextBlock Text="0 最好也最占空间，9 最省。编码后超过 256 KB 会自动切成多个流式块（和游戏自己切块的方式一致）。"
                                                                FontSize="{DynamicResource Fs10}"
                                                                Foreground="{DynamicResource TextMutedBrush}"
                                                                TextWrapping="Wrap" />
@@ -621,7 +621,7 @@
                                                               SelectedItem="{Binding SelectedPatchItem.AudioQuality}"
                                                               HorizontalAlignment="Left"
                                                               MinWidth="160" />
-                                                    <TextBlock Text="0 最好也最占空间，9 最省。编码后超过 256 KB 就放不进单个流式块。"
+                                                    <TextBlock Text="0 最好也最占空间，9 最省。编码后超过 256 KB 会自动切成多个流式块（和游戏自己切块的方式一致）。"
                                                                FontSize="{DynamicResource Fs10}"
                                                                Foreground="{DynamicResource TextMutedBrush}"
                                                                TextWrapping="Wrap" />

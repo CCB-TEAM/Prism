@@ -23,6 +23,9 @@ public static class SoundWavePatcher
     /// <summary>UE 单个流式块的上限：再大就要分块，而分块的 seek 表语义尚未验证，这里先卡住。</summary>
     public const int MaxDataChunkBytes = 262144;
 
+    /// <summary>BINKA 每块固定 1920 个采样（44.1k / 48k 实测一致）；推不出来时用它兜底。</summary>
+    private const int DefaultBlockFrames = 1920;
+
     private const int PrefixSize = 36; // flags(4) + cuePoints(4) + guid(16) + numChunks(4) + audioFormat(8)
     private const int SeekPrefixSize = 15; // "SEEK" + frames(4) + 3 字节保留 + seek 表项数(4)
 
@@ -40,10 +43,10 @@ public static class SoundWavePatcher
         var channels = GetInt(export, "NumChannels");
         var sampleRate = GetInt(export, "SampleRate");
         var seconds = (double)GetFloat(export, "Duration");
-        var audioBytes = layout.Chunks.Sum(chunk => Math.Max(chunk.DataSize, 0));
-        // 每块最大字节数：真实资产通常被零填充到烤制时的 MaxChunkSize，
-        // 摊给 UI 看就能对照游戏自己的规格（而不是我们凭空的 256 KB 闸门）。
-        var maxChunkBytes = layout.Chunks.Count == 0 ? 0 : layout.Chunks.Max(chunk => Math.Max(chunk.DataSize, 0));
+        // 只统计数据块（内联的那 28 字节只是流头），这样 audioBytes 就等于 .ubulk 的大小
+        var dataChunks = layout.Chunks.Where(chunk => chunk.Inline is null).ToList();
+        var audioBytes = dataChunks.Sum(chunk => Math.Max(chunk.DataSize, 0));
+        var maxChunkBytes = dataChunks.Count == 0 ? 0 : dataChunks.Max(chunk => Math.Max(chunk.DataSize, 0));
 
         // 属性缺失时退回到 ABEU 头里的值（头是音频自身的真值时更可信）
         if (layout.Header is { Length: >= BinkaEncoder.HeaderSize })
@@ -97,43 +100,33 @@ public static class SoundWavePatcher
             throw new InvalidOperationException("这个 SoundWave 没有 data resource（不是 5.3+ 的流式布局）。");
 
         var header = BuildHeaderChunk(binka);
-        var dataChunk = BuildDataChunk(binka, audio);
-        if (dataChunk.Length > MaxDataChunkBytes)
+
+        // 分块：UE 按 MaxChunkSize 切，这里照游戏自己的规格切（实测每块 ~255 KB）。
+        // 每块的 seekOffsetInAudioFrames 是"本块第一个采样在整条音频里的帧号"，
+        // 规则用真实资产验证过：offset += 本块组数 × blocksPerSeek × 块采样数。
+        var blockFrames = ResolveBlockFrames(binka, audio);
+        var framesField = ReadOriginalFramesField(uassetPath);
+        var dataChunks = BuildDataChunks(binka, audio, MaxDataChunkBytes, framesField, blockFrames);
+
+        var inlineResource = resources[layout.Chunks[0].ResourceIndex];
+        inlineResource.SerialSize = inlineResource.RawSize = header.Length;
+
+        var prototype = resources[layout.Chunks[1].ResourceIndex];
+        var rebuilt = new List<FObjectDataResource>(dataChunks.Count + 1) { inlineResource };
+        long offset = 0;
+        foreach (StreamedDataChunk chunk in dataChunks)
         {
-            throw new InvalidOperationException(
-                $"编码后 {dataChunk.Length / 1024} KB，超过单块上限 {MaxDataChunkBytes / 1024} KB。" +
-                "把音质数字调大（更省）或换短一点的素材。");
+            var resource = prototype;
+            resource.SerialOffset = offset;
+            resource.DuplicateSerialOffset = 0;
+            resource.SerialSize = chunk.Bytes.Length;
+            resource.RawSize = chunk.Bytes.Length;
+            rebuilt.Add(resource);
+            offset += chunk.Bytes.Length;
         }
 
-        // 只保留头块 + 数据块：原资产若切成更多块，多出来的 data resource 一并移除
-        var headerIndex = layout.Chunks[0].ResourceIndex;
-        var dataIndex = layout.Chunks[1].ResourceIndex;
-        var dropped = layout.Chunks.Skip(2)
-            .Select(chunk => chunk.ResourceIndex)
-            .Where(index => index != headerIndex && index != dataIndex)
-            .Distinct()
-            .OrderByDescending(index => index)
-            .ToList();
-        foreach (var index in dropped)
-        {
-            if (index >= 0 && index < resources.Count)
-                resources.RemoveAt(index);
-        }
-
-        headerIndex = ShiftIndex(headerIndex, dropped);
-        dataIndex = ShiftIndex(dataIndex, dropped);
-        if (headerIndex < 0 || dataIndex < 0 || headerIndex >= resources.Count || dataIndex >= resources.Count)
-            throw new InvalidOperationException("整理数据块后 data resource 索引越界，资产布局超出预期。");
-
-        var headerResource = resources[headerIndex];
-        headerResource.SerialSize = headerResource.RawSize = header.Length;
-        resources[headerIndex] = headerResource;
-
-        var dataResource = resources[dataIndex];
-        dataResource.SerialSize = dataResource.RawSize = dataChunk.Length;
-        resources[dataIndex] = dataResource;
-
-        export.Extras = BuildExtras(layout, header, dataChunk, headerIndex, dataIndex);
+        asset.DataResources = rebuilt;
+        export.Extras = BuildExtras(layout, header, dataChunks);
 
         SetInt(export, "NumChannels", audio.Channels);
         SetInt(export, "SampleRate", audio.SampleRate);
@@ -141,35 +134,167 @@ public static class SoundWavePatcher
         SetFloat(export, "TotalSamples", audio.SampleCount);
 
         var (uasset, uexp) = WriteAsset(asset);
-        return new SoundWaveReplacement(uasset, uexp, dataChunk, audio);
+        var ubulk = new byte[offset];
+        long cursor = 0;
+        foreach (StreamedDataChunk chunk in dataChunks)
+        {
+            chunk.Bytes.CopyTo(ubulk, cursor);
+            cursor += chunk.Bytes.Length;
+        }
+
+        return new SoundWaveReplacement(uasset, uexp, ubulk, audio);
     }
 
-    /// <summary>把 <paramref name="binka"/> 编成 <c>.ubulk</c> 的内容（SEEK 前导 + seek 表 + 数据块）。</summary>
-    public static byte[] BuildDataChunk(byte[] binka, BinkaAudioInfo audio)
+    /// <summary>把 <paramref name="binka"/> 切成若干流式块（每块 = SEEK 前导 + seek 表 + 若干块组）。</summary>
+    public static IReadOnlyList<StreamedDataChunk> BuildDataChunks(
+        byte[] binka,
+        BinkaAudioInfo audio,
+        int chunkBudgetBytes,
+        uint framesField,
+        int blockFrames)
     {
-        var seekEntries = audio.SeekEntryCount;
-        if (seekEntries <= 1)
+        var groups = audio.SeekEntryCount;
+        if (groups <= 1)
             throw new InvalidDataException("BINKA 的 seek 表太小，无法生成流式块。");
 
-        var blocksStart = BinkaEncoder.HeaderSize + seekEntries * 2;
+        var blocksStart = BinkaEncoder.HeaderSize + groups * 2;
         if (blocksStart >= binka.Length)
             throw new InvalidDataException("BINKA 数据的 seek 表越界（文件可能被截断）。");
 
-        var blockBytes = binka.Length - blocksStart;
-        var chunk = new byte[SeekPrefixSize + seekEntries * 2 + blockBytes];
+        // ABEU 自己的 seek 表：第 i 项就是第 i 组的字节数（一组 = blocksPerSeek 个编解码块）。
+        // 但 UE 的块内表是"首项 0 + 整体后移一格"，两种写法都可能出现，按字节总和判定。
+        var blockAreaLength = binka.Length - blocksStart;
+        var entries = new int[groups];
+        for (var i = 0; i < groups; i++)
+        {
+            entries[i] = BinaryPrimitives.ReadUInt16LittleEndian(binka.AsSpan(BinkaEncoder.HeaderSize + i * 2));
+        }
 
-        "SEEK"u8.CopyTo(chunk);
-        // 一个流式块覆盖的帧数：UE 的编码器固定按 10.24 秒一块写
-        BinaryPrimitives.WriteUInt32LittleEndian(chunk.AsSpan(4), (uint)Math.Round(audio.SampleRate * 10.24));
-        BinaryPrimitives.WriteUInt32LittleEndian(chunk.AsSpan(11), (uint)seekEntries);
+        var groupBytes = new int[groups];
+        var directSum = 0;
+        foreach (var value in entries)
+            directSum += value;
 
-        // UE 的 seek 表比 ABEU 那张整体后移一格，首项补 0（实测原始资产就是这个规则）
-        var table = chunk.AsSpan(SeekPrefixSize, seekEntries * 2);
-        BinaryPrimitives.WriteUInt16LittleEndian(table, 0);
-        binka.AsSpan(BinkaEncoder.HeaderSize, (seekEntries - 1) * 2).CopyTo(table[2..]);
+        var known = 0;
+        if (directSum == blockAreaLength)
+        {
+            Array.Copy(entries, groupBytes, groups);
+        }
+        else if (entries[0] == 0)
+        {
+            // 首项 0、其余是上一组：最后一组的字节数用总长倒推
+            for (var i = 0; i < groups - 1; i++)
+            {
+                groupBytes[i] = entries[i + 1];
+                known += groupBytes[i];
+            }
 
-        binka.AsSpan(blocksStart, blockBytes).CopyTo(chunk.AsSpan(SeekPrefixSize + seekEntries * 2));
-        return chunk;
+            groupBytes[groups - 1] = blockAreaLength - known;
+        }
+        else
+        {
+            for (var i = 0; i < groups - 1; i++)
+            {
+                groupBytes[i] = entries[i];
+                known += groupBytes[i];
+            }
+
+            groupBytes[groups - 1] = blockAreaLength - known;
+        }
+
+        if (groupBytes[groups - 1] <= 0)
+            throw new InvalidDataException("BINKA 的分组字节数不连续（文件可能损坏）。");
+
+        var blocksPerGroup = Math.Max(1, audio.BlocksPerSeek);
+        var result = new List<StreamedDataChunk>();
+        var groupOffset = 0;
+        uint startFrames = 0;
+
+        while (groupOffset < groups)
+        {
+            // 贪心装块：尽量多的组塞进一个块，但不超过预算
+            var count = 0;
+            var payloadBytes = 0;
+            while (groupOffset + count < groups)
+            {
+                var candidate = payloadBytes + groupBytes[groupOffset + count];
+                var tableBytes = (count + 1) * 2;
+                if (count > 0 && SeekPrefixSize + tableBytes + candidate > chunkBudgetBytes)
+                    break;
+
+                payloadBytes = candidate;
+                count++;
+            }
+
+            if (count == 0)
+                count = 1;
+
+            var chunk = new byte[SeekPrefixSize + count * 2 + payloadBytes];
+            "SEEK"u8.CopyTo(chunk);
+            BinaryPrimitives.WriteUInt32LittleEndian(chunk.AsSpan(4), framesField);
+            // 偏移 8..10 是保留字节（真实资产里为 0），块组数写在 11
+            BinaryPrimitives.WriteUInt32LittleEndian(chunk.AsSpan(11), (uint)count);
+
+            var table = chunk.AsSpan(SeekPrefixSize, count * 2);
+            BinaryPrimitives.WriteUInt16LittleEndian(table, 0);
+            var payload = SeekPrefixSize + (count * 2);
+            for (var i = 0; i < count; i++)
+            {
+                if (i < count - 1)
+                {
+                    BinaryPrimitives.WriteUInt16LittleEndian(table[((i + 1) * 2)..], (ushort)groupBytes[groupOffset + i]);
+                }
+
+                binka.AsSpan(blocksStart + groupOffsetBytes(groupBytes, groupOffset + i), groupBytes[groupOffset + i])
+                    .CopyTo(chunk.AsSpan(payload));
+                payload += groupBytes[groupOffset + i];
+            }
+
+            result.Add(new StreamedDataChunk(chunk, startFrames, count));
+            startFrames += (uint)(count * blocksPerGroup * blockFrames);
+            groupOffset += count;
+        }
+
+        return result;
+    }
+
+    /// <summary>第 <paramref name="group"/> 组块在块区里的起始字节偏移。</summary>
+    private static int groupOffsetBytes(int[] groupBytes, int group)
+    {
+        var offset = 0;
+        for (var i = 0; i < group; i++)
+            offset += groupBytes[i];
+        return offset;
+    }
+
+    /// <summary>BINKA 每块固定 1920 个采样（44.1k / 48k 实测都是）；对不上时按总采样数推。</summary>
+    private static int ResolveBlockFrames(byte[] binka, BinkaAudioInfo audio)
+    {
+        var totalBlocks = Math.Max(1, audio.SeekEntryCount * Math.Max(1, audio.BlocksPerSeek));
+        var derived = (int)Math.Ceiling(audio.SampleCount / (double)totalBlocks);
+        return derived is > 0 and <= 8192 ? derived : DefaultBlockFrames;
+    }
+
+    /// <summary>沿用原资产块头里的 frames 字段（解码器不看它，但保持与游戏一致最稳）。</summary>
+    private static uint ReadOriginalFramesField(string uassetPath)
+    {
+        try
+        {
+            string ubulkPath = Path.ChangeExtension(Path.GetFullPath(uassetPath), ".ubulk");
+            if (!File.Exists(ubulkPath))
+                return 0;
+
+            using var stream = File.OpenRead(ubulkPath);
+            Span<byte> head = stackalloc byte[8];
+            if (stream.Read(head) < 8 || !head[..4].SequenceEqual("SEEK"u8))
+                return 0;
+
+            return BinaryPrimitives.ReadUInt32LittleEndian(head[4..]);
+        }
+        catch
+        {
+            return 0;
+        }
     }
 
     private static byte[] BuildHeaderChunk(byte[] binka)
@@ -179,12 +304,7 @@ public static class SoundWavePatcher
         return header;
     }
 
-    private static byte[] BuildExtras(
-        StreamedLayout layout,
-        byte[] header,
-        byte[] dataChunk,
-        int headerResourceIndex,
-        int dataResourceIndex)
+    private static byte[] BuildExtras(StreamedLayout layout, byte[] header, IReadOnlyList<StreamedDataChunk> dataChunks)
     {
         using var stream = new MemoryStream();
         using var writer = new BinaryWriter(stream);
@@ -192,28 +312,31 @@ public static class SoundWavePatcher
         writer.Write(layout.Flags);
         writer.Write(layout.CuePointCount);
         writer.Write(Guid.NewGuid().ToByteArray()); // 新音频 = 新的压缩数据标识
-        writer.Write(2);                            // 只留头块 + 数据块
+        writer.Write(dataChunks.Count + 1);        // 头块 + N 个数据块
         writer.Write(layout.AudioFormatNameIndex);
         writer.Write(layout.AudioFormatNameNumber);
 
-        // chunk 0：内联 ABEU 头
+        // chunk 0：内联 ABEU 头（资源下标 0，重建后的 data resource 列表里它排第一）
         writer.Write((layout.Chunks[0].Flags | ChunkIsCooked | ChunkIsInlined) & ~ChunkHasSeekOffset);
-        writer.Write(headerResourceIndex);
+        writer.Write(0);
         writer.Write(header);
         writer.Write(header.Length);
         writer.Write(header.Length);
 
-        // chunk 1：数据块，带 seek 偏移
-        writer.Write((layout.Chunks[1].Flags | ChunkIsCooked | ChunkHasSeekOffset) & ~ChunkIsInlined);
-        writer.Write(dataResourceIndex);
-        writer.Write(dataChunk.Length);
-        writer.Write(dataChunk.Length);
-        writer.Write(0u);
+        for (var i = 0; i < dataChunks.Count; i++)
+        {
+            StreamedDataChunk chunk = dataChunks[i];
+            uint flags = (layout.Chunks[1].Flags | ChunkIsCooked | ChunkHasSeekOffset) & ~ChunkIsInlined;
+            writer.Write(flags);
+            writer.Write(i + 1);              // data resource 下标
+            writer.Write(chunk.Bytes.Length);
+            writer.Write(chunk.Bytes.Length);
+            writer.Write(chunk.StartFrames);
+        }
 
         writer.Flush();
         return stream.ToArray();
     }
-
     private static (UAsset Asset, NormalExport Export) Load(string uassetPath, string? usmapPath)
     {
         var full = Path.GetFullPath(uassetPath);
