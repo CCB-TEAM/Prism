@@ -432,8 +432,13 @@ UEBPR/wwwroot/lib/
 t_cromwell.*
 
 # 扁平化后不再入库的目录（base 树中被 git 跟踪，扁平树里不存在）
+# .reasonix/ 是 AI 会话状态，每开一次会话就会改，不该进版本库。
 .reasonix/
 UE-Pak-Manager/
+
+# AI 助手本地配置：opencode.json 里有明文 API key（sk-...），
+# 一旦 add -A 就会被提交、一旦 push 就等于把 key 公开，必须挡在门外。
+.opencode/
 
 # CUE4Parse 依赖树：不随仓库提交，需自行放到 external/CUE4Parse/
 # （PakTool.Core 以 ..\external\CUE4Parse\... 的项目引用方式消费它；
