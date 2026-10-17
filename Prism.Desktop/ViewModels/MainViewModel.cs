@@ -2835,8 +2835,10 @@ public partial class MainViewModel : ViewModelBase
                         {
                             byte[] higher = await File.ReadAllBytesAsync(existing.DiskPath);
                             byte[] lower = await File.ReadAllBytesAsync(file.DiskPath);
+                            // ShouldMergeConflict 已保证 baselineLocres 非空（它要求 Length > 0），
+                            // 但那是运行期判断，编译器看不穿，故此处显式断言。
                             byte[] combined = LocresMerge.Merge(
-                                baselineLocres, [higher, lower], out LocresMergeReport report);
+                                baselineLocres!, [higher, lower], out LocresMergeReport report);
 
                             string mergedLocresPath = Path.Combine(tempRoot, $"locres{Guid.NewGuid():N}.locres");
                             await File.WriteAllBytesAsync(mergedLocresPath, combined);
