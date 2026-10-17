@@ -35,9 +35,9 @@ New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
 $objDir = Join-Path $outDir "obj"
 New-Item -ItemType Directory -Force -Path $objDir | Out-Null
 
-# 第三方源码放在 reference/ 下（曾经放在仓库根目录，两个位置都兼容一下）
+# 源码解析顺序：native/third_party → 仓库根 → reference/（都按同名目录找）
 function Resolve-Source([string]$relative) {
-    foreach ($base in @($root, (Join-Path $root "reference"))) {
+    foreach ($base in @((Join-Path $root "native\third_party"), $root, (Join-Path $root "reference"))) {
         $candidate = Join-Path $base $relative
         if (Test-Path -LiteralPath $candidate) { return $candidate }
     }

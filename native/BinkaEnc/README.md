@@ -10,7 +10,8 @@
 - 那是 Windows 二进制，Android 上根本起不来；
 - RAD 只提供 win64 / winarm64 / lnx64 / osx 的预编译静态库，**没有 Android arm64**。
 
-但 `reference/binkaenc-main/Src/binkace.c` 是完整逻辑，缺的只是 RAD 的 5 个内部头文件。
+但上游的 `binkace.c` 是完整逻辑（已随仓库放在 `native/third_party/binkaenc-main/Src/`），
+缺的只是 RAD 的 5 个内部头文件。
 本目录把它们补出来，于是同一份 C 源码可以直接编到任何平台。
 
 ## 目录内容
@@ -29,7 +30,7 @@
 
 ## 关键数学约定
 
-解码端（`reference/binka_decoder-main/binka_transform.cpp` 的 `transform_dct`）是**不带 1/2 直流项**的 DCT-III：
+解码端（`native/third_party/binka_decoder-main/binka_transform.cpp` 的 `transform_dct`）是**不带 1/2 直流项**的 DCT-III：
 
 ```
 x[n] = c[0] + Σ_{k>0} c[k]·cos(πk(2n+1)/(2N))
@@ -68,7 +69,7 @@ pwsh -File native/PrismCodecs/build-android-arm64.ps1 -NdkRoot …  # Android: l
 Android 那条脚本要注意两点：
 
 1. `.c` 文件必须单独 `-x c` 编译，`clang++` 会把 `.c` 当 C++ 处理；
-2. `reference/binkaenc-main/Src/popmal.h` 是个 **0 字节空文件**，而引号包含永远先搜当前
+2. 自己那份上游树里的 `Src/popmal.h` 是个 **0 字节空文件**（仓库里的 `native/third_party` 版本没有这个坑），而引号包含永远先搜当前
    文件所在目录，所以必须 `-include compat/popmal.h` 先把它盖住。
 
 ## 速度

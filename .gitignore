@@ -393,6 +393,9 @@ binkaenc-main/
 # 见 native/BinkaEnc/README.md。
 native/RepakBind/target/
 native/PrismCodecs/build-android-*/
+# 上面那几个『按目录名忽略上游树』的规则会连带匹配到 third_party 里的副本，这两行把它们要回来
+!native/third_party/binkaenc-main/
+!native/third_party/binka_decoder-main/
 nihav-master-320ede8/
 # test/ 放的是样本资产（体积大、来源为游戏数据），不入库；
 # 但 test/Prism.FeatureTests 是仓库自带的集成测试工程，需要跟踪。

@@ -16,11 +16,25 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repo = Resolve-Path (Join-Path $PSScriptRoot '..\..')
-$binkaRoot = Join-Path $repo 'reference\binka_decoder-main'
-$encRoot = Join-Path $repo 'reference\binkaenc-main'
+
+# 源码解析顺序：native/third_party → 仓库根 → reference/（都按同名目录找）
+# 想用自己下载的完整上游树，把它放到仓库根或 reference/ 下即可覆盖 third_party 里的副本。
+function Resolve-Source([string]$name) {
+    foreach ($base in @((Join-Path $repo 'native\third_party'), $repo, (Join-Path $repo 'reference'))) {
+        $candidate = Join-Path $base $name
+        if (Test-Path -LiteralPath $candidate) { return $candidate }
+    }
+    throw "缺少源码目录：$name（放到 native\third_party 或 reference 下都行）"
+}
+
+$binkaRoot = Resolve-Source 'binka_decoder-main'
+$encRoot = Resolve-Source 'binkaenc-main'
 $encCompat = Join-Path $repo 'native\BinkaEnc\compat'
 $encPrism = Join-Path $repo 'native\BinkaEnc'
 $output = Join-Path $repo 'third_party\lib\win-x64'
+
+Write-Host "解码器源码: $binkaRoot"
+Write-Host "编码器源码: $encRoot"
 
 foreach ($required in $binkaRoot, $encRoot, $encCompat) {
     if (-not (Test-Path $required)) { throw "缺少源码 $required" }

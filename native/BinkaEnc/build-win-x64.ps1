@@ -18,8 +18,18 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repo = Resolve-Path (Join-Path $PSScriptRoot '..\..')
-$encRoot = Join-Path $repo 'reference\binkaenc-main'
-$decRoot = Join-Path $repo 'reference\binka_decoder-main'
+
+# 源码解析顺序：native/third_party → 仓库根 → reference/（都按同名目录找）
+function Resolve-Source([string]$name) {
+    foreach ($base in @((Join-Path $repo 'native\third_party'), $repo, (Join-Path $repo 'reference'))) {
+        $candidate = Join-Path $base $name
+        if (Test-Path -LiteralPath $candidate) { return $candidate }
+    }
+    throw "缺少源码目录：$name（放到 native\third_party 或 reference 下都行）"
+}
+
+$encRoot = Resolve-Source 'binkaenc-main'
+$decRoot = Resolve-Source 'binka_decoder-main'
 
 if (-not (Test-Path $encRoot)) { throw "缺少编码器源码 $encRoot" }
 if (-not (Test-Path $decRoot)) { throw "缺少解码器源码 $decRoot" }
