@@ -210,12 +210,16 @@ public sealed partial class PatchItem : ObservableObject
 
     public bool IsFailed => Status == "失败";
 
-    public bool IsPending => !IsReplaced && !IsFailed;
+    /// <summary>本地化写完一次译文后的状态（还没构建补丁 Pak）。</summary>
+    public bool IsEdited => Status == "已编辑";
+
+    public bool IsPending => !IsReplaced && !IsFailed && !IsEdited;
 
     partial void OnStatusChanged(string value)
     {
         OnPropertyChanged(nameof(IsReplaced));
         OnPropertyChanged(nameof(IsFailed));
+        OnPropertyChanged(nameof(IsEdited));
         OnPropertyChanged(nameof(IsPending));
     }
 }

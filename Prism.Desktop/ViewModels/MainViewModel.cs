@@ -3133,7 +3133,10 @@ public partial class MainViewModel : ViewModelBase
             Dictionary<string, string> originalFiles = new(StringComparer.OrdinalIgnoreCase);
 
             // 2. 原始文件（视频 / 音频 / 任意二进制）：只换字节，不解析资产
-            bool isMediaTarget = !isPackage || !string.Equals(targetPath, item.FullPath, StringComparison.Ordinal);
+            //    注意：.locres 大多是"裸文件"（不是 .uasset 包），必须在按包/非包分流之前
+            //    把本地化排除掉，否则会掉进"直接替换字节"分支，翻译编辑器就再也出不来了。
+            bool isMediaTarget = !isLocres &&
+                                 (!isPackage || !string.Equals(targetPath, item.FullPath, StringComparison.Ordinal));
             if (isMediaTarget)
             {
                 IReadOnlyDictionary<string, byte[]> mediaFiles;
@@ -3220,8 +3223,8 @@ public partial class MainViewModel : ViewModelBase
                         kind: "locres",
                         sourcePath: item.FullPath,
                         name: baseName,
-                        format: locres.Version,
-                        sizeLabel: $"{locres.EntryCount:N0} 条",
+                        format: "LOCRES",
+                        sizeLabel: $"{locres.EntryCount:N0} 条词条",
                         width: 0,
                         height: 0,
                         workDirectory: workDir,
@@ -3292,15 +3295,12 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>音频替换项：先确认这是个可替换的流式 SoundWave，再登记声道/时长等展示信息。</summary>
     private PatchItem CreateAudioPatch(string sourcePath, string baseName, string inputUassetPath, string workDir)
     {
-        if (OperatingSystem.IsAndroid())
-        {
-            throw new InvalidOperationException("音频替换依赖 binka_encode.exe，Android 版暂不支持（请用桌面版）。");
-        }
-
         if (!BinkaEncoder.IsAvailable(ToolsDirectory))
         {
             throw new InvalidOperationException(
-                $"没找到 {BinkaEncoder.ToolName}，音频替换暂时不可用。把它放进 {ToolsDirectory} 再重启即可（来源见 tools/README.md）。");
+                OperatingSystem.IsAndroid()
+                    ? "内置音频编码器没能加载，音频替换暂时不可用（请更新到最新版本）。"
+                    : $"没找到 {BinkaEncoder.ToolName}，音频替换暂时不可用。把它放进 {ToolsDirectory} 再重启即可（来源见 tools/README.md）。");
         }
 
         SoundWaveInfo info = SoundWavePatcher.Inspect(inputUassetPath, NullIfWhiteSpace(UsmapPath));
@@ -4908,6 +4908,19 @@ public partial class MainViewModel : ViewModelBase
             await using (FileStream dst = File.Create(destPath))
             {
                 await src.CopyToAsync(dst);
+            }
+
+            // 下载缓存之类的文件名常常没有扩展名，缓存副本会变成 <名字>.<guid>。
+            // 补一个按文件头猜出来的扩展名，后面识别格式、看日志都方便。
+            if (extension.Length == 0)
+            {
+                string guessed = UAssetAudio.Core.AudioSourceDecoder.SuggestExtension(destPath);
+                if (guessed.Length > 0)
+                {
+                    string renamed = destPath + guessed;
+                    File.Move(destPath, renamed, true);
+                    destPath = renamed;
+                }
             }
 
             DeleteReplacedAndroidPickedFile(replaceCachePath, destPath);

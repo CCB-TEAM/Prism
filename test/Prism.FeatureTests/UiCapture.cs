@@ -45,6 +45,7 @@ internal static class UiCapture
             ("workspace-browse", "GoWorkspace", 1),
             ("workspace-replace-audio", "GoWorkspace", 2),
             ("workspace-replace-media", "GoWorkspace", 2),
+            ("workspace-replace-locres", "GoWorkspace", 2),
             ("preview-audio", "GoWorkspace", 1),
             ("preview-video", "GoWorkspace", 1),
             ("merge", "GoMerge", 0),
@@ -71,7 +72,14 @@ internal static class UiCapture
                     // 替换页需要真的有任务才看得出来长什么样：塞两条示例（音频 / 视频）。
                     if (pageLabel.StartsWith("workspace-replace", StringComparison.Ordinal))
                     {
-                        SeedPatchDemo(vm, selectMedia: pageLabel.EndsWith("media", StringComparison.Ordinal));
+                        if (pageLabel.EndsWith("locres", StringComparison.Ordinal))
+                        {
+                            SeedLocresDemo(vm);
+                        }
+                        else
+                        {
+                            SeedPatchDemo(vm, selectMedia: pageLabel.EndsWith("media", StringComparison.Ordinal));
+                        }
                     }
 
                     // 预览栏的内置播放器 / 视频画面：同样造一份示例状态
@@ -183,6 +191,42 @@ internal static class UiCapture
         vm.SelectedPatchItem = selectMedia
             ? vm.PatchItems.FirstOrDefault(item => item.IsMedia)
             : vm.PatchItems.FirstOrDefault(item => item.IsAudio);
+        Pump();
+    }
+
+    /// <summary>
+    /// 给替换页塞一份本地化任务：裸 .locres 应该显示翻译编辑器（搜索 + 词条列表 + 导出 JSON），
+    /// 而不是"直接替换字节"的通用卡片。
+    /// </summary>
+    private static void SeedLocresDemo(MainViewModel vm)
+    {
+        var patch = new Prism.Desktop.Models.PatchItem(
+            kind: "locres",
+            sourcePath: "kards/Content/Localization/Game/zh-Hans/Game.locres",
+            name: "Game",
+            format: "LOCRES",
+            sizeLabel: "4 条词条",
+            width: 0,
+            height: 0,
+            workDirectory: Path.GetTempPath(),
+            inputUassetPath: string.Empty);
+
+        (string Key, string Text)[] demo =
+        [
+            ("PlayButton", "开始"),
+            ("SettingsButton", "设置"),
+            ("VictoryMessage", "胜利"),
+            ("DefeatMessage", "失败"),
+        ];
+        for (var i = 0; i < demo.Length; i++)
+        {
+            patch.LocresEntries.Add(new Prism.Desktop.Models.LocresEntryVM(
+                new PakTool.Core.LocresEntryDto(i, "/Game/Loc/UI", demo[i].Key, demo[i].Text)));
+        }
+
+        patch.ApplyLocresFilter();
+        vm.PatchItems = new System.Collections.ObjectModel.ObservableCollection<Prism.Desktop.Models.PatchItem> { patch };
+        vm.SelectedPatchItem = patch;
         Pump();
     }
 

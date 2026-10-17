@@ -32,11 +32,12 @@ Browse pak contents, preview textures / audio / 3D meshes / localization, export
 - Both live on the same rail: add to replace list -> choose the clip -> build a patch pak.
 - Longer clips are split into multiple streaming chunks automatically (each ≤ 256 KB, mirroring how
   the game itself chunks them), so the old "about a minute" ceiling is gone.
-- Audio encoding needs `tools/binka_encode.exe` (a third-party binary, not committed — see
-  [tools/README.md](tools/README.md)).
-- **Desktop only for audio**: the encoder is a Windows binary (RAD ships static libs for
-  win/linux/osx only, none for Android arm64), so Android builds say so when you try; video
-  replacement works on both.
+- Audio is encoded by a built-in native encoder (`prism_encode_binka`: `prism_binka.dll` on
+  desktop, `libprism_codecs.so` on Android — sources in
+  [native/BinkaEnc](native/BinkaEnc/README.md)), so **audio replacement works on both
+  platforms**. It only falls back to `tools/binka_encode.exe` (a third-party binary, not
+  committed — see [tools/README.md](tools/README.md)) when the native library is missing.
+- Video replacement follows the same rail and works on both platforms as well.
 
 **Pak merging**
 - Select multiple paks at once and drag to reorder; **the higher entry wins** on conflicting paths.

@@ -32,6 +32,9 @@ public class MainActivity : AvaloniaMainActivity
     {
         base.OnCreate(savedInstanceState);
         Current = this;
+
+        // 手机上没有 ffmpeg：M4A / AAC / FLAC 这类素材交给系统解码器
+        UAssetAudio.Core.AudioSourceDecoder.PlatformDecoder = AndroidAudioDecoder.TryDecode;
     }
 
     protected override void OnResume()

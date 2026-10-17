@@ -4,10 +4,14 @@ using System.Diagnostics;
 namespace UAssetAudio.Core;
 
 /// <summary>
-/// 调 <c>binka_encode.exe</c> 把 16 位 PCM 编成 UE 用的 BINKA（ABEU 容器）。
+/// 把 16 位 PCM 编成 UE 用的 BINKA（ABEU 容器）。
 ///
-/// 这个编码器是外部工具（来源见 tools/README.md），不随仓库提交：
-/// 找不到时 <see cref="IsAvailable"/> 为 false，调用方据此给出可读的提示。
+/// 首选进程内的原生编码器（<c>prism_encode_binka</c>，Windows 在 prism_binka.dll、
+/// Android 在 libprism_codecs.so）——它由 native/BinkaEnc 从同一份源码编出来，
+/// 桌面上不必再带 <c>binka_encode.exe</c>，手机上也是它让音频替换成立。
+///
+/// 原生库缺失时才回退到外部工具 <c>binka_encode.exe</c>（来源见 tools/README.md）；
+/// 两者都没有时 <see cref="IsAvailable"/> 为 false，调用方据此给出可读的提示。
 /// </summary>
 public static class BinkaEncoder
 {
@@ -23,7 +27,19 @@ public static class BinkaEncoder
 
     public static string? FindTool(string? toolDirectory = null) => ExternalToolLocator.Find(ToolName, toolDirectory);
 
-    public static bool IsAvailable(string? toolDirectory = null) => FindTool(toolDirectory) is not null;
+    /// <summary>原生库或外部工具任一可用即可。</summary>
+    public static bool IsAvailable(string? toolDirectory = null)
+        => NativeBinkaEncoder.IsAvailable() || FindTool(toolDirectory) is not null;
+
+    /// <summary>说明当前用的是哪条编码路径，用于界面提示。</summary>
+    public static string DescribeEncoder(string? toolDirectory = null)
+    {
+        if (NativeBinkaEncoder.IsAvailable())
+            return "内置编码器";
+
+        var tool = FindTool(toolDirectory);
+        return tool is null ? "不可用" : ToolName;
+    }
 
     /// <summary>把 PCM 编成 BINKA 字节（ABEU 头 + seek 表 + 数据块）。</summary>
     public static byte[] Encode(PcmAudio audio, int quality = DefaultQuality, string? toolDirectory = null)
@@ -33,9 +49,28 @@ public static class BinkaEncoder
         if (audio.Channels <= 0 || audio.SampleRate <= 0)
             throw new InvalidDataException("音频的声道/采样率非法。");
 
+        if (NativeBinkaEncoder.IsAvailable())
+        {
+            try
+            {
+                var native = NativeBinkaEncoder.Encode(audio, quality);
+                ReadInfo(native);
+                return native;
+            }
+            catch (Exception) when (FindTool(toolDirectory) is not null)
+            {
+                // 原生路径出问题时退回外部工具，别让用户卡住
+            }
+        }
+
+        return EncodeWithTool(audio, quality, toolDirectory);
+    }
+
+    private static byte[] EncodeWithTool(PcmAudio audio, int quality, string? toolDirectory)
+    {
         var tool = FindTool(toolDirectory)
                    ?? throw new FileNotFoundException(
-                       $"没找到 {ToolName}。把它放到 tools 目录（和 Prism 可执行文件同级）即可启用音频替换。");
+                       $"没找到 {ToolName}，内置编码器也不可用，音频替换暂时不能用。把 {ToolName} 放到 tools 目录即可恢复。");
 
         var temp = Path.Combine(Path.GetTempPath(), "prism-binka", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(temp);

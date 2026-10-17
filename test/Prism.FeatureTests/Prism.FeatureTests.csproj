@@ -14,6 +14,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- 原生 BINKA 编解码库：音频替换现在优先走进程内编码（不再依赖 binka_encode.exe），
+         测试要以「真实的那条路径」跑，所以把 dll 复制到输出目录。 -->
+    <None Include="..\..\third_party\lib\win-x64\prism_binka.dll"
+          Condition="Exists('..\..\third_party\lib\win-x64\prism_binka.dll')"
+          Link="prism_binka.dll"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\PakTool.Core\PakTool.Core.csproj" />
     <ProjectReference Include="..\..\UAssetTexture.Core\UAssetTexture.Core.csproj" />
     <ProjectReference Include="..\..\UAssetAudio.Core\UAssetAudio.Core.csproj" />

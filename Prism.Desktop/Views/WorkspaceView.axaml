@@ -266,10 +266,13 @@
                                                            FontSize="{DynamicResource Fs10}"
                                                            Foreground="{DynamicResource TextMutedBrush}"
                                                            TextTrimming="CharacterEllipsis" />
-                                                <TextBlock Text="已替换"
+                                                <TextBlock Text="已替换"
+                                                           FontSize="{DynamicResource Fs10}"
+                                                           Foreground="{DynamicResource PrimaryBrush}"
+                                                           IsVisible="{Binding IsReplaced}" />                                                <TextBlock Text="已编辑"
                                                            FontSize="{DynamicResource Fs10}"
                                                            Foreground="{DynamicResource PrimaryBrush}"
-                                                           IsVisible="{Binding IsReplaced}" />
+                                                           IsVisible="{Binding IsEdited}" />
                                                 <TextBlock Text="失败"
                                                            FontSize="{DynamicResource Fs10}"
                                                            Foreground="{DynamicResource DangerBrush}"
@@ -322,6 +325,9 @@
                                                     Classes="ghost"
                                                     FontSize="{DynamicResource Fs11}"
                                                     HorizontalAlignment="Left" />
+                                            <TextBlock Text="{Binding SelectedPatchItem.LocresFilterSummary}"
+                                                       FontSize="{DynamicResource Fs10}"
+                                                       Foreground="{DynamicResource TextMutedBrush}" />
                                             <TextBlock Text="改完按回车写回，再构建补丁 Pak。"
                                                        FontSize="{DynamicResource Fs10}"
                                                        Foreground="{DynamicResource TextMutedBrush}" />
@@ -342,6 +348,8 @@
                                                             <TextBlock Text="{Binding DisplayKey}"
                                                                        FontSize="{DynamicResource Fs11}"
                                                                        TextWrapping="Wrap"
+                                                                       MaxLines="2"
+                                                                       TextTrimming="CharacterEllipsis"
                                                                        VerticalAlignment="Center" />
                                                             <TextBox Grid.Column="1"
                                                                      Text="{Binding Text}"
@@ -490,6 +498,10 @@
                                                        FontSize="{DynamicResource Fs10}"
                                                        Foreground="{DynamicResource PrimaryBrush}"
                                                        IsVisible="{Binding IsReplaced}" />
+                                            <TextBlock Text="已编辑"
+                                                       FontSize="{DynamicResource Fs10}"
+                                                       Foreground="{DynamicResource PrimaryBrush}"
+                                                       IsVisible="{Binding IsEdited}" />
                                             <TextBlock Text="失败"
                                                        FontSize="{DynamicResource Fs10}"
                                                        Foreground="{DynamicResource DangerBrush}"
@@ -541,6 +553,9 @@
                                                     Classes="ghost"
                                                     FontSize="{DynamicResource Fs11}"
                                                     HorizontalAlignment="Left" />
+                                            <TextBlock Text="{Binding SelectedPatchItem.LocresFilterSummary}"
+                                                       FontSize="{DynamicResource Fs10}"
+                                                       Foreground="{DynamicResource TextMutedBrush}" />
                                             <TextBlock Text="改完按回车写回，再构建补丁 Pak。"
                                                        FontSize="{DynamicResource Fs10}"
                                                        Foreground="{DynamicResource TextMutedBrush}" />
@@ -561,6 +576,8 @@
                                                             <TextBlock Text="{Binding DisplayKey}"
                                                                        FontSize="{DynamicResource Fs10}"
                                                                        TextWrapping="Wrap"
+                                                                       MaxLines="2"
+                                                                       TextTrimming="CharacterEllipsis"
                                                                        VerticalAlignment="Center" />
                                                             <TextBox Grid.Column="1"
                                                                      Text="{Binding Text}"

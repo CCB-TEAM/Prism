@@ -30,9 +30,10 @@
   选中 `UFileMediaSource` 资产时会自动定位到它引用的那个视频文件。
 - 两者走同一条路：加入替换 → 选择素材 → 构建补丁 pak。
 - 长素材会自动切成多个流式块（每块 ≤ 256 KB，和游戏自己的切块方式一致），不再有"只能换 1 分钟以内"的限制。
-- 音频编码依赖 `tools/binka_encode.exe`（三方二进制，不入库，见 [tools/README.md](tools/README.md)）。
-- **音频替换仅桌面端**：编码器是 Windows 可执行文件（RAD 只提供 win/linux/osx 的静态库，没有 Android arm64），
-  Android 版会在加入替换时直接说明；视频替换两端都能用。
+- 音频编码走内置原生编码器（`prism_encode_binka`：桌面在 `prism_binka.dll`、Android 在
+  `libprism_codecs.so`，源码见 [native/BinkaEnc](native/BinkaEnc/README.md)），**两端都能替换音频**；
+  找不到原生库时才回退到 `tools/binka_encode.exe`（三方二进制，不入库，见 [tools/README.md](tools/README.md)）。
+- 视频替换与音频替换走同一条流程，两端都可用。
 
 **Pak 合并**
 - 一次性多选多个 pak，长按拖动调整覆盖优先级（**越靠上优先级越高**）。

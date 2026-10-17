@@ -781,14 +781,18 @@ try
     bool hasAudioFixture = File.Exists(audioStem + ".uasset") && File.Exists(audioStem + ".uexp") &&
                            File.Exists(audioStem + ".ubulk") && File.Exists(audioStem + ".wav");
     bool hasBinkaEncoder = UAssetAudio.Core.BinkaEncoder.IsAvailable(toolsDir);
-    Console.WriteLine($"        音频 fixture={hasAudioFixture} 映射={audioUsmap is not null} binka_encode={hasBinkaEncoder}");
+    string encoderKind = UAssetAudio.Core.BinkaEncoder.DescribeEncoder(toolsDir);
+    Console.WriteLine($"        音频 fixture={hasAudioFixture} 映射={audioUsmap is not null} 编码器={encoderKind}");
 
     if (!hasAudioFixture || audioUsmap is null || !hasBinkaEncoder)
     {
-        Console.WriteLine("        跳过音频替换断言（缺少 fixture / 映射文件 / tools/binka_encode.exe）");
+        Console.WriteLine("        跳过音频替换断言（缺少 fixture / 映射文件 / 编码器）");
     }
     else
     {
+        // 手机端没有 binka_encode.exe，音频替换必须靠进程内的原生编码器
+        Check(encoderKind == "内置编码器", $"音频编码走进程内原生库（{encoderKind}）");
+
         UAssetAudio.Core.SoundWaveInfo originalInfo = UAssetAudio.Core.SoundWavePatcher.Inspect(audioStem + ".uasset", audioUsmap);
         Check(originalInfo.IsBinka, $"原始资产是 BINKA（{originalInfo.Format}）");
         Check(originalInfo.IsStreaming && originalInfo.ChunkCount == 2,
@@ -804,6 +808,24 @@ try
             $"块头记录每块 10.24 秒（{framesPerChunk} 帧 @ {originalInfo.SampleRate} Hz）");
 
         var fixturePcm = UAssetAudio.Core.WavCodec.Read(File.ReadAllBytes(audioStem + ".wav"));
+
+        // 手机 SAF 选出来的素材常常没有扩展名（缓存文件名就是一串哈希）。格式判断必须看文件头，
+        // 否则会把 WAV 当成"未知格式"、再误报「需要 ffmpeg」—— 这是手机端音频替换踩过的坑。
+        {
+            string weirdDir = Path.Combine(root, "audio-extensionless");
+            Directory.CreateDirectory(weirdDir);
+            string weirdPath = Path.Combine(weirdDir, "0f3c9e5a7b1d4c8e9a6b2f5d3c1e8a7b");
+            File.Copy(audioStem + ".wav", weirdPath, true);
+
+            Check(UAssetAudio.Core.AudioSourceDecoder.DetectContainer(weirdPath) == UAssetAudio.Core.AudioContainer.Wav,
+                "没有扩展名的 WAV 也能按文件头认出容器");
+            Check(UAssetAudio.Core.AudioSourceDecoder.SuggestExtension(weirdPath) == ".wav",
+                "能按文件头给它补出 .wav 扩展名");
+
+            var fromWeirdName = UAssetAudio.Core.AudioSourceDecoder.Decode(weirdPath, toolsDir);
+            Check(fromWeirdName.SampleRate == fixturePcm.SampleRate && fromWeirdName.FrameCount == fixturePcm.FrameCount,
+                "没有扩展名的素材仍能正常解码（手机端那条路）");
+        }
         byte[] binkaBytes = UAssetAudio.Core.BinkaEncoder.Encode(fixturePcm, 4, toolsDir);
         var binkaInfo = UAssetAudio.Core.BinkaEncoder.ReadInfo(binkaBytes);
         Check(binkaBytes.AsSpan(0, 4).SequenceEqual("ABEU"u8), "编码结果是 ABEU 容器");
@@ -1269,6 +1291,39 @@ try
         {
             Console.WriteLine("        跳过音频流程断言（缺少 fixture / 映射文件 / binka_encode.exe）");
         }
+
+        // 本地化：.locres 是裸文件（不是 .uasset 包）。「加入替换」必须走翻译编辑器那条路，
+        // 不能被"非 uasset 就当原始文件替换"提前吃掉 —— 那样界面上就只剩"直接替换字节"。
+        if (File.Exists(locresPak))
+        {
+            var locresVm = new Prism.Desktop.ViewModels.MainViewModel { PakPath = locresPak };
+            RunVmCommand(locresVm, locresVm.OpenPakCommand);
+            EnterFolder(locresVm, "Kards");
+            EnterFolder(locresVm, "Content");
+            EnterFolder(locresVm, "Config");
+
+            Prism.Desktop.Models.EntryItem? locresEntry = locresVm.Entries
+                .FirstOrDefault(entry => !entry.IsDirectory && entry.Name.EndsWith(".locres", StringComparison.OrdinalIgnoreCase));
+            Check(locresEntry is not null, "locres 文件出现在列表里");
+
+            locresVm.SelectedItem = locresEntry;
+            RunVmCommand(locresVm, locresVm.AddSelectedToPatchCommand);
+
+            Prism.Desktop.Models.PatchItem? locresPatch = locresVm.PatchItems.FirstOrDefault();
+            Check(locresPatch?.IsLocres == true, $"裸 .locres「加入替换」后被识别为本地化项（kind={locresPatch?.Kind}）");
+            Check(locresPatch?.LocresEntries.Count == 2, $"词条已载入翻译编辑器（{locresPatch?.LocresEntries.Count} 条）");
+            Check(locresPatch?.Format == "LOCRES", $"本地化项的标签是 LOCRES（{locresPatch?.Format}）");
+
+            // 编辑一条再写回：走的是 LocresResourceCodec，不经过"原始文件替换"
+            locresPatch!.LocresEntries[0].Text = "改过的译文";
+            RunVmCommand(locresVm, locresVm.UpdateLocresEntryCommand, locresPatch);
+            Check(locresPatch.Status == "已编辑", $"编辑后状态变成已编辑（{locresPatch.Status}）");
+            Check(locresPatch.PatchedFiles.Count == 1, $"本地化写回只产出一个文件（{locresPatch.PatchedFiles.Count}）");
+        }
+        else
+        {
+            Console.WriteLine("        跳过本地化流程断言（locres.pak 未生成）");
+        }
     }
     catch (Exception ex)
     {
@@ -1676,9 +1731,9 @@ static bool SeekTableFollowsUeRule(byte[] chunk, out int blockCount, out uint fr
 }
 
 /// <summary>跑一个异步命令并把它推完（无头环境没有消息循环，需要手动 Pump）。</summary>
-static void RunVmCommand(Prism.Desktop.ViewModels.MainViewModel vm, CommunityToolkit.Mvvm.Input.IAsyncRelayCommand command)
+static void RunVmCommand(Prism.Desktop.ViewModels.MainViewModel vm, CommunityToolkit.Mvvm.Input.IAsyncRelayCommand command, object? parameter = null)
 {
-    Task task = command.ExecuteAsync(null);
+    Task task = command.ExecuteAsync(parameter);
     DateTime deadline = DateTime.UtcNow.AddSeconds(120);
     while (!task.IsCompleted && DateTime.UtcNow < deadline)
     {

@@ -85,10 +85,10 @@ public static class SmokeTest
     /// </summary>
     private static async Task<int> VerifyAudioReplacementAsync(PakArchiveSession session, string? usmapPath)
     {
-        string toolPath = Path.Combine(AppContext.BaseDirectory, "tools", BinkaEncoder.ToolName);
-        if (!File.Exists(toolPath))
+        string toolsDir = Path.Combine(AppContext.BaseDirectory, "tools");
+        if (!BinkaEncoder.IsAvailable(toolsDir))
         {
-            Console.WriteLine($"[smoke] 音频替换: 跳过（没找到 {BinkaEncoder.ToolName}，见 tools/README.md）");
+            Console.WriteLine($"[smoke] 音频替换: 跳过（内置编码器和 {BinkaEncoder.ToolName} 都不可用）");
             return 1;
         }
 
@@ -228,11 +228,20 @@ public static class SmokeTest
             }
         }
 
-        // 音频编码器是可选的（仓库不含，发布包会带）
+        // 音频编码器：优先用随包的原生库（prism_binka.dll / libprism_codecs.so），
+        // 没有时才退回外部 binka_encode.exe
         string binka = Path.Combine(baseDir, "tools", BinkaEncoder.ToolName);
-        Console.WriteLine(File.Exists(binka)
-            ? $"[smoke] 依赖 binka_encode: OK ({new FileInfo(binka).Length / 1024:N0} KB)"
-            : $"[smoke] 依赖 binka_encode: 缺失 → {binka}（音频替换不可用）");
+        bool nativeEncoder = BinkaEncoder.IsAvailable(Path.Combine(baseDir, "tools"));
+        if (nativeEncoder)
+        {
+            Console.WriteLine("[smoke] 依赖 binka 编码: OK（内置）");
+        }
+        else
+        {
+            Console.WriteLine(File.Exists(binka)
+                ? $"[smoke] 依赖 binka_encode: OK ({new FileInfo(binka).Length / 1024:N0} KB)"
+                : $"[smoke] 依赖 binka_encode: 缺失 → {binka}（音频替换不可用）");
+        }
 
         if (missing > 0)
         {
