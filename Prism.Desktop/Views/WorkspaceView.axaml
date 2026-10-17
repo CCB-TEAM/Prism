@@ -374,7 +374,7 @@
                                                     <Image Source="{Binding SelectedPatchItem.ReplacementPreview}"
                                                            Stretch="Uniform"
                                                            MaxHeight="280" />
-                                                    <TextBlock Text="{Binding SelectedPatchItem.ReplacementName}"
+                                                    <TextBlock Text="{Binding SelectedPatchItem.ReplacementText}"
                                                                FontSize="{DynamicResource Fs11}"
                                                                Foreground="{DynamicResource TextMutedBrush}" TextTrimming="CharacterEllipsis" />
                                                 </StackPanel>
@@ -385,10 +385,50 @@
                                                    Foreground="{DynamicResource DangerBrush}"
                                                    TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="3"
                                                    IsVisible="{Binding SelectedPatchItem.IsFailed}" />
+
+                                        <!-- 音频 / 媒体文件 -->
+                                        <Border Classes="card"
+                                                Padding="14"
+                                                IsVisible="{Binding SelectedPatchItem.IsMediaLike}">
+                                            <StackPanel Spacing="12">
+                                                <StackPanel Spacing="4">
+                                                    <TextBlock Text="原始" Classes="card-title" />
+                                                    <TextBlock Text="{Binding SelectedPatchItem.Detail}"
+                                                               FontSize="{DynamicResource Fs11}"
+                                                               TextWrapping="Wrap" />
+                                                </StackPanel>
+                                                <StackPanel Spacing="6"
+                                                            IsVisible="{Binding SelectedPatchItem.IsAudio}">
+                                                    <Border Height="1" Background="{DynamicResource DividerBrush}" />
+                                                    <TextBlock Text="编码质量" Classes="card-title" />
+                                                    <ComboBox ItemsSource="{Binding $parent[UserControl].DataContext.AudioQualities}"
+                                                              SelectedItem="{Binding SelectedPatchItem.AudioQuality}"
+                                                              HorizontalAlignment="Left"
+                                                              MinWidth="180" />
+                                                    <TextBlock Text="0 最好也最占空间，9 最省。编码后超过 256 KB 就放不进单个流式块。"
+                                                               FontSize="{DynamicResource Fs10}"
+                                                               Foreground="{DynamicResource TextMutedBrush}"
+                                                               TextWrapping="Wrap" />
+                                                </StackPanel>
+                                                <StackPanel Spacing="4">
+                                                    <Border Height="1" Background="{DynamicResource DividerBrush}" />
+                                                    <TextBlock Text="替换" Classes="card-title" />
+                                                    <TextBlock Text="{Binding SelectedPatchItem.ReplacementText}"
+                                                               FontSize="{DynamicResource Fs11}"
+                                                               TextWrapping="Wrap" />
+                                                    <TextBlock Text="{Binding SelectedPatchItem.ReplacementDetail}"
+                                                               FontSize="{DynamicResource Fs10}"
+                                                               Foreground="{DynamicResource TextMutedBrush}"
+                                                               TextWrapping="Wrap" />
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Border>
+
                                         <StackPanel Orientation="Horizontal" Spacing="8">
-                                            <Button Content="选择替换图片"
+                                            <Button Content="{Binding SelectedPatchItem.PickActionText}"
                                                     Command="{Binding PickReplacementCommand}"
-                                                    Classes="accent" />
+                                                    Classes="accent"
+                                                    IsVisible="{Binding SelectedPatchItem.CanPickFile}" />
                                             <Button Content="移除"
                                                     Command="{Binding RemovePatchItemCommand}"
                                                     Classes="ghost" />
@@ -551,7 +591,7 @@
                                                 <Image Source="{Binding SelectedPatchItem.ReplacementPreview}"
                                                        Stretch="Uniform"
                                                        MaxHeight="200" />
-                                                <TextBlock Text="{Binding SelectedPatchItem.ReplacementName}"
+                                                <TextBlock Text="{Binding SelectedPatchItem.ReplacementText}"
                                                            FontSize="{DynamicResource Fs11}"
                                                            Foreground="{DynamicResource TextMutedBrush}" TextTrimming="CharacterEllipsis" />
                                             </StackPanel>
@@ -561,11 +601,50 @@
                                                    Foreground="{DynamicResource DangerBrush}"
                                                    TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="3"
                                                    IsVisible="{Binding SelectedPatchItem.IsFailed}" />
+
+                                        <!-- 音频 / 媒体文件（竖屏单列） -->
+                                        <Border Classes="card"
+                                                Padding="14"
+                                                IsVisible="{Binding SelectedPatchItem.IsMediaLike}">
+                                            <StackPanel Spacing="12">
+                                                <StackPanel Spacing="4">
+                                                    <TextBlock Text="原始" Classes="card-title" />
+                                                    <TextBlock Text="{Binding SelectedPatchItem.Detail}"
+                                                               FontSize="{DynamicResource Fs11}"
+                                                               TextWrapping="Wrap" />
+                                                </StackPanel>
+                                                <StackPanel Spacing="6"
+                                                            IsVisible="{Binding SelectedPatchItem.IsAudio}">
+                                                    <Border Height="1" Background="{DynamicResource DividerBrush}" />
+                                                    <TextBlock Text="编码质量" Classes="card-title" />
+                                                    <ComboBox ItemsSource="{Binding $parent[UserControl].DataContext.AudioQualities}"
+                                                              SelectedItem="{Binding SelectedPatchItem.AudioQuality}"
+                                                              HorizontalAlignment="Left"
+                                                              MinWidth="160" />
+                                                    <TextBlock Text="0 最好也最占空间，9 最省。编码后超过 256 KB 就放不进单个流式块。"
+                                                               FontSize="{DynamicResource Fs10}"
+                                                               Foreground="{DynamicResource TextMutedBrush}"
+                                                               TextWrapping="Wrap" />
+                                                </StackPanel>
+                                                <StackPanel Spacing="4">
+                                                    <Border Height="1" Background="{DynamicResource DividerBrush}" />
+                                                    <TextBlock Text="替换" Classes="card-title" />
+                                                    <TextBlock Text="{Binding SelectedPatchItem.ReplacementText}"
+                                                               FontSize="{DynamicResource Fs11}"
+                                                               TextWrapping="Wrap" />
+                                                    <TextBlock Text="{Binding SelectedPatchItem.ReplacementDetail}"
+                                                               FontSize="{DynamicResource Fs10}"
+                                                               Foreground="{DynamicResource TextMutedBrush}"
+                                                               TextWrapping="Wrap" />
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Border>
+
                                         <StackPanel Orientation="Horizontal" Spacing="8">
-                                            <Button Content="选择替换图片"
+                                            <Button Content="{Binding SelectedPatchItem.PickActionText}"
                                                     Command="{Binding PickReplacementCommand}"
                                                     Classes="accent"
-                                                    IsVisible="{Binding SelectedPatchItem.IsTexture}" />
+                                                    IsVisible="{Binding SelectedPatchItem.CanPickFile}" />
                                             <Button Content="移除"
                                                     Command="{Binding RemovePatchItemCommand}"
                                                     Classes="ghost" />

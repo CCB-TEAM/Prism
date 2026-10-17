@@ -546,6 +546,65 @@ public sealed class PakArchiveSession : IDisposable
         return LocresResourceCodec.Read(data);
     }
 
+    /// <summary>
+    /// 把媒体源资产（<c>UFileMediaSource</c> / <c>UStreamMediaSource</c> 等）解析成它在 Pak 内引用的
+    /// 那个文件路径。视频实际是包里的 <c>.mp4/.bk2</c>，替换时改的是那个文件，资产本身不动。
+    /// 解析不出来（引用了外部 URL、文件不在包里）时返回 null。
+    /// </summary>
+    public Task<string?> ResolveMediaSourceFileAsync(string path, CancellationToken cancellationToken = default)
+    {
+        return Task.Run(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var provider = Provider;
+            var fixedPath = provider.FixPath(path);
+            if (!TryResolveGameFile(provider, fixedPath, out var gameFile))
+                throw new FileNotFoundException("The archive entry was not found.", fixedPath);
+
+            if (!gameFile.IsUePackage)
+                return (string?) gameFile.Path;
+
+            IPackage package;
+            try
+            {
+                package = provider.LoadPackage(gameFile);
+            }
+            catch (Exception ex) when (IsMissingMappingsError(ex))
+            {
+                throw new InvalidOperationException("This media asset uses unversioned properties. Import the matching mapping file (.usmap or .jmap), then try again.", ex);
+            }
+
+            foreach (var export in package.ExportsLazy)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                UObject value;
+                try
+                {
+                    value = export.Value;
+                }
+                catch
+                {
+                    continue;
+                }
+
+                if (value is not (UFileMediaSource or UStreamMediaSource or UBaseMediaSource))
+                    continue;
+
+                foreach (var propertyName in new[] { "FilePath", "StreamUrl", "Url", "MediaUrl", "ProxyOverride", "PrecacheFilePath" })
+                {
+                    if (value.TryGetValue(out string reference, propertyName) &&
+                        !string.IsNullOrWhiteSpace(reference) &&
+                        TryResolveMediaFile(provider, reference, out var file))
+                    {
+                        return file.Path;
+                    }
+                }
+            }
+
+            return (string?) null;
+        }, cancellationToken);
+    }
+
     private async Task<AssetPreviewDto> ReadDirectFilePreviewAsync(GameFile file, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();

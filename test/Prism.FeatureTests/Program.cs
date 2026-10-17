@@ -704,6 +704,166 @@ try
             "kards/Content/Localization/Game/en/Game.locres", @"D:\x\Other.locres"),
         "文件名不同则不匹配");
 
+    // ══════════════════════════════════════════════════════════════
+    Section("F9 · 音频替换（BINKA 流式 SoundWave）与媒体文件替换");
+
+    // WAV 读写：binka_encode 只吃 16 位整型 PCM，24 位/浮点素材必须先折到 16 位。
+    var sinePcm = new byte[1600];
+    for (var i = 0; i < sinePcm.Length / 2; i++)
+    {
+        var sample = (short)(Math.Sin(i * 0.05) * 20000);
+        sinePcm[i * 2] = (byte)sample;
+        sinePcm[i * 2 + 1] = (byte)(sample >> 8);
+    }
+
+    var sineAudio = new UAssetAudio.Core.PcmAudio(sinePcm, 8000, 2);
+    var sineWav = UAssetAudio.Core.WavCodec.Write16(sineAudio);
+    var sineBack = UAssetAudio.Core.WavCodec.Read(sineWav);
+    Check(sineBack.Pcm16.SequenceEqual(sinePcm), "WAV 写→读往返逐字节一致");
+    Check(sineBack.SampleRate == 8000 && sineBack.Channels == 2, "WAV 往返保住采样率与声道数");
+    Check(Math.Abs(sineBack.Seconds - 0.05) < 0.001, $"WAV 时长按帧数换算（{sineBack.Seconds:0.###} 秒）");
+
+    // 24 位 WAV：右移 8 位折到 16 位，且符号扩展正确（满幅/负满幅各一个采样）
+    byte[] wav24 = BuildWav(24, 1, 8000,
+    [
+        0xFF, 0xFF, 0x7F, // +满幅
+        0x00, 0x00, 0x80, // -满幅
+        0x00, 0x00, 0x00, // 0
+        0x00, 0x00, 0x40, // 0.5
+    ]);
+    var read24 = UAssetAudio.Core.WavCodec.Read(wav24);
+    Check(read24.Pcm16.Length == 8, "24 位 WAV 被折成 16 位 PCM（每采样 2 字节）");
+    Check(BitConverter.ToInt16(read24.Pcm16, 0) == short.MaxValue, "24 位满幅折到 16 位满幅");
+    Check(BitConverter.ToInt16(read24.Pcm16, 2) == short.MinValue, "24 位负满幅正确符号扩展");
+    Check(BitConverter.ToInt16(read24.Pcm16, 4) == 0, "24 位静音折成 0");
+
+    // 视频/任意二进制：包里的 mp4 按字节替换，不做定长假设
+    string mediaPak = Path.Combine(root, "media.pak");
+    string originalVideoPath = Path.Combine(root, "Intro.mp4");
+    string newVideoPath = Path.Combine(root, "Intro-new.mp4");
+    const string mediaPakPath = "Kards/Content/Movies/Intro.mp4";
+    byte[] originalVideoBytes = BuildPseudoRandomBytes(4096, 11);
+    byte[] newVideoBytes = BuildPseudoRandomBytes(16384, 22); // 比原来大 4 倍
+    File.WriteAllBytes(originalVideoPath, originalVideoBytes);
+    File.WriteAllBytes(newVideoPath, newVideoBytes);
+    ModifiedPakPackService.Pack(new ModifiedPakRequest(
+        [new ModifiedPakFile(originalVideoPath, mediaPakPath)], mediaPak));
+
+    using (var session = new PakArchiveSession())
+    {
+        await session.OpenAsync(new PakOpenOptions([mediaPak]));
+        IReadOnlyDictionary<string, byte[]> related = await session.ReadRelatedRawFilesAsync(mediaPakPath);
+        Check(related.Count == 1 && related.Values.First().SequenceEqual(originalVideoBytes),
+            "原始视频字节可从 Pak 取出（媒体替换不需要 .uasset 兄弟文件）");
+        AssetPreviewDto videoPreview = await session.ReadPreviewAsync(mediaPakPath);
+        Check(videoPreview.Kind == "video", $"mp4 被识别成视频（{videoPreview.Kind}）");
+    }
+
+    string mediaPatchedPak = Path.Combine(root, "media-patched.pak");
+    ModifiedPakPackService.Pack(new ModifiedPakRequest(
+        [new ModifiedPakFile(newVideoPath, mediaPakPath)], mediaPatchedPak));
+    using (var session = new PakArchiveSession())
+    {
+        await session.OpenAsync(new PakOpenOptions([mediaPatchedPak]));
+        byte[] replaced = await session.ReadFileAsync(mediaPakPath);
+        Check(replaced.SequenceEqual(newVideoBytes), "替换后 Pak 里的视频是新的字节");
+        Check(replaced.Length != originalVideoBytes.Length, "长度变化也能正确写入（不做定长假设）");
+    }
+
+    // 音频替换：fixture + 映射文件 + binka_encode.exe 都是本地资源，缺哪个就跳过。
+    string repoRootForAudio = LocateRepoRoot();
+    string audioStem = Path.Combine(repoRootForAudio, "test", "AU_Arrow_morse_loop_01");
+    string toolsDir = Path.Combine(repoRootForAudio, "tools");
+    string? audioUsmap = FirstExistingFile(
+        Path.Combine(repoRootForAudio, "Mapping.usmap"),
+        Path.Combine(repoRootForAudio, "reference", "Mapping.usmap"),
+        Path.Combine(repoRootForAudio, "test", "Mapping.usmap"));
+    bool hasAudioFixture = File.Exists(audioStem + ".uasset") && File.Exists(audioStem + ".uexp") &&
+                           File.Exists(audioStem + ".ubulk") && File.Exists(audioStem + ".wav");
+    bool hasBinkaEncoder = UAssetAudio.Core.BinkaEncoder.IsAvailable(toolsDir);
+    Console.WriteLine($"        音频 fixture={hasAudioFixture} 映射={audioUsmap is not null} binka_encode={hasBinkaEncoder}");
+
+    if (!hasAudioFixture || audioUsmap is null || !hasBinkaEncoder)
+    {
+        Console.WriteLine("        跳过音频替换断言（缺少 fixture / 映射文件 / tools/binka_encode.exe）");
+    }
+    else
+    {
+        UAssetAudio.Core.SoundWaveInfo originalInfo = UAssetAudio.Core.SoundWavePatcher.Inspect(audioStem + ".uasset", audioUsmap);
+        Check(originalInfo.IsBinka, $"原始资产是 BINKA（{originalInfo.Format}）");
+        Check(originalInfo.IsStreaming && originalInfo.ChunkCount == 2,
+            $"原始资产是两块的流式布局（{originalInfo.ChunkCount} 块）");
+        Check(originalInfo.CanReplace, $"原始资产可替换（{originalInfo.Problem ?? "无阻碍"}）");
+        Check(Math.Abs(originalInfo.Seconds - 2.53) < 0.15, $"时长从属性读出（{originalInfo.Seconds:0.###} 秒）");
+
+        // UE 的块内 seek 表规则：首项 0，其余 = 上一块长度 + 4（实测原始资产就是这个规则）
+        byte[] originalBulkBytes = File.ReadAllBytes(audioStem + ".ubulk");
+        bool originalSeekOk = SeekTableFollowsUeRule(originalBulkBytes, out int originalBlocks, out uint framesPerChunk);
+        Check(originalSeekOk, $"原始 ubulk 的 seek 表符合 UE 规则（{originalBlocks} 个数据块）");
+        Check(Math.Abs(framesPerChunk - originalInfo.SampleRate * 10.24) < 1,
+            $"块头记录每块 10.24 秒（{framesPerChunk} 帧 @ {originalInfo.SampleRate} Hz）");
+
+        var fixturePcm = UAssetAudio.Core.WavCodec.Read(File.ReadAllBytes(audioStem + ".wav"));
+        byte[] binkaBytes = UAssetAudio.Core.BinkaEncoder.Encode(fixturePcm, 4, toolsDir);
+        var binkaInfo = UAssetAudio.Core.BinkaEncoder.ReadInfo(binkaBytes);
+        Check(binkaBytes.AsSpan(0, 4).SequenceEqual("ABEU"u8), "编码结果是 ABEU 容器");
+        Check(binkaInfo.SampleCount == fixturePcm.FrameCount,
+            $"编码后采样数与原素材一致（{binkaInfo.SampleCount}）");
+        Check(Math.Abs(binkaInfo.Seconds - fixturePcm.Seconds) < 0.01, "编码后时长与原素材一致");
+
+        UAssetAudio.Core.SoundWaveReplacement replacement =
+            UAssetAudio.Core.SoundWavePatcher.Replace(audioStem + ".uasset", binkaBytes, audioUsmap);
+        Check(replacement.Uexp.Length == new FileInfo(audioStem + ".uexp").Length,
+            "重建后 .uexp 长度不变（导出表偏移无需改动）");
+        Check(SeekTableFollowsUeRule(replacement.Ubulk, out int newBlocks, out _),
+            $"新 ubulk 的 seek 表同样符合规则（{newBlocks} 个数据块）");
+        Check(replacement.Ubulk.AsSpan(0, 4).SequenceEqual("SEEK"u8), "新 ubulk 以 SEEK 前导开始");
+
+        string patchedAudioDir = Path.Combine(root, "audio-patched");
+        Directory.CreateDirectory(patchedAudioDir);
+        string patchedAudioStem = Path.Combine(patchedAudioDir, "AU_Patched");
+        File.WriteAllBytes(patchedAudioStem + ".uasset", replacement.Uasset);
+        File.WriteAllBytes(patchedAudioStem + ".uexp", replacement.Uexp);
+        File.WriteAllBytes(patchedAudioStem + ".ubulk", replacement.Ubulk);
+
+        UAssetAudio.Core.SoundWaveInfo patchedInfo = UAssetAudio.Core.SoundWavePatcher.Inspect(patchedAudioStem + ".uasset", audioUsmap);
+        Check(patchedInfo.CanReplace, "替换后的资产仍能按同一套布局解析");
+        Check(Math.Abs(patchedInfo.Seconds - binkaInfo.Seconds) < 0.01,
+            $"Duration 属性跟着新音频更新（{patchedInfo.Seconds:0.###} 秒）");
+        Check(patchedInfo.Channels == fixturePcm.Channels && patchedInfo.SampleRate == fixturePcm.SampleRate,
+            "声道数与采样率属性与素材一致");
+
+        // 打进 Pak 再用 CUE4Parse 读回：整条链路（导出表 / data resource / 内联块）都要对得上
+        string audioPak = Path.Combine(root, "audio.pak");
+        const string audioPakAsset = "Kards/Content/Audio/AU_Replaced.uasset";
+        ModifiedPakPackService.Pack(new ModifiedPakRequest(
+        [
+            new ModifiedPakFile(patchedAudioStem + ".uasset", audioPakAsset),
+            new ModifiedPakFile(patchedAudioStem + ".uexp", "Kards/Content/Audio/AU_Replaced.uexp"),
+            new ModifiedPakFile(patchedAudioStem + ".ubulk", "Kards/Content/Audio/AU_Replaced.ubulk"),
+        ], audioPak));
+
+        using (var session = new PakArchiveSession())
+        {
+            await session.OpenAsync(new PakOpenOptions([audioPak], UsmapPath: audioUsmap));
+            AssetPreviewDto audioPreview = await session.ReadPreviewAsync(audioPakAsset);
+            Check(audioPreview.Kind == "audio",
+                $"音频资产的预览 Kind 是 audio（{audioPreview.Kind}），替换页据此走音频分支");
+            IReadOnlyDictionary<string, byte[]> audioParts = await session.ReadRelatedRawFilesAsync(audioPakAsset);
+            Check(audioParts.Count == 3, $"一个 SoundWave 会带出三件套（{audioParts.Count} 个文件）");
+            AudioPayloadDto payload = await session.ReadAudioPayloadAsync(audioPakAsset);
+            Check(payload.Format.Equals("binka", StringComparison.OrdinalIgnoreCase),
+                $"CUE4Parse 把新资产识别成 BINKA（{payload.Format}）");
+            Check(payload.Data.Length > 32 && payload.Data.AsSpan(0, 4).SequenceEqual("ABEU"u8),
+                "载荷以 ABEU 头开始（内联块被正确读回）");
+            var payloadHeader = UAssetAudio.Core.BinkaEncoder.ReadInfo(payload.Data);
+            Check(payloadHeader.SampleCount == binkaInfo.SampleCount,
+                $"读回的采样数与编码结果一致（{payloadHeader.SampleCount}）");
+            byte[] pakBulk = await session.ReadFileAsync("Kards/Content/Audio/AU_Replaced.ubulk");
+            Check(pakBulk.SequenceEqual(replacement.Ubulk), "Pak 里的 ubulk 与重建结果逐字节一致");
+        }
+    }
+
     Section("F4/F1/F7 · UI 层验证（headless 真实窗口）");
 
     try
@@ -920,6 +1080,90 @@ try
     {
         Check(false, $"UI 验证抛出异常：{ex.GetType().Name}: {ex.Message}");
         Console.Error.WriteLine(ex.ToString());
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    Section("F10 · 替换页流程（音频 / 视频，含真实编码）");
+
+    // 这里驱动真实的 MainViewModel：打开 pak → 进目录 → 选中资产 → 加入替换 → 选素材。
+    // 文件选择器用 FilePickerOverride 注入，绕开无头环境里没有的 StorageProvider。
+    Prism.FeatureTests.UiFixture.EnsureInitialized();
+    try
+    {
+        if (File.Exists(mediaPak))
+        {
+            var mediaVm = new Prism.Desktop.ViewModels.MainViewModel { PakPath = mediaPak };
+            RunVmCommand(mediaVm, mediaVm.OpenPakCommand);
+            EnterFolder(mediaVm, "Kards");
+            EnterFolder(mediaVm, "Content");
+            EnterFolder(mediaVm, "Movies");
+
+            Prism.Desktop.Models.EntryItem? videoEntry = mediaVm.Entries
+                .FirstOrDefault(entry => !entry.IsDirectory && entry.Name.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase));
+            Check(videoEntry is not null, "视频文件出现在列表里");
+            mediaVm.SelectedItem = videoEntry;
+            RunVmCommand(mediaVm, mediaVm.AddSelectedToPatchCommand);
+
+            Prism.Desktop.Models.PatchItem? mediaPatch = mediaVm.PatchItems.FirstOrDefault();
+            Check(mediaPatch is not null && mediaPatch.IsMedia, "视频条目「加入替换」后被识别为媒体替换");
+            Check(mediaPatch?.SourcePath.EndsWith("Intro.mp4", StringComparison.OrdinalIgnoreCase) == true,
+                $"媒体替换项指向那个视频文件（{mediaPatch?.SourcePath}）");
+
+            mediaVm.FilePickerOverride = (_, _) => Task.FromResult<string?>(newVideoPath);
+            RunVmCommand(mediaVm, mediaVm.PickReplacementCommand);
+            Check(mediaPatch!.IsReplaced, $"视频替换完成（{mediaPatch.Error ?? "无错误"}）");
+            Check(mediaPatch.PatchedFiles.Count == 1, "媒体替换只产出一个文件");
+            Check(File.ReadAllBytes(mediaPatch.PatchedFiles.Values.First()).SequenceEqual(newVideoBytes),
+                "替换内容就是选中的新视频字节");
+        }
+        else
+        {
+            Console.WriteLine("        跳过视频流程断言（测试 pak 未生成）");
+        }
+
+        if (hasAudioFixture && audioUsmap is not null && hasBinkaEncoder)
+        {
+            // 用原始 fixture 现场打一个 pak，走"替换真资产"的真实路径
+            string vmAudioPak = Path.Combine(root, "vm-audio.pak");
+            ModifiedPakPackService.Pack(new ModifiedPakRequest(
+            [
+                new ModifiedPakFile(audioStem + ".uasset", "Kards/Content/Audio/AU_Arrow_morse_loop_01.uasset"),
+                new ModifiedPakFile(audioStem + ".uexp", "Kards/Content/Audio/AU_Arrow_morse_loop_01.uexp"),
+                new ModifiedPakFile(audioStem + ".ubulk", "Kards/Content/Audio/AU_Arrow_morse_loop_01.ubulk"),
+            ], vmAudioPak));
+
+            var audioVm = new Prism.Desktop.ViewModels.MainViewModel { PakPath = vmAudioPak, UsmapPath = audioUsmap };
+            RunVmCommand(audioVm, audioVm.OpenPakCommand);
+            EnterFolder(audioVm, "Kards");
+            EnterFolder(audioVm, "Content");
+            EnterFolder(audioVm, "Audio");
+
+            Prism.Desktop.Models.EntryItem? audioEntry = audioVm.Entries
+                .FirstOrDefault(entry => !entry.IsDirectory && entry.Name.StartsWith("AU_Arrow", StringComparison.OrdinalIgnoreCase));
+            Check(audioEntry is not null, "音频资产出现在列表里");
+            audioVm.SelectedItem = audioEntry;
+            RunVmCommand(audioVm, audioVm.AddSelectedToPatchCommand);
+
+            Prism.Desktop.Models.PatchItem? audioPatch = audioVm.PatchItems.FirstOrDefault();
+            Check(audioPatch is not null && audioPatch.IsAudio, "SoundWave「加入替换」后被识别为音频替换");
+            Check(audioPatch?.Detail.Contains("48,000") == true, $"音频替换项带声道/采样率（{audioPatch?.Detail}）");
+
+            audioVm.PatchItems.FirstOrDefault()!.AudioQuality = 6;
+            audioVm.FilePickerOverride = (_, _) => Task.FromResult<string?>(audioStem + ".wav");
+            RunVmCommand(audioVm, audioVm.PickReplacementCommand);
+            Check(audioPatch!.IsReplaced, $"音频替换完成（{audioPatch.Error ?? "无错误"}）");
+            Check(audioPatch.PatchedFiles.Count == 3, $"三件套都被替换（{audioPatch.PatchedFiles.Count} 个文件）");
+            Check(audioPatch.ReplacementDetail?.Contains("编码后") == true,
+                $"替换信息带编码后体积（{audioPatch.ReplacementDetail}）");
+        }
+        else
+        {
+            Console.WriteLine("        跳过音频流程断言（缺少 fixture / 映射文件 / binka_encode.exe）");
+        }
+    }
+    catch (Exception ex)
+    {
+        Check(false, $"替换页流程抛出异常：{ex.GetType().Name}: {ex.Message}");
     }
 
     Section("Pak 打包 · 非 ASCII 路径回归");
@@ -1206,4 +1450,147 @@ static List<(int Index, int Width, int Height, int ByteLength, string Storage, i
     }
 
     return mips;
+}
+
+/// <summary>按顺序返回第一个存在的文件（跳过缺失的可选资源）。</summary>
+static string? FirstExistingFile(params string[] candidates) => candidates.FirstOrDefault(File.Exists);
+
+/// <summary>拼一个最小 WAV（44 字节头 + PCM 数据），用于喂各种位深给解码器。</summary>
+static byte[] BuildWav(int bitsPerSample, int channels, int sampleRate, byte[] pcm)
+{
+    byte[] wav = new byte[44 + pcm.Length];
+    "RIFF"u8.CopyTo(wav);
+    BitConverter.GetBytes(36 + pcm.Length).CopyTo(wav, 4);
+    "WAVE"u8.CopyTo(wav.AsSpan(8));
+    "fmt "u8.CopyTo(wav.AsSpan(12));
+    BitConverter.GetBytes(16).CopyTo(wav, 16);
+    BitConverter.GetBytes((ushort)1).CopyTo(wav, 20); // PCM
+    BitConverter.GetBytes((ushort)channels).CopyTo(wav, 22);
+    BitConverter.GetBytes(sampleRate).CopyTo(wav, 24);
+    BitConverter.GetBytes(sampleRate * channels * bitsPerSample / 8).CopyTo(wav, 28);
+    BitConverter.GetBytes((ushort)(channels * bitsPerSample / 8)).CopyTo(wav, 32);
+    BitConverter.GetBytes((ushort)bitsPerSample).CopyTo(wav, 34);
+    "data"u8.CopyTo(wav.AsSpan(36));
+    BitConverter.GetBytes(pcm.Length).CopyTo(wav, 40);
+    pcm.CopyTo(wav, 44);
+    return wav;
+}
+
+/// <summary>确定性伪随机字节（避免测试里用 Random 造成不可复现）。</summary>
+static byte[] BuildPseudoRandomBytes(int length, int seed)
+{
+    byte[] bytes = new byte[length];
+    uint state = ((uint)seed * 2654435761u) | 1u;
+    for (var i = 0; i < length; i++)
+    {
+        state = (state * 1664525u) + 1013904223u;
+        bytes[i] = (byte)(state >> 16);
+    }
+
+    return bytes;
+}
+
+/// <summary>
+/// 校验 <c>.ubulk</c> 的流式块符合 UE 的写法：
+/// <c>"SEEK" + 帧数 + 保留 + 表项数</c> 共 15 字节前导，表首项 0、其余等于上一块长度 + 4，
+/// 表后是若干 <c>0x9999</c> 同步帧，且恰好铺满整个块。
+/// </summary>
+static bool SeekTableFollowsUeRule(byte[] chunk, out int blockCount, out uint framesPerChunk)
+{
+    blockCount = 0;
+    framesPerChunk = 0;
+    if (chunk.Length < 32 || !chunk.AsSpan(0, 4).SequenceEqual("SEEK"u8))
+    {
+        return false;
+    }
+
+    framesPerChunk = BitConverter.ToUInt32(chunk, 4);
+    int entries = BitConverter.ToInt32(chunk, 11);
+    if (entries <= 0)
+    {
+        return false;
+    }
+
+    const int tableStart = 15;
+    if (tableStart + (entries * 2) > chunk.Length || BitConverter.ToUInt16(chunk, tableStart) != 0)
+    {
+        return false;
+    }
+
+    int position = tableStart + (entries * 2);
+    List<int> sizes = [];
+    while (position + 4 <= chunk.Length)
+    {
+        uint header = BitConverter.ToUInt32(chunk, position);
+        if ((header & 0xFFFF) != 0x9999)
+        {
+            return false;
+        }
+
+        int size = (int)(header >> 16);
+        int headerBytes = 4;
+        if (size == 0xFFFF)
+        {
+            // 变长帧：真实长度与采样数写在后面的 u32 里
+            if (position + 8 > chunk.Length)
+            {
+                return false;
+            }
+
+            size = BitConverter.ToUInt16(chunk, position + 4);
+            headerBytes = 8;
+        }
+
+        position += headerBytes + size;
+        sizes.Add(size);
+        if (sizes.Count > entries)
+        {
+            return false;
+        }
+    }
+
+    if (position != chunk.Length || sizes.Count != entries)
+    {
+        return false;
+    }
+
+    for (var i = 1; i < entries; i++)
+    {
+        if (BitConverter.ToUInt16(chunk, tableStart + (i * 2)) != (ushort)(sizes[i - 1] + 4))
+        {
+            return false;
+        }
+    }
+
+    blockCount = sizes.Count;
+    return true;
+}
+
+/// <summary>跑一个异步命令并把它推完（无头环境没有消息循环，需要手动 Pump）。</summary>
+static void RunVmCommand(Prism.Desktop.ViewModels.MainViewModel vm, CommunityToolkit.Mvvm.Input.IAsyncRelayCommand command)
+{
+    Task task = command.ExecuteAsync(null);
+    DateTime deadline = DateTime.UtcNow.AddSeconds(120);
+    while (!task.IsCompleted && DateTime.UtcNow < deadline)
+    {
+        Prism.FeatureTests.UiFixture.RunJobs();
+        Thread.Sleep(5);
+    }
+
+    Prism.FeatureTests.UiFixture.RunJobs();
+    task.GetAwaiter().GetResult();
+}
+
+/// <summary>在浏览器列表里双击进入某个目录。</summary>
+static void EnterFolder(Prism.Desktop.ViewModels.MainViewModel vm, string name)
+{
+    Prism.Desktop.Models.EntryItem? entry = vm.Entries.FirstOrDefault(
+        candidate => candidate.IsDirectory && candidate.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+    if (entry is null)
+    {
+        throw new InvalidOperationException($"列表里找不到目录 {name}（当前 {vm.CurrentFolder}）");
+    }
+
+    vm.SelectedItem = entry;
+    RunVmCommand(vm, vm.ActivateCommand);
 }

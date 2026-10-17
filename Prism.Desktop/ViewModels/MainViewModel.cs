@@ -13,6 +13,7 @@ using Prism.Desktop.Models;
 using Prism.Desktop.Services;
 using UAssetAPI;
 using UAssetAPI.UnrealTypes;
+using UAssetAudio.Core;
 using UAssetTexture.Core;
 
 namespace Prism.Desktop.ViewModels;
@@ -1009,6 +1010,16 @@ public partial class MainViewModel : ViewModelBase
     public bool CanPickReplacement => SelectedPatchItem is not null && !IsBusy;
 
     public bool CanRemovePatchItem => SelectedPatchItem is not null;
+
+    /// <summary>BINKA 编码质量选项（0 最好、9 最省），给替换页的下拉用。</summary>
+    public IReadOnlyList<int> AudioQualities { get; } = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+
+    /// <summary>
+    /// 文件选择器的注入口：桌面与 Android 走系统选择器（需要真实 TopLevel），
+    /// 无头测试注入一个"直接返回路径"的实现，就能把选择之后的链路一起测掉。
+    /// 参数为（对话框标题, 通配符），返回 null 表示用户取消。
+    /// </summary>
+    public Func<string, string[], Task<string?>>? FilePickerOverride { get; set; }
 
     // ============ 合并页 ============
 
@@ -2450,13 +2461,11 @@ public partial class MainViewModel : ViewModelBase
 
         await RunBusyAsync(async () =>
         {
-            // 1. 从 Pak 解出原始关联文件，并生成原始预览
-            IReadOnlyDictionary<string, byte[]> rawFiles;
+            // 1. 先用预览判断类型：本地化 / 音频 / 媒体源 / 纹理
             AssetPreviewDto? originalPreview = null;
             await _gate.WaitAsync();
             try
             {
-                rawFiles = await _session.ReadRelatedRawFilesAsync(item.FullPath);
                 try
                 {
                     originalPreview = await _session.ReadPreviewAsync(item.FullPath);
@@ -2471,92 +2480,185 @@ public partial class MainViewModel : ViewModelBase
                 _gate.Release();
             }
 
-            if (rawFiles.Count == 0)
-            {
-                throw new InvalidOperationException("该资源没有可替换的关联文件。");
-            }
-
-            // 2. 写入工作目录
-            string workDir = Path.Combine(Path.GetTempPath(), "prism-desktop-patch", Guid.NewGuid().ToString("N"));
-            string inputDir = Path.Combine(workDir, "input");
-            Directory.CreateDirectory(inputDir);
-
-            string baseName = Path.GetFileNameWithoutExtension(item.FullPath);
-            Dictionary<string, string> originalFiles = new(StringComparer.OrdinalIgnoreCase);
-            foreach ((string pakPath, byte[] data) in rawFiles)
-            {
-                string localPath = Path.Combine(inputDir, Path.GetFileName(pakPath));
-                await File.WriteAllBytesAsync(localPath, data);
-                originalFiles[pakPath] = localPath;
-            }
-
-            // 3. 本地化（locres）或纹理
-            PatchItem patch;
             bool isLocres = originalPreview is { Kind: "locres" } || originalPreview?.Locres is not null;
-            if (isLocres)
+            bool isPackage = item.FullPath.EndsWith(".uasset", StringComparison.OrdinalIgnoreCase) ||
+                             item.FullPath.EndsWith(".umap", StringComparison.OrdinalIgnoreCase);
+
+            // 媒体源资产（UFileMediaSource 等）：要替换的是它引用的那个视频文件
+            string targetPath = item.FullPath;
+            if (originalPreview is { Kind: "video" })
             {
-                LocresPreviewDto locres;
                 await _gate.WaitAsync();
                 try
                 {
-                    locres = await _session.ReadLocresPreviewAsync(item.FullPath);
+                    targetPath = await _session.ResolveMediaSourceFileAsync(item.FullPath) ?? string.Empty;
+                }
+                catch
+                {
+                    targetPath = string.Empty;
                 }
                 finally
                 {
                     _gate.Release();
                 }
 
+                if (string.IsNullOrEmpty(targetPath))
+                {
+                    throw new InvalidOperationException(
+                        "这个媒体源资产没能解析出它引用的文件。可以到浏览页直接选中那段视频，再「加入替换」。");
+                }
+            }
+
+            string workDir = Path.Combine(Path.GetTempPath(), "prism-desktop-patch", Guid.NewGuid().ToString("N"));
+            string inputDir = Path.Combine(workDir, "input");
+            Directory.CreateDirectory(inputDir);
+
+            PatchItem patch;
+            Dictionary<string, string> originalFiles = new(StringComparer.OrdinalIgnoreCase);
+
+            // 2. 原始文件（视频 / 音频 / 任意二进制）：只换字节，不解析资产
+            bool isMediaTarget = !isPackage || !string.Equals(targetPath, item.FullPath, StringComparison.Ordinal);
+            if (isMediaTarget)
+            {
+                IReadOnlyDictionary<string, byte[]> mediaFiles;
+                await _gate.WaitAsync();
+                try
+                {
+                    mediaFiles = await _session.ReadRelatedRawFilesAsync(targetPath);
+                }
+                finally
+                {
+                    _gate.Release();
+                }
+
+                if (mediaFiles.Count == 0)
+                {
+                    throw new InvalidOperationException("这个文件不在 Pak 里，无法加入替换。");
+                }
+
+                foreach ((string pakPath, byte[] data) in mediaFiles)
+                {
+                    string localPath = Path.Combine(inputDir, Path.GetFileName(pakPath));
+                    await File.WriteAllBytesAsync(localPath, data);
+                    originalFiles[pakPath] = localPath;
+                }
+
+                string extension = Path.GetExtension(targetPath);
+                long totalBytes = mediaFiles.Values.Sum(chunk => (long)chunk.Length);
                 patch = new PatchItem(
-                    kind: "locres",
-                    sourcePath: item.FullPath,
-                    name: baseName,
-                    format: locres.Version,
-                    sizeLabel: $"{locres.EntryCount:N0} 条",
+                    kind: "media",
+                    sourcePath: targetPath,
+                    name: Path.GetFileName(targetPath),
+                    format: string.IsNullOrEmpty(extension) ? "文件" : extension.TrimStart('.').ToUpperInvariant(),
+                    sizeLabel: FormatSize(totalBytes),
                     width: 0,
                     height: 0,
                     workDirectory: workDir,
-                    inputUassetPath: string.Empty);
-                foreach (LocresEntryDto entry in locres.Entries)
+                    inputUassetPath: string.Empty)
                 {
-                    patch.LocresEntries.Add(new LocresEntryVM(entry));
-                }
-
-                patch.ApplyLocresFilter();
-                StatusText = $"已加入本地化：{baseName}（{locres.EntryCount:N0} 条）";
+                    Detail = $"{FormatSize(totalBytes)}（直接替换字节，不改资产）",
+                };
+                StatusText = $"已加入替换：{patch.Name}（{patch.Format}）";
             }
             else
             {
-                // 纹理：需要 .uasset 关联文件
-                string? uassetPakPath = rawFiles.Keys.FirstOrDefault(k => k.EndsWith(".uasset", StringComparison.OrdinalIgnoreCase));
-                if (uassetPakPath is null)
+                // 3. 资产：把三件套解到工作目录，再按类型处理
+                IReadOnlyDictionary<string, byte[]> rawFiles;
+                await _gate.WaitAsync();
+                try
                 {
-                    throw new InvalidOperationException("该资源不是 .uasset 资产。");
+                    rawFiles = await _session.ReadRelatedRawFilesAsync(item.FullPath);
+                }
+                finally
+                {
+                    _gate.Release();
                 }
 
-                string inputUassetPath = Path.Combine(inputDir, baseName + ".uasset");
-
-                // 检查纹理格式
-                TextureInspectionResult inspect = await new TextureReplacementService().InspectAsync(
-                    inputUassetPath,
-                    EngineVersion.VER_UE5_6,
-                    NullIfWhiteSpace(UsmapPath));
-
-                patch = new PatchItem(
-                    kind: "texture",
-                    sourcePath: item.FullPath,
-                    name: baseName,
-                    format: inspect.Format,
-                    sizeLabel: $"{inspect.Width}×{inspect.Height}",
-                    width: inspect.Width,
-                    height: inspect.Height,
-                    workDirectory: workDir,
-                    inputUassetPath: inputUassetPath)
+                if (rawFiles.Count == 0)
                 {
-                    OriginalPreview = originalPreview is { Data: { Length: > 0 } previewData }
-                        ? DecodeImage(previewData, 640)
-                        : null,
-                };
-                StatusText = $"已加入替换：{baseName}（{inspect.Format}）";
+                    throw new InvalidOperationException("该资源没有可替换的关联文件。");
+                }
+
+                string baseName = Path.GetFileNameWithoutExtension(item.FullPath);
+                foreach ((string pakPath, byte[] data) in rawFiles)
+                {
+                    string localPath = Path.Combine(inputDir, Path.GetFileName(pakPath));
+                    await File.WriteAllBytesAsync(localPath, data);
+                    originalFiles[pakPath] = localPath;
+                }
+
+                if (isLocres)
+                {
+                    LocresPreviewDto locres;
+                    await _gate.WaitAsync();
+                    try
+                    {
+                        locres = await _session.ReadLocresPreviewAsync(item.FullPath);
+                    }
+                    finally
+                    {
+                        _gate.Release();
+                    }
+
+                    patch = new PatchItem(
+                        kind: "locres",
+                        sourcePath: item.FullPath,
+                        name: baseName,
+                        format: locres.Version,
+                        sizeLabel: $"{locres.EntryCount:N0} 条",
+                        width: 0,
+                        height: 0,
+                        workDirectory: workDir,
+                        inputUassetPath: string.Empty);
+                    foreach (LocresEntryDto entry in locres.Entries)
+                    {
+                        patch.LocresEntries.Add(new LocresEntryVM(entry));
+                    }
+
+                    patch.ApplyLocresFilter();
+                    StatusText = $"已加入本地化：{baseName}（{locres.EntryCount:N0} 条）";
+                }
+                else
+                {
+                    // 纹理：需要 .uasset 关联文件
+                    string? uassetPakPath = rawFiles.Keys.FirstOrDefault(k => k.EndsWith(".uasset", StringComparison.OrdinalIgnoreCase));
+                    if (uassetPakPath is null)
+                    {
+                        throw new InvalidOperationException("该资源不是 .uasset 资产。");
+                    }
+
+                    string inputUassetPath = Path.Combine(inputDir, baseName + ".uasset");
+
+                    if (originalPreview is { Kind: "audio" })
+                    {
+                        patch = CreateAudioPatch(item.FullPath, baseName, inputUassetPath, workDir);
+                    }
+                    else
+                    {
+                        // 检查纹理格式
+                        TextureInspectionResult inspect = await new TextureReplacementService().InspectAsync(
+                            inputUassetPath,
+                            EngineVersion.VER_UE5_6,
+                            NullIfWhiteSpace(UsmapPath));
+
+                        patch = new PatchItem(
+                            kind: "texture",
+                            sourcePath: item.FullPath,
+                            name: baseName,
+                            format: inspect.Format,
+                            sizeLabel: $"{inspect.Width}×{inspect.Height}",
+                            width: inspect.Width,
+                            height: inspect.Height,
+                            workDirectory: workDir,
+                            inputUassetPath: inputUassetPath)
+                        {
+                            OriginalPreview = originalPreview is { Data: { Length: > 0 } previewData }
+                                ? DecodeImage(previewData, 640)
+                                : null,
+                        };
+                        StatusText = $"已加入替换：{baseName}（{inspect.Format}）";
+                    }
+                }
             }
 
             foreach ((string pakPath, string localPath) in originalFiles)
@@ -2571,12 +2673,65 @@ public partial class MainViewModel : ViewModelBase
         });
     }
 
+    /// <summary>音频替换项：先确认这是个可替换的流式 SoundWave，再登记声道/时长等展示信息。</summary>
+    private PatchItem CreateAudioPatch(string sourcePath, string baseName, string inputUassetPath, string workDir)
+    {
+        if (OperatingSystem.IsAndroid())
+        {
+            throw new InvalidOperationException("音频替换依赖 binka_encode.exe，Android 版暂不支持（请用桌面版）。");
+        }
+
+        if (!BinkaEncoder.IsAvailable(ToolsDirectory))
+        {
+            throw new InvalidOperationException(
+                $"没找到 {BinkaEncoder.ToolName}，音频替换暂时不可用。把它放进 {ToolsDirectory} 再重启即可（来源见 tools/README.md）。");
+        }
+
+        SoundWaveInfo info = SoundWavePatcher.Inspect(inputUassetPath, NullIfWhiteSpace(UsmapPath));
+        if (!info.CanReplace)
+        {
+            throw new InvalidOperationException($"{baseName} 无法替换：{info.Problem}");
+        }
+
+        var patch = new PatchItem(
+            kind: "audio",
+            sourcePath: sourcePath,
+            name: baseName,
+            format: info.Format,
+            sizeLabel: info.DescribeSeconds,
+            width: 0,
+            height: 0,
+            workDirectory: workDir,
+            inputUassetPath: inputUassetPath)
+        {
+            Detail = $"{info.DescribeChannels} · {info.DescribeSeconds} · 原始 {FormatSize(info.AudioBytes)}",
+        };
+
+        // 预览已经把原始音频解码成可播放的 WAV，这里不需要再读一次
+        StatusText = $"已加入替换：{baseName}（{info.Format} · {info.DescribeSeconds}）";
+        return patch;
+    }
+
     [RelayCommand(CanExecute = nameof(CanPickReplacement))]
     private async Task PickReplacementAsync()
     {
         PatchItem? patch = SelectedPatchItem;
-        if (patch is null || TopLevel is null)
+        // TopLevel 只影响能不能弹系统选择器，交给 PickFileAsync 判断；这里别提前返回，
+        // 否则无头环境下（注入了 FilePickerOverride）整条替换流程都跑不起来。
+        if (patch is null || patch.IsLocres)
         {
+            return;
+        }
+
+        if (patch.IsMedia)
+        {
+            await PickMediaReplacementAsync(patch);
+            return;
+        }
+
+        if (patch.IsAudio)
+        {
+            await PickAudioReplacementAsync(patch);
             return;
         }
 
@@ -2663,6 +2818,109 @@ public partial class MainViewModel : ViewModelBase
             patch.ReplacementPreview = LoadImage(imagePath, 512);
             patch.Status = "已替换";
             StatusText = $"已替换 {patch.Name}（{patch.Format}）。";
+        });
+    }
+
+    /// <summary>视频 / 原始文件：挑一个同名扩展名的文件，直接按字节替换。</summary>
+    private async Task PickMediaReplacementAsync(PatchItem patch)
+    {
+        string extension = Path.GetExtension(patch.SourcePath);
+        string pattern = string.IsNullOrEmpty(extension) ? "*.*" : "*" + extension;
+        string? picked = await PickFileAsync(
+            string.IsNullOrEmpty(extension) ? "选择替换文件" : $"选择替换的 {extension} 文件",
+            [pattern, "*.*"],
+            replaceCachePath: null);
+        if (string.IsNullOrEmpty(picked))
+        {
+            return;
+        }
+
+        await RunBusyAsync(async () =>
+        {
+            string outputDir = Path.Combine(patch.WorkDirectory, "output");
+            Directory.CreateDirectory(outputDir);
+            string outputPath = Path.Combine(outputDir, Path.GetFileName(patch.SourcePath));
+            File.Copy(picked, outputPath, overwrite: true);
+            long size = new FileInfo(outputPath).Length;
+
+            patch.PatchedFiles.Clear();
+            foreach (string pakPath in patch.OriginalFiles.Keys)
+            {
+                patch.PatchedFiles[pakPath] = outputPath;
+            }
+
+            patch.ReplacementName = Path.GetFileName(picked);
+            patch.ReplacementDetail = FormatSize(size);
+            patch.Status = "已替换";
+            StatusText = $"已替换 {patch.Name}（{FormatSize(size)}）。";
+            await Task.CompletedTask;
+        });
+    }
+
+    /// <summary>音频：解码素材 → 编成 BINKA → 重建 SoundWave 三件套。</summary>
+    private async Task PickAudioReplacementAsync(PatchItem patch)
+    {
+        string? picked = await PickFileAsync(
+            "选择替换音频",
+            ["*.wav", "*.mp3", "*.ogg", "*.oga", "*.flac", "*.m4a", "*.aac", "*.wma", "*.opus"],
+            replaceCachePath: null,
+            mimeTypes: ["audio/wav", "audio/x-wav", "audio/mpeg", "audio/ogg", "audio/flac", "audio/mp4", "audio/aac"]);
+        if (string.IsNullOrEmpty(picked))
+        {
+            return;
+        }
+
+        await RunBusyAsync(async () =>
+        {
+            try
+            {
+                string outputDir = Path.Combine(patch.WorkDirectory, "output");
+                Directory.CreateDirectory(outputDir);
+                string baseName = Path.GetFileNameWithoutExtension(patch.InputUassetPath);
+
+                SoundWaveReplacement replacement = await Task.Run(() =>
+                {
+                    PcmAudio source = AudioSourceDecoder.Decode(picked, ToolsDirectory);
+                    byte[] binka = BinkaEncoder.Encode(source, patch.AudioQuality, ToolsDirectory);
+                    return SoundWavePatcher.Replace(patch.InputUassetPath, binka, NullIfWhiteSpace(UsmapPath));
+                });
+
+                string outputUassetPath = Path.Combine(outputDir, baseName + ".patched.uasset");
+                string outputUexpPath = Path.ChangeExtension(outputUassetPath, ".uexp");
+                string outputUbulkPath = Path.ChangeExtension(outputUassetPath, ".ubulk");
+                await File.WriteAllBytesAsync(outputUassetPath, replacement.Uasset);
+                await File.WriteAllBytesAsync(outputUexpPath, replacement.Uexp);
+                await File.WriteAllBytesAsync(outputUbulkPath, replacement.Ubulk);
+
+                patch.PatchedFiles.Clear();
+                foreach (string pakPath in patch.OriginalFiles.Keys)
+                {
+                    string? candidate = Path.GetExtension(pakPath).ToLowerInvariant() switch
+                    {
+                        ".uasset" => outputUassetPath,
+                        ".uexp" => outputUexpPath,
+                        ".ubulk" => outputUbulkPath,
+                        _ => null,
+                    };
+                    if (candidate is not null && File.Exists(candidate))
+                    {
+                        patch.PatchedFiles[pakPath] = candidate;
+                    }
+                }
+
+                patch.ReplacementName = Path.GetFileName(picked);
+                patch.ReplacementDetail =
+                    $"{replacement.Channels} 声道 / {replacement.SampleRate:N0} Hz / {replacement.Seconds:0.##} 秒 · " +
+                    $"编码后 {FormatSize(replacement.Ubulk.Length)}";
+                patch.Status = "已替换";
+                StatusText = $"已替换 {patch.Name}：{replacement.Seconds:0.##} 秒，{FormatSize(replacement.Ubulk.Length)}。";
+            }
+            catch (Exception ex)
+            {
+                patch.Status = "失败";
+                patch.Error = ex.Message;
+                StatusText = $"音频替换失败：{ex.Message}";
+            }
         });
     }
 
@@ -3988,6 +4246,12 @@ public partial class MainViewModel : ViewModelBase
         string? replaceCachePath = null,
         IReadOnlyList<string>? mimeTypes = null)
     {
+        // 无头测试没有 StorageProvider，注入这个委托就能把"选文件"之后的全流程跑通。
+        if (FilePickerOverride is not null)
+        {
+            return await FilePickerOverride(title, patterns);
+        }
+
         TopLevel? top = TopLevel;
         if (top is null)
         {
@@ -4199,6 +4463,12 @@ public partial class MainViewModel : ViewModelBase
     private static string? NullIfWhiteSpace(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
     private static string FormatSize(long bytes) => EntryItem.FormatSize(bytes);
+
+    /// <summary>
+    /// 外部工具目录：<c>binka_encode.exe</c>（音频编码）、<c>ffmpeg.exe</c>（可选，解更多音频格式）
+    /// 都从这里找。构建时 <c>tools/*.exe</c> 会被复制到输出目录的同名子目录。
+    /// </summary>
+    public static string ToolsDirectory => Path.Combine(AppContext.BaseDirectory, "tools");
 
     /// <summary>应用私有数据目录（Android = FilesDir/Prism，桌面 = %LOCALAPPDATA%/Prism）。</summary>
     private static string PrivateDataDir() =>

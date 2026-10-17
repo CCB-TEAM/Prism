@@ -4,7 +4,7 @@
 
 面向 **Windows 桌面端与 Android** 的 UE `.pak` 资产管理工具，基于 [CUE4Parse](https://github.com/FabianFG/CUE4Parse)，扩展自 [kardswalker/Prism](https://github.com/kardswalker/Prism)。
 
-浏览 pak 内容，预览贴图 / 音频 / 三维网格 / 本地化文本，导出与分享资产，制作贴图替换 mod，还能在同一游戏的 PC 端与手机端之间互转贴图包。
+浏览 pak 内容，预览贴图 / 音频 / 三维网格 / 本地化文本，导出与分享资产，制作贴图 / 音频 / 视频替换 mod，还能在同一游戏的 PC 端与手机端之间互转贴图包。
 
 ## 功能
 
@@ -19,6 +19,14 @@
 **贴图替换**
 - 选中贴图资产、给一张图片，直接生成补丁 pak，无需手工重打包。
 - 桌面端经 UAssetCLI + astcenc / texconv 编码；Android 端由 `libprism_codecs` 在进程内编码。
+
+**音频替换 / 视频替换**
+- 选中流式 `SoundWave`，喂一段素材（WAV / MP3 / OGG，装了 ffmpeg 还能吃 FLAC / M4A），
+  编成 BINKA 后写回资产：声道、采样率、时长一并更新，音质 0–9 可调。
+- 视频（以及包里任意原始文件）直接按字节替换：选中 `.mp4` / `.bk2` 再给个新文件即可；
+  选中 `UFileMediaSource` 资产时会自动定位到它引用的那个视频文件。
+- 两者走同一条路：加入替换 → 选择素材 → 构建补丁 pak。
+- 音频编码依赖 `tools/binka_encode.exe`（三方二进制，不入库，见 [tools/README.md](tools/README.md)）。
 
 **Pak 合并**
 - 一次性多选多个 pak，长按拖动调整覆盖优先级（**越靠上优先级越高**）。
@@ -242,8 +250,9 @@ Prism **不**分发 Oodle。若你在本地或私有构建中放入 Oodle 相关
 ## 验证
 
 ```sh
-# 集成测试（178 条断言）：映射格式识别、搜索框路径解析、pak 转换（两条路径 + 全部输出模式）、
+# 集成测试（225 条断言）：映射格式识别、搜索框路径解析、pak 转换（两条路径 + 全部输出模式）、
 # 合并优先级、locres <-> JSON 往返、非 ASCII pak 路径处理、无头 UI 加载与导航，
+# 音频替换（BINKA 经真实 pak 往返）、媒体文件替换，以及用真实视图模型跑一遍替换页流程，
 # 以及纹理解析器两份副本的一致性（UAssetTexture.Core vs UAssetCLI，
 # 后者需要先有 Release 产物，没有则跳过该组）
 dotnet run --project test/Prism.FeatureTests
@@ -252,7 +261,7 @@ dotnet run --project test/Prism.FeatureTests
 # （用于审美评审与改版前后对比，输出到指定目录）
 dotnet run --project test/Prism.FeatureTests -- --capture artifacts/ui
 
-# 针对真实 pak 的冒烟测试：打开 -> 搜索 -> 贴图预览，并自检外部依赖
+# 针对真实 pak 的冒烟测试：打开 -> 搜索 -> 贴图预览 -> 音频替换，并自检外部依赖
 Prism.Desktop.Desktop/bin/Debug/net10.0/Prism.Desktop.Desktop.exe --smoke <pak> [映射文件]
 ```
 

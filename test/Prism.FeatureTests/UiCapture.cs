@@ -43,6 +43,8 @@ internal static class UiCapture
             ("home", "GoHome", 0),
             ("workspace-config", "GoWorkspace", 0),
             ("workspace-browse", "GoWorkspace", 1),
+            ("workspace-replace-audio", "GoWorkspace", 2),
+            ("workspace-replace-media", "GoWorkspace", 2),
             ("merge", "GoMerge", 0),
             ("convert", "GoConvert", 0),
             ("settings", "GoSettings", 0),
@@ -63,6 +65,13 @@ internal static class UiCapture
                 foreach ((string pageLabel, string command, int tab) in forViewport)
                 {
                     Navigate(vm, command, tab);
+
+                    // 替换页需要真的有任务才看得出来长什么样：塞两条示例（音频 / 视频）。
+                    if (pageLabel.StartsWith("workspace-replace", StringComparison.Ordinal))
+                    {
+                        SeedPatchDemo(vm, selectMedia: pageLabel.EndsWith("media", StringComparison.Ordinal));
+                    }
+
                     string name = $"{theme}-{viewportLabel}-{pageLabel}.png";
                     if (Capture(window, Path.Combine(outputDirectory, name)))
                     {
@@ -116,8 +125,60 @@ internal static class UiCapture
         }
     }
 
-    private static (MainViewModel Vm, MainWindow Window) CreateShell(double width, double height, string theme, bool collapsed)
+    /// <summary>
+    /// 给替换页塞两条示例任务：一条是编码过的音频（已替换），一条是待替换的视频。
+    /// 截图评审要看的是控件排版与信息层级，不是真实解码结果，所以这里只填展示字段。
+    /// </summary>
+    private static void SeedPatchDemo(MainViewModel vm, bool selectMedia)
     {
+        if (vm.PatchItems.Count == 0)
+        {
+            var audio = new Prism.Desktop.Models.PatchItem(
+                kind: "audio",
+                sourcePath: "Kards/Content/Audio/BGM/AU_Arrow_morse_loop_01.uasset",
+                name: "AU_Arrow_morse_loop_01",
+                format: "BINKA",
+                sizeLabel: "2.53 秒",
+                width: 0,
+                height: 0,
+                workDirectory: Path.GetTempPath(),
+                inputUassetPath: string.Empty)
+            {
+                Detail = "2 声道 / 48,000 Hz · 2.53 秒 · 原始 12 KB",
+                AudioQuality = 4,
+                Status = "已替换",
+                ReplacementName = "arrow_loop.wav",
+                ReplacementDetail = "2 声道 / 48,000 Hz / 2.53 秒 · 编码后 12 KB",
+            };
+
+            var media = new Prism.Desktop.Models.PatchItem(
+                kind: "media",
+                sourcePath: "Kards/Content/Movies/Intro_Main.mp4",
+                name: "Intro_Main.mp4",
+                format: "MP4",
+                sizeLabel: "48.2 MB",
+                width: 0,
+                height: 0,
+                workDirectory: Path.GetTempPath(),
+                inputUassetPath: string.Empty)
+            {
+                Detail = "48.2 MB（直接替换字节，不改资产）",
+            };
+
+            vm.PatchItems = new System.Collections.ObjectModel.ObservableCollection<Prism.Desktop.Models.PatchItem>
+            {
+                audio,
+                media,
+            };
+        }
+
+        vm.SelectedPatchItem = selectMedia
+            ? vm.PatchItems.FirstOrDefault(item => item.IsMedia)
+            : vm.PatchItems.FirstOrDefault(item => item.IsAudio);
+        Pump();
+    }
+
+    private static (MainViewModel Vm, MainWindow Window) CreateShell(double width, double height, string theme, bool collapsed)    {
         var vm = new MainViewModel
         {
             // 关掉过渡动画：截到淡入中间态会得到半透明页面，评审时看不出真实观感。
@@ -166,8 +227,7 @@ internal static class UiCapture
         Pump();
     }
 
-    private static bool Capture(MainWindow window, string path)
-    {
+    private static bool Capture(MainWindow window, string path)    {
         // 抓两遍取第二帧：第一帧可能是在竖直滚动条刚出现、内容宽度因此变动的那一次
         // 布局之前合成的，会留下上一版位置的残影（设置页尤其明显）。第二帧是稳定态。
         Pump();

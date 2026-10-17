@@ -4,7 +4,7 @@
 
 UE `.pak` asset management toolkit for **Windows desktop and Android**, built on [CUE4Parse](https://github.com/FabianFG/CUE4Parse). Extends [kardswalker/Prism](https://github.com/kardswalker/Prism).
 
-Browse pak contents, preview textures / audio / 3D meshes / localization, export and share assets, build texture-replacement mod paks — and convert texture packs between the PC and mobile builds of a game.
+Browse pak contents, preview textures / audio / 3D meshes / localization, export and share assets, build texture / audio / video replacement mod paks — and convert texture packs between the PC and mobile builds of a game.
 
 ## Features
 
@@ -19,6 +19,16 @@ Browse pak contents, preview textures / audio / 3D meshes / localization, export
 **Texture replacement**
 - Pick a texture asset, supply an image, and build a patch pak — no manual repacking.
 - Desktop encodes via UAssetCLI + astcenc / texconv; Android encodes in-process via `libprism_codecs`.
+
+**Audio & video replacement**
+- Pick a streamed `SoundWave`, supply a clip (WAV / MP3 / OGG, plus FLAC / M4A when ffmpeg is around),
+  and it is encoded to BINKA and written back — channels, sample rate and duration are updated too,
+  with a 0–9 quality knob.
+- Video (or any raw file in the pak) is replaced byte for byte: select the `.mp4` / `.bk2`, supply a new
+  file. Selecting a `UFileMediaSource` asset resolves to the video it points at.
+- Both live on the same rail: add to replace list -> choose the clip -> build a patch pak.
+- Audio encoding needs `tools/binka_encode.exe` (a third-party binary, not committed — see
+  [tools/README.md](tools/README.md)).
 
 **Pak merging**
 - Select multiple paks at once and drag to reorder; **the higher entry wins** on conflicting paths.
@@ -256,9 +266,11 @@ A full repack needs temp space equal to the main pak.
 ## Verifying
 
 ```sh
-# Integration tests (178 assertions): mapping format detection, search-box path resolution,
+# Integration tests (225 assertions): mapping format detection, search-box path resolution,
 # pak conversion (both paths + all output modes), merge priority, locres <-> JSON round-trip,
-# non-ASCII pak path handling, headless UI loading and navigation,
+# non-ASCII pak path handling, headless UI loading and navigation, audio replacement
+# (BINKA round-trip through a real pak), media replacement, and the replace-page flow driven
+# through the real view-model,
 # and parity between the two copies of the texture-layout parser
 # (UAssetTexture.Core vs UAssetCLI — the latter needs its Release build; skipped without it)
 dotnet run --project test/Prism.FeatureTests
@@ -267,7 +279,7 @@ dotnet run --project test/Prism.FeatureTests
 # (useful for design review and before/after comparisons; writes to the given folder)
 dotnet run --project test/Prism.FeatureTests -- --capture artifacts/ui
 
-# Smoke test against a real pak: open -> search -> texture preview, plus dependency self-check
+# Smoke test against a real pak: open -> search -> texture preview -> audio replacement, plus dependency self-check
 Prism.Desktop.Desktop/bin/Debug/net10.0/Prism.Desktop.Desktop.exe --smoke <pak> [mapping]
 ```
 

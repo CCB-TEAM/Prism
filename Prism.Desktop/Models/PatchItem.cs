@@ -149,6 +149,43 @@ public sealed partial class PatchItem : ObservableObject
 
     public bool IsTexture => Kind == "texture";
 
+    /// <summary>SoundWave 资产：换成另一段音频，编码成 BINKA 后写回。</summary>
+    public bool IsAudio => Kind == "audio";
+
+    /// <summary>包内的原始文件（视频、音频、任意二进制）：直接替换字节。</summary>
+    public bool IsMedia => Kind == "media";
+
+    /// <summary>不是图片也不是本地化 —— 详情面板走"媒体"那一套。</summary>
+    public bool IsMediaLike => IsAudio || IsMedia;
+
+    /// <summary>详情面板里那个主按钮的文案，按类型换。</summary>
+    public string PickActionText => Kind switch
+    {
+        "audio" => "选择音频并编码",
+        "media" => "选择替换文件",
+        "locres" => "导出 JSON",
+        _ => "选择替换图片",
+    };
+
+    /// <summary>BINKA 质量：0 最好、9 最省，编码时才用得上。</summary>
+    [ObservableProperty]
+    public partial int AudioQuality { get; set; } = 4;
+
+    partial void OnAudioQualityChanged(int value) => OnPropertyChanged(nameof(AudioQualityText));
+
+    public string AudioQualityText => $"质量 {AudioQuality}（0 最好 / 9 最省）";
+
+    /// <summary>详情面板那个"选文件"主按钮要不要显示（本地化没有文件可选）。</summary>
+    public bool CanPickFile => !IsLocres;
+
+    /// <summary>原始文件的一句话描述（音频：声道/采样率/时长；媒体：大小）。</summary>
+    [ObservableProperty]
+    public partial string Detail { get; set; } = string.Empty;
+
+    /// <summary>替换后的一句话描述（编码后的时长、体积等）。</summary>
+    [ObservableProperty]
+    public partial string? ReplacementDetail { get; set; }
+
     [ObservableProperty]
     public partial string Status { get; set; } = "待替换";
 
@@ -163,6 +200,11 @@ public sealed partial class PatchItem : ObservableObject
 
     [ObservableProperty]
     public partial string? ReplacementName { get; set; }
+
+    partial void OnReplacementNameChanged(string? value) => OnPropertyChanged(nameof(ReplacementText));
+
+    /// <summary>替换项的文件名；没选之前给一句占位，免得详情面板空着一块。</summary>
+    public string ReplacementText => string.IsNullOrWhiteSpace(ReplacementName) ? "还没选替换文件" : ReplacementName;
 
     public bool IsReplaced => Status == "已替换";
 

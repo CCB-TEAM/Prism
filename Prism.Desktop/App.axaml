@@ -108,6 +108,16 @@
             <Setter Property="BorderThickness" Value="1" />
         </Style>
 
+        <!-- 下拉框沿用输入框的观感：Fluent 默认的 ComboBox 圆角与描边都和卡片里其它控件对不上。 -->
+        <Style Selector="ComboBox">
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Background" Value="{DynamicResource FieldBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource FieldBorderBrush}" />
+            <Setter Property="MinHeight" Value="34" />
+            <Setter Property="Padding" Value="10,4" />
+            <Setter Property="FontSize" Value="{DynamicResource Fs12}" />
+        </Style>
+
         <!-- 顶栏：返回按钮与页面标题。四个业务页原本各写一套，
              结果合并页成了灰色方块、标题字号 15/18/20 三种。 -->
         <Style Selector="Button.back">

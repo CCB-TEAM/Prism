@@ -1,12 +1,13 @@
 using System;
 using System.IO;
 using PakTool.Core;
+using UAssetAudio.Core;
 
 namespace Prism.Desktop;
 
 /// <summary>
-/// 命令行冒烟测试：不启动 UI，直接跑通「打开 Pak → 搜索 → 纹理预览」核心链路，
-/// 用于验证依赖链（尤其 SkiaSharp 版本兼容性）在真实运行环境下是否正常。
+/// 命令行冒烟测试：不启动 UI，直接跑通「打开 Pak → 搜索 → 纹理预览 → 音频替换」核心链路，
+/// 用于验证依赖链（SkiaSharp 版本兼容性、外部工具是否随构建就位）在真实运行环境下是否正常。
 /// 用法: Prism.Desktop --smoke [pakPath] [usmapPath]
 ///
 /// 注意：这里刻意<b>不</b>初始化 Avalonia。此进程已进入 WPF 消息循环，
@@ -63,7 +64,11 @@ public static class SmokeTest
                 return 1;
             }
 
-            Console.WriteLine("[smoke] PASS");
+            // 音频替换自检：能找到 BINKA 流式 SoundWave 就实打实地编一遍、写回一遍。
+            // 缺 binka_encode.exe 或映射文件时只提示，不算失败（仓库本就不带这个二进制）。
+            int audioResult = await VerifyAudioReplacementAsync(session, usmapPath);
+
+            Console.WriteLine(audioResult == 0 ? "[smoke] PASS" : "[smoke] PASS（音频替换未验证）");
             return depsResult;
         }
         catch (Exception ex)
@@ -72,6 +77,126 @@ public static class SmokeTest
             Console.Error.WriteLine(ex.ToString());
             return 1;
         }
+    }
+
+    /// <summary>
+    /// 音频替换全链路自检：解三件套 → 解析 → 合成 1 秒素材 → 编 BINKA → 写回 → 再解析。
+    /// 返回 0 表示跑通或被合理跳过；非 0 只用于打印，不影响整体退出码。
+    /// </summary>
+    private static async Task<int> VerifyAudioReplacementAsync(PakArchiveSession session, string? usmapPath)
+    {
+        string toolPath = Path.Combine(AppContext.BaseDirectory, "tools", BinkaEncoder.ToolName);
+        if (!File.Exists(toolPath))
+        {
+            Console.WriteLine($"[smoke] 音频替换: 跳过（没找到 {BinkaEncoder.ToolName}，见 tools/README.md）");
+            return 1;
+        }
+
+        if (string.IsNullOrWhiteSpace(usmapPath) || !File.Exists(usmapPath))
+        {
+            Console.WriteLine("[smoke] 音频替换: 跳过（没有映射文件，unversioned 资产解析不了）");
+            return 1;
+        }
+
+        string? audioAsset = await FindBinkaSoundWaveAsync(session);
+        if (audioAsset is null)
+        {
+            Console.WriteLine("[smoke] 音频替换: 跳过（这个 pak 里没找到可替换的 BINKA 流式音频）");
+            return 1;
+        }
+
+        string work = Path.Combine(Path.GetTempPath(), "prism-smoke-audio", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(work);
+        try
+        {
+            IReadOnlyDictionary<string, byte[]> parts = await session.ReadRelatedRawFilesAsync(audioAsset);
+            string stem = Path.Combine(work, Path.GetFileNameWithoutExtension(audioAsset));
+            foreach ((string pakPath, byte[] data) in parts)
+            {
+                File.WriteAllBytes(Path.Combine(work, Path.GetFileName(pakPath)), data);
+            }
+
+            SoundWaveInfo before = SoundWavePatcher.Inspect(stem + ".uasset", usmapPath);
+            Console.WriteLine($"[smoke] 音频 \"{audioAsset}\": {before.Format} {before.DescribeChannels} {before.DescribeSeconds}，{before.ChunkCount} 块");
+
+            // 1 秒 440Hz 正弦，走真实的 WAV 解码路径（与玩家选文件一致）
+            var pcm = new byte[48000 * 2];
+            for (var i = 0; i < 48000; i++)
+            {
+                var sample = (short)(Math.Sin(2 * Math.PI * 440 * i / 48000.0) * 12000);
+                pcm[i * 2] = (byte)sample;
+                pcm[i * 2 + 1] = (byte)(sample >> 8);
+            }
+
+            string sourceWav = Path.Combine(work, "tone.wav");
+            File.WriteAllBytes(sourceWav, WavCodec.Write16(pcm, 48000, 1));
+
+            PcmAudio decoded = AudioSourceDecoder.Decode(sourceWav, Path.Combine(AppContext.BaseDirectory, "tools"));
+            byte[] binka = BinkaEncoder.Encode(decoded, 4, Path.Combine(AppContext.BaseDirectory, "tools"));
+            var encoded = BinkaEncoder.ReadInfo(binka);
+            Console.WriteLine($"[smoke] 编码完成: {binka.Length:N0} 字节，{encoded.Channels} 声道 {encoded.SampleRate} Hz {encoded.Seconds:0.##} 秒");
+
+            ulong originalUexpLength = (ulong)new FileInfo(stem + ".uexp").Length;
+            SoundWaveReplacement replacement = SoundWavePatcher.Replace(stem + ".uasset", binka, usmapPath);
+            File.WriteAllBytes(stem + ".uasset", replacement.Uasset);
+            File.WriteAllBytes(stem + ".uexp", replacement.Uexp);
+            File.WriteAllBytes(stem + ".ubulk", replacement.Ubulk);
+
+            SoundWaveInfo after = SoundWavePatcher.Inspect(stem + ".uasset", usmapPath);
+            bool uexpStable = (ulong)replacement.Uexp.Length == originalUexpLength;
+            bool durationOk = Math.Abs(after.Seconds - encoded.Seconds) < 0.05;
+            Console.WriteLine($"[smoke] 写回完成: uexp {originalUexpLength} → {replacement.Uexp.Length}（稳定={uexpStable}），" +
+                              $"时长 {after.Seconds:0.##} 秒（匹配={durationOk}），ubulk {replacement.Ubulk.Length:N0} 字节");
+
+            if (!uexpStable || !durationOk)
+            {
+                Console.Error.WriteLine("[smoke] FAIL: 音频写回结果不符合预期");
+                return 1;
+            }
+
+            Console.WriteLine("[smoke] 音频替换: OK");
+            return 0;
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(work, true);
+            }
+            catch
+            {
+                // 临时目录残留不影响结论
+            }
+        }
+    }
+
+    /// <summary>在 pak 里找第一个 BINKA 流式 SoundWave（最多扫若干候选，避免为了冒烟测试遍历几万个文件）。</summary>
+    private static async Task<string?> FindBinkaSoundWaveAsync(PakArchiveSession session)
+    {
+        IReadOnlySet<string> paths = await session.ListRawFilePathsAsync();
+        IEnumerable<string> candidates = paths
+            .Where(path => path.EndsWith(".uasset", StringComparison.OrdinalIgnoreCase))
+            .Where(path => path.Contains("Audio", StringComparison.OrdinalIgnoreCase) ||
+                           path.Contains("Sound", StringComparison.OrdinalIgnoreCase))
+            .Take(400);
+
+        foreach (string candidate in candidates)
+        {
+            try
+            {
+                AssetPreviewDto preview = await session.ReadPreviewAsync(candidate);
+                if (preview.Kind == "audio")
+                {
+                    return candidate;
+                }
+            }
+            catch
+            {
+                // 单个资产解析失败（缺映射、格式特殊）就跳过
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -102,6 +227,12 @@ public static class SmokeTest
                 Console.Error.WriteLine($"[smoke] 依赖 {label}: 缺失 → {path}");
             }
         }
+
+        // 音频编码器是可选的（仓库不含，发布包会带）
+        string binka = Path.Combine(baseDir, "tools", BinkaEncoder.ToolName);
+        Console.WriteLine(File.Exists(binka)
+            ? $"[smoke] 依赖 binka_encode: OK ({new FileInfo(binka).Length / 1024:N0} KB)"
+            : $"[smoke] 依赖 binka_encode: 缺失 → {binka}（音频替换不可用）");
 
         if (missing > 0)
         {

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\UAssetAPI-master\UAssetAPI\UAssetAPI.csproj" />
+    <!-- 音频源解码：WAV 自己读，MP3 / OGG 用纯托管解码器（Android 同样可用）。 -->
+    <PackageReference Include="NLayer" Version="3.0.0" />
+    <PackageReference Include="NVorbis" Version="0.10.5" />
+  </ItemGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <TrimMode>partial</TrimMode>
+  </PropertyGroup>
+</Project>
