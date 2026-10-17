@@ -248,67 +248,179 @@
                 </Button>
             </StackPanel>
             <!--
-                桌面（≥980px）的欢迎页：只放文字。
-                窄窗/手机的入口卡片在上面，两种宽度各用各的形态，不是同一份内容的两种排版。
+                桌面（≥980px）的欢迎页。
+                不是"一段说明文字"，而是一页有层次的静态内容：引题区 → 分隔线 →
+                两栏（左：四个工作区，逐条编号；右：开始之前要准备的东西）。
+                侧栏已经提供导航，所以这里不再放任何按钮。
             -->
-            <StackPanel Spacing="22"
-                        MaxWidth="780"
+            <StackPanel MaxWidth="1060"
                         HorizontalAlignment="Left"
                         IsVisible="{Binding CanCollapseSidebar}">
-                <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs14}">
-                    <Run Text="Prism 把 UE 的 " />
-                    <Run Text=".pak" FontFamily="Consolas, Courier New" />
-                    <Run Text=" 当成文件系统来用：打开、浏览、预览、导出，也可以直接在包里做贴图替换、多 Pak 合并、跨平台转换与本地化编辑。当前版本 " />
-                    <Run Text="{Binding VersionText}" />
-                    <Run Text="。" />
+
+                <!-- ── 引题区：左侧一道主色细条 + 标签行 + 大标题 ── -->
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                    <Border Grid.Column="0"
+                            Width="3"
+                            CornerRadius="2"
+                            Background="{DynamicResource PrimaryBrush}"
+                            Margin="0,5,0,5" />
+                    <StackPanel Grid.Column="1" Spacing="8">
+                        <TextBlock FontSize="{DynamicResource Fs10}"
+                                   Foreground="{DynamicResource PrimaryBrush}"
+                                   LetterSpacing="1.4">
+                            <Run Text="PRISM · PAK 资产管理工具 · v" />
+                            <Run Text="{Binding VersionText}" />
+                        </TextBlock>
+                        <TextBlock Text="把 .pak 当成文件系统来用"
+                                   FontSize="{DynamicResource Fs25}"
+                                   FontWeight="SemiBold"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </Grid>
+
+                <TextBlock TextWrapping="Wrap"
+                           MaxWidth="620"
+                           HorizontalAlignment="Left"
+                           Margin="0,14,0,0"
+                           FontSize="{DynamicResource Fs13}"
+                           Foreground="{DynamicResource TextMutedBrush}"
+                           Text="打开、浏览、预览、导出，也能直接在包里做贴图替换、多 Pak 合并、跨平台转换与本地化编辑。全部在本机完成，不上传任何文件。" />
+
+                <!-- ── 分隔线 ── -->
+                <Border Height="1"
+                        Background="{DynamicResource DividerBrush}"
+                        Margin="0,28,0,24" />
+
+                <!-- ── 两栏：左 工作区 / 右 开始之前（中间一道竖线） ── -->
+                <Grid ColumnDefinitions="*,Auto,*">
+
+                    <StackPanel Grid.Column="0" Spacing="16" Margin="0,0,0,0">
+                        <TextBlock Text="四个工作区"
+                                   FontSize="{DynamicResource Fs10}"
+                                   LetterSpacing="1.2"
+                                   Foreground="{DynamicResource TextMutedBrush}" />
+
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                            <TextBlock Grid.Column="0"
+                                       Text="01"
+                                       FontFamily="Consolas, Courier New"
+                                       FontSize="{DynamicResource Fs11}"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       Margin="0,3,0,0" />
+                            <StackPanel Grid.Column="1" Spacing="3">
+                                <TextBlock Text="解包 &amp; 模组" FontSize="{DynamicResource Fs13}" FontWeight="SemiBold" />
+                                <TextBlock TextWrapping="Wrap"
+                                           FontSize="{DynamicResource Fs11}"
+                                           Foreground="{DynamicResource TextMutedBrush}"
+                                           Text="浏览包内文件、预览贴图与模型、导出资源；把资产加入替换列表后换贴图、改本地化，再构建补丁 Pak。" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                            <TextBlock Grid.Column="0"
+                                       Text="02"
+                                       FontFamily="Consolas, Courier New"
+                                       FontSize="{DynamicResource Fs11}"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       Margin="0,3,0,0" />
+                            <StackPanel Grid.Column="1" Spacing="3">
+                                <TextBlock Text="Pak 合并" FontSize="{DynamicResource Fs13}" FontWeight="SemiBold" />
+                                <TextBlock TextWrapping="Wrap"
+                                           FontSize="{DynamicResource Fs11}"
+                                           Foreground="{DynamicResource TextMutedBrush}"
+                                           Text="多个 Pak 合成一个，越靠上的优先级越高。给出原版 .locres 作基准时，同名本地化文件逐条三路合并，而不是整份覆盖。" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                            <TextBlock Grid.Column="0"
+                                       Text="03"
+                                       FontFamily="Consolas, Courier New"
+                                       FontSize="{DynamicResource Fs11}"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       Margin="0,3,0,0" />
+                            <StackPanel Grid.Column="1" Spacing="3">
+                                <TextBlock Text="Pak 转换" FontSize="{DynamicResource Fs13}" FontWeight="SemiBold" />
+                                <TextBlock TextWrapping="Wrap"
+                                           FontSize="{DynamicResource Fs11}"
+                                           Foreground="{DynamicResource TextMutedBrush}"
+                                           Text="把另一个平台 Pak 里同路径的贴图搬到本平台：解出源像素，按主 Pak 的纹理格式重编码，再打成新 Pak。" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                            <TextBlock Grid.Column="0"
+                                       Text="04"
+                                       FontFamily="Consolas, Courier New"
+                                       FontSize="{DynamicResource Fs11}"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       Margin="0,3,0,0" />
+                            <StackPanel Grid.Column="1" Spacing="3">
+                                <TextBlock Text="设置" FontSize="{DynamicResource Fs13}" FontWeight="SemiBold" />
+                                <TextBlock TextWrapping="Wrap"
+                                           FontSize="{DynamicResource Fs11}"
+                                           Foreground="{DynamicResource TextMutedBrush}"
+                                           Text="Pak 与映射文件路径、AES 密钥、导出目录、主题，以及日志与诊断报告。" />
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+
+                    <Border Grid.Column="1"
+                            Width="1"
+                            Background="{DynamicResource DividerBrush}"
+                            Margin="32,0" />
+
+                    <StackPanel Grid.Column="2" Spacing="16">
+                        <TextBlock Text="开始之前"
+                                   FontSize="{DynamicResource Fs10}"
+                                   LetterSpacing="1.2"
+                                   Foreground="{DynamicResource TextMutedBrush}" />
+
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="映射文件" FontSize="{DynamicResource Fs12}" FontWeight="SemiBold" />
+                            <TextBlock TextWrapping="Wrap"
+                                       FontSize="{DynamicResource Fs11}"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       Text=".usmap / .jmap。只有读取蓝图属性与跨平台转换需要，在「设置」里选一次即可，两个平台导出的映射通用。" />
+                        </StackPanel>
+
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="AES 密钥" FontSize="{DynamicResource Fs12}" FontWeight="SemiBold" />
+                            <TextBlock TextWrapping="Wrap"
+                                       FontSize="{DynamicResource Fs11}"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       Text="只有加密 Pak 需要。密钥以明文保存在本机设置文件里，分享截图时注意避开。" />
+                        </StackPanel>
+
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="编码器" FontSize="{DynamicResource Fs12}" FontWeight="SemiBold" />
+                            <TextBlock TextWrapping="Wrap"
+                                       FontSize="{DynamicResource Fs11}"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       Text="桌面端的贴图替换与转换依赖 UAssetCLI 与 astcenc / texconv，发行包已随附；Android 端在应用内完成编码。" />
+                        </StackPanel>
+
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Oodle 压缩" FontSize="{DynamicResource Fs12}" FontWeight="SemiBold" />
+                            <TextBlock TextWrapping="Wrap"
+                                       FontSize="{DynamicResource Fs11}"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       Text="默认关闭。开启需要本机具备 oo2core 原生库，缺失时会自动降级为不压缩并在状态栏说明。" />
+                        </StackPanel>
+                    </StackPanel>
+                </Grid>
+
+                <!-- ── 页脚提示 ── -->
+                <Border Height="1"
+                        Background="{DynamicResource DividerBrush}"
+                        Margin="0,28,0,18" />
+                <TextBlock FontSize="{DynamicResource Fs11}"
+                           Foreground="{DynamicResource PrimaryBrush}">
+                    <Run Text="从左侧「解包 &amp; 模组」开始" />
+                    <Run Text="　·　放入游戏的 Pak 请放在 Paks 目录下" Foreground="{DynamicResource TextMutedBrush}" />
                 </TextBlock>
-
-                <StackPanel Spacing="10">
-                    <TextBlock Text="四个工作区"
-                               FontSize="{DynamicResource Fs12}"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource TextMutedBrush}" />
-                    <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs12}">
-                        <Run Text="解包 &amp; 模组" FontWeight="SemiBold" />
-                        <Run Text="　浏览包内文件、预览贴图与模型、导出资源；把选中的资产加入替换列表后，可以换贴图、改本地化，再构建补丁 Pak。" />
-                    </TextBlock>
-                    <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs12}">
-                        <Run Text="Pak 合并" FontWeight="SemiBold" />
-                        <Run Text="　把多个 Pak 合成一个，列表里越靠上的优先级越高。给出原版 .locres 作基准时，同名本地化文件会逐条三路合并，而不是整份覆盖。" />
-                    </TextBlock>
-                    <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs12}">
-                        <Run Text="Pak 转换" FontWeight="SemiBold" />
-                        <Run Text="　把另一个平台 Pak 里的同路径贴图搬到本平台：解出源像素，按主 Pak 的纹理格式重新编码，再打成新 Pak。" />
-                    </TextBlock>
-                    <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs12}">
-                        <Run Text="设置" FontWeight="SemiBold" />
-                        <Run Text="　Pak 与映射文件路径、AES 密钥、导出目录、主题，以及日志与诊断报告。" />
-                    </TextBlock>
-                </StackPanel>
-
-                <StackPanel Spacing="10">
-                    <TextBlock Text="开始之前"
-                               FontSize="{DynamicResource Fs12}"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource TextMutedBrush}" />
-                    <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs12}" Foreground="{DynamicResource TextMutedBrush}">
-                        <Run Text="映射文件（.usmap / .jmap）" FontWeight="SemiBold" />
-                        <Run Text="　只有读取蓝图属性与跨平台转换需要；在「设置」里选一次即可，两个平台导出的映射通用。" />
-                    </TextBlock>
-                    <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs12}" Foreground="{DynamicResource TextMutedBrush}">
-                        <Run Text="AES 密钥" FontWeight="SemiBold" />
-                        <Run Text="　只有加密 Pak 需要。密钥以明文保存在本机设置文件里，分享截图时注意避开。" />
-                    </TextBlock>
-                    <TextBlock TextWrapping="Wrap" FontSize="{DynamicResource Fs12}" Foreground="{DynamicResource TextMutedBrush}">
-                        <Run Text="编码器" FontWeight="SemiBold" />
-                        <Run Text="　桌面端的贴图替换与转换依赖 UAssetCLI 与 astcenc / texconv，发行包已随附；Android 端在应用内完成编码。" />
-                    </TextBlock>
-                </StackPanel>
-
-                <TextBlock Text="从左侧「解包 &amp; 模组」开始。"
-                           FontSize="{DynamicResource Fs12}"
-                           Foreground="{DynamicResource PrimaryBrush}" />
             </StackPanel>
+
         </StackPanel>
     </ScrollViewer>
 </UserControl>
