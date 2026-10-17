@@ -633,8 +633,12 @@ public partial class MainViewModel : ViewModelBase
 
     public string AudioTimeText => $"{FormatAudioTime(AudioPosition)} / {FormatAudioTime(AudioDuration)}";
 
-    /// <summary>内置播放器进度条：Android 走 MediaPlayer，桌面走 MCI，两边都能拖。</summary>
-    public bool CanSeekAudio => HasAudioPreview && AudioDuration > 0;
+    /// <summary>
+    /// 内置播放器进度条：Android 走 MediaPlayer，桌面走 MCI，两边都能拖。
+    /// 只要有音频就允许拖 —— 时长还没算出来时禁用，滑块看起来就是"坏掉"，不如让它可点、
+    /// seek 时再按已知时长夹一下。
+    /// </summary>
+    public bool CanSeekAudio => HasAudioPreview;
 
     partial void OnIsAudioPlayingChanged(bool value)
     {
@@ -1284,6 +1288,38 @@ public partial class MainViewModel : ViewModelBase
         if (wasPlaying && _videoTempFile is not null && _videoProbe is not null)
         {
             StartVideoPlayback(_videoTempFile);
+            return;
+        }
+
+        // 暂停状态下拖动也要有反馈：把那一帧抠出来替换画面，
+        // 否则"拖了但画面不动"看起来就像进度条坏了。
+        if (_videoTempFile is not null && _videoProbe is not null)
+        {
+            _ = ShowVideoFrameAtAsync(_videoTempFile, VideoPosition);
+        }
+    }
+
+    /// <summary>抽指定时间点的一帧当画面（暂停拖动时用）。</summary>
+    private async Task ShowVideoFrameAtAsync(string path, double seconds)
+    {
+        Bitmap? bitmap = await Task.Run(() =>
+        {
+            string framePath = Path.ChangeExtension(path, ".seek.png");
+            try
+            {
+                return Ffmpeg.TryExtractPoster(path, framePath, ToolsDirectory, TimeSpan.FromSeconds(seconds))
+                    ? LoadImage(framePath, Ffmpeg.PreviewMaxWidth)
+                    : null;
+            }
+            catch
+            {
+                return null;
+            }
+        });
+
+        if (bitmap is not null && !IsVideoPlaying)
+        {
+            VideoFrame = bitmap;
         }
     }
 

@@ -150,7 +150,8 @@
                                     IsEnabled="{Binding CanSeekAudio}"
                                     VerticalAlignment="Center"
                                     PointerPressed="OnAudioSliderPressed"
-                                    PointerReleased="OnAudioSliderReleased" />
+                                    PointerReleased="OnAudioSliderReleased"
+                                    PointerCaptureLost="OnAudioSliderCaptureLost" />
                             <TextBlock Grid.Column="1"
                                        Text="{Binding AudioTimeText}"
                                        FontSize="{DynamicResource Fs10}"
@@ -195,7 +196,8 @@
                                     IsEnabled="{Binding CanSeekVideo}"
                                     VerticalAlignment="Center"
                                     PointerPressed="OnVideoSliderPressed"
-                                    PointerReleased="OnVideoSliderReleased" />
+                                    PointerReleased="OnVideoSliderReleased"
+                                    PointerCaptureLost="OnVideoSliderCaptureLost" />
                             <TextBlock Grid.Column="1"
                                        Text="{Binding VideoTimeText}"
                                        FontSize="{DynamicResource Fs10}"
