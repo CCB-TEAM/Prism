@@ -284,6 +284,13 @@ assertions are skipped.
   `PakTool.Core` / `UAssetTexture.Core` / `UAssetAPI` output directories and will lock each other's files.
 - **`--smoke` must not initialize Avalonia** — the process is already inside a WPF message loop, and
   starting Avalonia there prevents it from exiting. Use the headless test project for UI checks.
+- **`NU1608: SkiaSharp 2.88.9 vs 3.119.4` is expected, and it is live, not dead code.** Avalonia 12's
+  renderer requires SkiaSharp 3.119.4 while the vendored `CUE4Parse-Conversion` pins 2.88.9, so NuGet
+  resolves 3.119.4 and the pinned reference is ignored. That code path *does* run: every texture
+  preview and PNG export goes through `CTexture.Encode(...)` → `ToSkBitmap()` → `SKBitmap`. It works
+  only because the handful of SkiaSharp members used there are unchanged in 3.x — it is a two-major-
+  version ABI gamble, not a clean build. Do not silence the warning; treat it as the reason `--smoke`
+  exists, and re-check texture preview after any Avalonia or CUE4Parse bump.
 
 ## Scope
 

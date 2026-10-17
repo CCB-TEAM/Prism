@@ -268,6 +268,13 @@ Prism.Desktop.Desktop/bin/Debug/net10.0/Prism.Desktop.Desktop.exe --smoke <pak> 
   `PakTool.Core` / `UAssetTexture.Core` / `UAssetAPI` 的输出目录，会互相锁文件。
 - **`--smoke` 不能初始化 Avalonia** —— 该进程已处于 WPF 消息循环中，在其中启动 Avalonia
   会导致进程无法退出。UI 校验请用无头测试工程。
+- **`NU1608: SkiaSharp 2.88.9 vs 3.119.4` 是预期警告，而且它作用在活路径上，不是死代码。**
+  Avalonia 12 的渲染层要求 SkiaSharp 3.119.4，而 vendored 的 `CUE4Parse-Conversion` 钉死 2.88.9，
+  NuGet 于是解析成 3.119.4、忽略钉死的那份。这条路径**确实在跑**：每一次贴图预览与 PNG 导出
+  都经过 `CTexture.Encode(...)` → `ToSkBitmap()` → `SKBitmap`。它能正常工作，只是因为这里用到
+  的那几个 SkiaSharp 成员在 3.x 里签名没变 —— 这是跨两个大版本的 ABI 赌注，不是干净的构建。
+  不要屏蔽这条警告：它正是 `--smoke` 存在的理由；升级 Avalonia 或 CUE4Parse 之后务必重新验证
+  贴图预览。
 
 ## 范围
 
