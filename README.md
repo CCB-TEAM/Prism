@@ -29,6 +29,9 @@ Browse pak contents, preview textures / audio / 3D meshes / localization, export
 - Both live on the same rail: add to replace list -> choose the clip -> build a patch pak.
 - Audio encoding needs `tools/binka_encode.exe` (a third-party binary, not committed — see
   [tools/README.md](tools/README.md)).
+- **Desktop only for audio**: the encoder is a Windows binary (RAD ships static libs for
+  win/linux/osx only, none for Android arm64), so Android builds say so when you try; video
+  replacement works on both.
 
 **Pak merging**
 - Select multiple paks at once and drag to reorder; **the higher entry wins** on conflicting paths.

@@ -27,6 +27,8 @@
   选中 `UFileMediaSource` 资产时会自动定位到它引用的那个视频文件。
 - 两者走同一条路：加入替换 → 选择素材 → 构建补丁 pak。
 - 音频编码依赖 `tools/binka_encode.exe`（三方二进制，不入库，见 [tools/README.md](tools/README.md)）。
+- **音频替换仅桌面端**：编码器是 Windows 可执行文件（RAD 只提供 win/linux/osx 的静态库，没有 Android arm64），
+  Android 版会在加入替换时直接说明；视频替换两端都能用。
 
 **Pak 合并**
 - 一次性多选多个 pak，长按拖动调整覆盖优先级（**越靠上优先级越高**）。

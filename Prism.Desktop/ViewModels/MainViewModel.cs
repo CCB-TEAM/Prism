@@ -2829,7 +2829,10 @@ public partial class MainViewModel : ViewModelBase
         string? picked = await PickFileAsync(
             string.IsNullOrEmpty(extension) ? "选择替换文件" : $"选择替换的 {extension} 文件",
             [pattern, "*.*"],
-            replaceCachePath: null);
+            replaceCachePath: null,
+            // 媒体替换什么都能换（mp4 / bk2 / usm / 自定义格式），Android 上按 MIME
+            // 过滤反而会把文件藏起来，直接放开。
+            mimeTypes: ["*/*"]);
         if (string.IsNullOrEmpty(picked))
         {
             return;
