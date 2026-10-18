@@ -22,6 +22,8 @@
 **贴图替换**
 - 选中贴图资产、给一张图片，直接生成补丁 pak，无需手工重打包。
 - 桌面端经 UAssetCLI + astcenc / texconv 编码；Android 端由 `libprism_codecs` 在进程内编码。
+- 未压缩贴图（`PF_B8G8R8A8` / `PF_R8G8B8A8` / `PF_A8R8G8B8`）与 `PF_DXT1` 不需要外部编码器：
+  像素直接打包 / 内置 BC1 编码。
 
 **音频替换 / 视频替换**
 - 选中流式 `SoundWave`，喂一段素材（WAV / MP3 / OGG，装了 ffmpeg 还能吃 FLAC / M4A），
@@ -64,17 +66,18 @@
 
 ```
 Prism/                     Android WebView 应用（早期版本，源自上游）
-Prism.PC/                  本地 Web UI 构建
-Prism.Desktop/             共享 Avalonia UI 与逻辑（库，net10.0）
-Prism.Desktop.Desktop/     Windows 外壳（单文件发布）
-Prism.Desktop.Android/     Android 外壳（APK，arm64-v8a）
-PakTool.Core/              pak 会话 / 预览 / 导出 / 合并 / 映射 / locres
-UAssetTexture.Core/        贴图替换引擎与 pak 转换
-UAssetCLI/                 贴图替换命令行工具（自带一份贴图代码）
-test/Prism.FeatureTests/   集成测试（控制台程序）
-UAssetAPI-master/          内置改造过的 UAssetAPI
-tools/                     astcenc + texconv（构建时复制到应用旁）
-third_party/               Android 原生库（不提交，见下文）
+Prism.PC/                     本地 Web UI 构建
+Prism.Desktop/                共享 Avalonia UI 与逻辑（库，net10.0）
+Prism.Desktop.Desktop/        Windows 外壳（单文件发布）
+Prism.Desktop.Android/        Android 外壳（APK，arm64-v8a）
+PakTool.Core/                 pak 会话 / 预览 / 导出 / 合并 / 映射 / locres
+UAssetTexture.Core/           贴图解析 / mip 编码 / 替换（只依赖 UAssetAPI + ImageSharp）
+UAssetTexture.PakConversion/  在其之上的 pak 转换（需要 PakTool.Core / CUE4Parse）
+UAssetCLI/                    贴图替换命令行工具（引用 UAssetTexture.Core）
+test/Prism.FeatureTests/      集成测试（控制台程序）
+UAssetAPI-master/             内置改造过的 UAssetAPI
+tools/                        astcenc + texconv（构建时复制到应用旁）
+third_party/                  Android 原生库（不提交，见下文）
 ```
 
 以下不随仓库提交，需要时自行放置：
@@ -86,8 +89,10 @@ native/                    那些 .so 的源码（PrismCodecs C++、RepakBind Ru
 reference/                 本地留存的参考克隆（astcenc、FModel 等）
 ```
 
-`UAssetCLI` **有意不引用** `UAssetTexture.Core`：它自带一份解析器与替换器副本，
-这样 AOT 产物就不必背上 CUE4Parse 的依赖链。改动贴图解析逻辑时，两处都要改。
+`UAssetCLI` 直接引用 `UAssetTexture.Core`，所以「进程内替换」和「CLI 子进程替换」用的是**同一份**
+解析器、格式表与 mip 回写代码。前提是 `UAssetTexture.Core` 不依赖 CUE4Parse —— 需要 pak 会话的
+逻辑都放在 `UAssetTexture.PakConversion`。这样 AOT 产物依然瘦（包里没有 CUE4Parse），也不会再出现
+「同一个修复只落到一条链路上」的情况。
 
 ## 下载
 
@@ -257,12 +262,12 @@ Prism **不**分发 Oodle。若你在本地或私有构建中放入 Oodle 相关
 ## 验证
 
 ```sh
-# 集成测试（239 条断言）：映射格式识别、搜索框路径解析、pak 转换（两条路径 + 全部输出模式）、
+# 集成测试（261 条断言）：映射格式识别、搜索框路径解析、pak 转换（两条路径 + 全部输出模式）、
 # 合并优先级、locres <-> JSON 往返、非 ASCII pak 路径处理、无头 UI 加载与导航，
 # 音频替换（BINKA 经真实 pak 往返）、媒体文件替换、用真实视图模型跑一遍替换页流程，
 # 以及视频预览的 ffmpeg 探测/封面抽取/尺寸换算，
-# 以及纹理解析器两份副本的一致性（UAssetTexture.Core vs UAssetCLI，
-# 后者需要先有 Release 产物，没有则跳过该组）
+# 未压缩贴图格式（PF_B8G8R8A8 等）的识别与通道顺序，
+# 以及真实跑一次 UAssetCLI 替换（需要先有它的 Release 产物，没有则跳过该组）
 dotnet run --project test/Prism.FeatureTests
 
 # 界面截图：每个页面 × 浅色/深色 × 紧凑/宽屏，由 Skia 渲染成 PNG

@@ -1,5 +1,6 @@
 using SixLabors.ImageSharp;
 using UAssetAPI.UnrealTypes;
+using UAssetTexture.Core;
 
 internal static class Cli
 {
@@ -64,9 +65,12 @@ internal static class Cli
     private static async Task<int> ReplaceTextureAsync(Dictionary<string, string?> options)
     {
         string assetPath = Require(options, "asset");
-        TextureAssetInfo info = TextureAssetParser.Load(assetPath, ParseEngineVersion(options), GetUsmapPath(options));
-        if (options.TryGetValue("expected-format", out string? expectedFormat)
-            && !string.IsNullOrWhiteSpace(expectedFormat)
+        string? expectedFormat = GetOptionalFormat(options);
+
+        // --expected-format 同时作为格式识别的提示：调用方（Prism 桌面端 / Pak 转换）
+        // 已经从资产里读出了真实格式，没必要再靠字节扫描猜一次。
+        TextureAssetInfo info = TextureAssetParser.Load(assetPath, ParseEngineVersion(options), GetUsmapPath(options), expectedFormat);
+        if (!string.IsNullOrWhiteSpace(expectedFormat)
             && !string.Equals(info.Format.Name, expectedFormat, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
@@ -90,6 +94,12 @@ internal static class Cli
         else if (info.Format.IsDxt1)
         {
             mipPayloads = await TextureReplacementSource.LoadAndEncodeDxt1ImageAsync(source, info.Width, info.Height, info.Mips);
+        }
+        else if (info.Format.IsUncompressed8BitColor)
+        {
+            // PF_B8G8R8A8 这类未压缩贴图：直接打包像素，不依赖 astcenc / texconv。
+            mipPayloads = await TextureReplacementSource.LoadAndEncodeUncompressedImageAsync(
+                source, info.Format, info.Width, info.Height, info.Mips);
         }
         else if (info.Format.IsAstc || info.Format.RequiresTexconv)
         {
@@ -176,6 +186,13 @@ internal static class Cli
             : null;
     }
 
+    private static string? GetOptionalFormat(Dictionary<string, string?> options)
+    {
+        return options.TryGetValue("expected-format", out string? value) && !string.IsNullOrWhiteSpace(value)
+            ? value.Trim()
+            : null;
+    }
+
     private static string Require(Dictionary<string, string?> options, string key)
     {
         if (options.TryGetValue(key, out string? value) && !string.IsNullOrWhiteSpace(value))
@@ -207,6 +224,7 @@ internal static class Cli
         Console.WriteLine();
         Console.WriteLine("Notes:");
         Console.WriteLine("  PF_DXT1 image input is encoded internally.");
+        Console.WriteLine("  PF_B8G8R8A8 / PF_R8G8B8A8 / PF_A8R8G8B8 image input is encoded internally (raw pixels, no external tool).");
         Console.WriteLine("  Image input is resized to the asset texture size when dimensions differ.");
         Console.WriteLine("  PF_ASTC_* image input uses astcenc; PF_DXT5 and PF_BC7 image input use texconv.");
         Console.WriteLine("  Raw mip directories must contain mip0.bin, mip1.bin, ... with already compressed payload bytes.");

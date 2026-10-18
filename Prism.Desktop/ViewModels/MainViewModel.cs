@@ -3403,9 +3403,11 @@ public partial class MainViewModel : ViewModelBase
 
                 if (result.ExitCode != 0)
                 {
+                    AppLog.Error($"UAssetCLI 替换失败（exit={result.ExitCode}）：{patch.Name}{Environment.NewLine}{result.CombinedOutput}");
+                    string failure = result.DescribeFailure();
                     patch.Status = "失败";
-                    patch.Error = result.CombinedOutput;
-                    StatusText = $"替换失败：{result.CombinedOutput.Split('\n').FirstOrDefault()}";
+                    patch.Error = failure;
+                    StatusText = $"替换失败：{failure}";
                     return;
                 }
             }

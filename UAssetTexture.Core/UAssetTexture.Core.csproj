@@ -7,8 +7,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\UAssetAPI-master\UAssetAPI\UAssetAPI.csproj" />
-    <!-- PakConversionService 需要 PakArchiveSession（解包）与 MappingsLoader（usmap/jmap）。 -->
-    <ProjectReference Include="..\PakTool.Core\PakTool.Core.csproj" />
+    <!-- 只依赖 UAssetAPI + ImageSharp：这一层会被进程外的 UAssetCLI（Native AOT）直接引用，
+         pak 解包/打包相关的 PakConversionService 已拆到 UAssetTexture.PakConversion。 -->
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
   </ItemGroup>
 

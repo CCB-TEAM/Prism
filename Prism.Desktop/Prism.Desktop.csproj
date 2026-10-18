@@ -14,6 +14,7 @@
   <ItemGroup>
     <ProjectReference Include="..\PakTool.Core\PakTool.Core.csproj" />
     <ProjectReference Include="..\UAssetTexture.Core\UAssetTexture.Core.csproj" />
+    <ProjectReference Include="..\UAssetTexture.PakConversion\UAssetTexture.PakConversion.csproj" />
     <ProjectReference Include="..\UAssetAudio.Core\UAssetAudio.Core.csproj" />
   </ItemGroup>
 

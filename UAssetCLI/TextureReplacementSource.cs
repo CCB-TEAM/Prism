@@ -1,6 +1,7 @@
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
+using UAssetTexture.Core;
 
 internal static class TextureReplacementSource
 {
@@ -62,6 +63,37 @@ internal static class TextureReplacementSource
             TextureMip mip = mips[i];
             using Image<Rgba32> mipImage = CreateMipImage(source, mip);
             result[i] = Bc1Encoder.Encode(mipImage);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// 未压缩 8 位颜色（PF_B8G8R8A8 等）：直接把像素按目标字节序打包，不调用任何外部编码器。
+    /// 编码实现与进程内路径共用 <see cref="TexturePixelEncoder"/>。
+    /// </summary>
+    public static async Task<byte[][]> LoadAndEncodeUncompressedImageAsync(
+        string imagePath,
+        TextureFormatInfo format,
+        int width,
+        int height,
+        IReadOnlyList<TextureMip> mips)
+    {
+        using Image<Rgba32> source = await LoadSourceImageAsync(imagePath, width, height);
+
+        byte[][] result = new byte[mips.Count][];
+        for (int i = 0; i < mips.Count; i++)
+        {
+            TextureMip mip = mips[i];
+            using Image<Rgba32> mipImage = CreateMipImage(source, mip);
+            result[i] = TexturePixelEncoder.EncodeUncompressed(mipImage, format);
+
+            int expected = format.GetMipByteSize(mip.Width, mip.Height);
+            if (result[i].Length != expected)
+            {
+                throw new InvalidOperationException(
+                    $"Encoder produced {result[i].Length} bytes for mip {i}, but {expected} bytes are required.");
+            }
         }
 
         return result;

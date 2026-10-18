@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Pak 转换需要 PakTool.Core（解包 / 打包 / usmap），
+         这一层从 UAssetTexture.Core 里拆出来：Core 只依赖 UAssetAPI + ImageSharp，
+         这样进程外的 UAssetCLI（AOT）也能直接引用 Core，不用把 CUE4Parse 打进去，
+         纹理解析逻辑从此只有一份实现。 -->
+    <ProjectReference Include="..\UAssetTexture.Core\UAssetTexture.Core.csproj" />
+    <ProjectReference Include="..\PakTool.Core\PakTool.Core.csproj" />
+  </ItemGroup>
+</Project>

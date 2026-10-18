@@ -20,6 +20,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\UAssetAPI-master\UAssetAPI\UAssetAPI.csproj" />
+    <!-- 纹理解析/回写只有一份实现，就在 UAssetTexture.Core 里：
+         它只依赖 UAssetAPI + ImageSharp，AOT 友好。pak 相关逻辑在 UAssetTexture.PakConversion，
+         这里不引用，所以不会把 CUE4Parse 打进 CLI。 -->
+    <ProjectReference Include="..\UAssetTexture.Core\UAssetTexture.Core.csproj" />
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
   </ItemGroup>
 

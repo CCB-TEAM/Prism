@@ -11,5 +11,7 @@
   <Project Path="PakTool.Core/PakTool.Core.csproj" />
   <Project Path="Prism.PC/Prism.PC.csproj" />
   <Project Path="UAssetTexture.Core/UAssetTexture.Core.csproj" />
+  <Project Path="UAssetTexture.PakConversion/UAssetTexture.PakConversion.csproj" />
+  <Project Path="UAssetCLI/UAssetCLI.csproj" />
   <Project Path="UAssetAudio.Core/UAssetAudio.Core.csproj" />
 </Solution>

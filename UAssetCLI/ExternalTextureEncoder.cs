@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.Intrinsics.X86;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
+using UAssetTexture.Core;
 
 internal sealed record ExternalEncoderOptions(string? AstcencPath, string? TexconvPath, string AstcQuality);
 

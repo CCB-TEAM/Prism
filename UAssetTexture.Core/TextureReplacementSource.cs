@@ -51,7 +51,7 @@ internal static class TextureReplacementSource
             using var mipImage = CreateMipImage(source, mip);
             options.Log?.Invoke($"Encoding mip {i}: {mip.Width}x{mip.Height}, format={format.Name}");
             result[i] = format.IsUncompressed8BitColor
-                ? EncodeUncompressedColor(mipImage, format)
+                ? TexturePixelEncoder.EncodeUncompressed(mipImage, format)
                 : format.IsDxt1
                     ? Bc1Encoder.Encode(mipImage)
                     : NativeTextureEncoder.Encode(mipImage, format, options);
@@ -123,39 +123,5 @@ internal static class TextureReplacementSource
                 Mode = ResizeMode.Stretch,
                 Sampler = KnownResamplers.Lanczos3,
             }));
-    }
-
-    private static byte[] EncodeUncompressedColor(Image<Rgba32> image, TextureFormatInfo format)
-    {
-        var rgba = new byte[checked(image.Width * image.Height * 4)];
-        image.CopyPixelDataTo(rgba);
-
-        if (format.IsRgba8)
-            return rgba;
-
-        var output = new byte[rgba.Length];
-        for (var i = 0; i < rgba.Length; i += 4)
-        {
-            if (format.IsBgra8)
-            {
-                output[i] = rgba[i + 2];
-                output[i + 1] = rgba[i + 1];
-                output[i + 2] = rgba[i];
-                output[i + 3] = rgba[i + 3];
-            }
-            else if (format.IsArgb8)
-            {
-                output[i] = rgba[i + 3];
-                output[i + 1] = rgba[i];
-                output[i + 2] = rgba[i + 1];
-                output[i + 3] = rgba[i + 2];
-            }
-            else
-            {
-                throw new InvalidOperationException($"{format.Name} is not a supported uncompressed color format.");
-            }
-        }
-
-        return output;
     }
 }

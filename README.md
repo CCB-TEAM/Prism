@@ -22,6 +22,8 @@ Browse pak contents, preview textures / audio / 3D meshes / localization, export
 **Texture replacement**
 - Pick a texture asset, supply an image, and build a patch pak — no manual repacking.
 - Desktop encodes via UAssetCLI + astcenc / texconv; Android encodes in-process via `libprism_codecs`.
+- Uncompressed textures (`PF_B8G8R8A8` / `PF_R8G8B8A8` / `PF_A8R8G8B8`) and `PF_DXT1` need no
+  external encoder — the pixels are packed / BC1-encoded directly.
 
 **Audio & video replacement**
 - Pick a streamed `SoundWave`, supply a clip (WAV / MP3 / OGG, plus FLAC / M4A when ffmpeg is around),
@@ -68,17 +70,18 @@ and `..\third_party` as siblings, so a flat tree is what the project files expec
 
 ```
 Prism/                     Android WebView app (earlier, upstream-derived)
-Prism.PC/                  Local web UI build
-Prism.Desktop/             Shared Avalonia UI + logic (library, net10.0)
-Prism.Desktop.Desktop/     Windows shell (single-file publish)
-Prism.Desktop.Android/     Android shell (APK, arm64-v8a)
-PakTool.Core/              Pak session / preview / export / merge / mappings / locres
-UAssetTexture.Core/        Texture replacement engine + pak conversion
-UAssetCLI/                 Texture replacement CLI (its own copy of the texture code)
-test/Prism.FeatureTests/   Integration tests (console app)
-UAssetAPI-master/          Vendored UAssetAPI with local patches
-tools/                     astcenc + texconv (copied next to the app on build)
-third_party/               Android native libraries (not committed, see below)
+Prism.PC/                     Local web UI build
+Prism.Desktop/                Shared Avalonia UI + logic (library, net10.0)
+Prism.Desktop.Desktop/        Windows shell (single-file publish)
+Prism.Desktop.Android/        Android shell (APK, arm64-v8a)
+PakTool.Core/                 Pak session / preview / export / merge / mappings / locres
+UAssetTexture.Core/           Texture parsing / mip encoding / replacement (UAssetAPI + ImageSharp)
+UAssetTexture.PakConversion/  Pak conversion on top of it (needs PakTool.Core / CUE4Parse)
+UAssetCLI/                    Texture replacement CLI (references UAssetTexture.Core)
+test/Prism.FeatureTests/      Integration tests (console app)
+UAssetAPI-master/             Vendored UAssetAPI with local patches
+tools/                        astcenc + texconv (copied next to the app on build)
+third_party/                  Android native libraries (not committed, see below)
 ```
 
 Not committed — supply locally if you need them:
@@ -90,9 +93,11 @@ native/                    Source of those .so files (PrismCodecs C++, RepakBind
 reference/                 Local clones kept for reference (astcenc, FModel, …)
 ```
 
-`UAssetCLI` deliberately does **not** reference `UAssetTexture.Core`: it carries its own copies of
-the parser/replacer so the AOT binary stays free of the CUE4Parse dependency chain. When you change
-texture parsing, change both.
+`UAssetCLI` references `UAssetTexture.Core` directly, so there is exactly **one** texture parser,
+format table and mip writer for both the in-process and the CLI path. That only works because
+`UAssetTexture.Core` is kept free of CUE4Parse — everything that needs pak sessions lives in
+`UAssetTexture.PakConversion`. The AOT binary stays lean (no CUE4Parse in the bundle) and a parser fix can no
+longer reach one path but not the other.
 
 ## Download
 
@@ -275,13 +280,12 @@ A full repack needs temp space equal to the main pak.
 ## Verifying
 
 ```sh
-# Integration tests (239 assertions): mapping format detection, search-box path resolution,
+# Integration tests (261 assertions): mapping format detection, search-box path resolution,
 # pak conversion (both paths + all output modes), merge priority, locres <-> JSON round-trip,
 # non-ASCII pak path handling, headless UI loading and navigation, audio replacement
 # (BINKA round-trip through a real pak), media replacement, the replace-page flow driven
-# through the real view-model,
-# and parity between the two copies of the texture-layout parser
-# (UAssetTexture.Core vs UAssetCLI — the latter needs its Release build; skipped without it)
+# through the real view-model, uncompressed texture formats (PF_B8G8R8A8 …), and a real
+# UAssetCLI replace run (needs its Release build; skipped without it)
 dotnet run --project test/Prism.FeatureTests
 
 # UI screenshots: every page × light/dark × compact/wide, rendered by Skia to PNG

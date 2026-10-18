@@ -158,13 +158,23 @@ public sealed class UAssetCliRunner
             arguments.AddRange(["--texconv", _texconvPath]);
         }
 
-        if (_astcencPath is null && _texconvPath is null)
+        if (_astcencPath is null && _texconvPath is null && !IsInternallyEncodedFormat(format))
         {
             return CliResult.Fail("缺少 astcenc 与 texconv 编码器，无法重新编码纹理。");
         }
 
         return await RunAsync(arguments, ct);
     }
+
+    /// <summary>
+    /// 这些格式由 CLI 自己编码（DXT1 走内置 BC1 编码器，未压缩格式直接打包像素），
+    /// 不需要 astcenc / texconv。没有外部编码器时不能把它们一起挡掉。
+    /// </summary>
+    private static bool IsInternallyEncodedFormat(string format) =>
+        string.Equals(format, "PF_DXT1", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(format, "PF_B8G8R8A8", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(format, "PF_R8G8B8A8", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(format, "PF_A8R8G8B8", StringComparison.OrdinalIgnoreCase);
 
     private async Task<CliResult> RunAsync(IReadOnlyList<string> arguments, CancellationToken ct)
     {
@@ -196,6 +206,33 @@ public sealed class UAssetCliRunner
     {
         public string CombinedOutput => string.Join(Environment.NewLine,
             new[] { StandardOutput, StandardError }.Where(t => !string.IsNullOrWhiteSpace(t)));
+
+        /// <summary>
+        /// 给界面看的失败原因：CLI 未捕获异常时会打印整个 ToString()（首行是异常类型+消息，
+        /// 后面全是堆栈帧），整段塞进替换项会让界面变成一面堆栈墙。这里只留首行，
+        /// 完整输出由调用方写进日志。
+        /// </summary>
+        public string DescribeFailure()
+        {
+            foreach (string raw in CombinedOutput.Split('\n'))
+            {
+                string line = raw.Trim();
+                if (line.Length == 0)
+                {
+                    continue;
+                }
+
+                if (line.StartsWith("at ", StringComparison.Ordinal)
+                    || line.StartsWith("--- End of stack trace", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                return line;
+            }
+
+            return "替换失败（CLI 没有输出原因，完整日志见「设置 → 日志」）。";
+        }
 
         public static CliResult Fail(string message) => new(1, string.Empty, message);
     }

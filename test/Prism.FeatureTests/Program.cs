@@ -5,6 +5,10 @@ using Avalonia;
 using Avalonia.Controls;
 using UAssetAPI.UnrealTypes;
 
+// Avalonia.Controls 里也有 Image、Avalonia 里也有 Size，这里只用到 ImageSharp 的泛型 Image<Rgba32>，
+// 起个别名避免歧义（SaveAsPng 这类扩展方法则显式走静态调用）。
+using SharpImage = SixLabors.ImageSharp.Image<SixLabors.ImageSharp.PixelFormats.Rgba32>;
+
 // 截图模式必须在任何 Avalonia 初始化之前分流：常规测试用 UseHeadlessDrawing = true
 // （不绘制），截图要挂 Skia 真正光栅化，两者不能在同一进程共存。
 if (args.Length > 0 && args[0] == "--capture")
@@ -1369,47 +1373,76 @@ try
     Check(!plainResult.OodleRequestedButUnavailable && plainResult.Note is null,
         "不请求 Oodle 时不产生降级提示");
 
-    Section("纹理解析双副本一致性（UAssetTexture.Core ↔ UAssetCLI）");
+    Section("纹理 · 未压缩格式（PF_B8G8R8A8 这类）");
 
-    // 贴图替换/转换的纹理布局解析器有两份：
-    //   UAssetTexture.Core —— 桌面端进程内、Android 进程内替换、双端转换都走它；
-    //   UAssetCLI          —— AOT 单文件，刻意不引用 CUE4Parse，故自带一份副本。
-    // 两份之间没有任何编译期约束，README 只写了"改一处要改两处"这句口头约定。
+    // 真实事故（用户截图）：KARDS 的 T_standard_ammo 是 PF_B8G8R8A8、2090x2311 的单级内联贴图。
+    // 桌面端走 UAssetCLI 子进程替换，而 CLI 自带的那份格式表里没有未压缩格式，
+    // 于是在 DetectFormat 里抛 "Could not detect a supported pixel format from the asset."。
+    // 修法是删掉 CLI 的副本、直接引用 UAssetTexture.Core，并补上未压缩格式的编码。
+    byte[] bgraExport = System.Text.Encoding.ASCII.GetBytes("...PF_B8G8R8A8\u0000....");
+    TextureFormatInfo bgraFormat = TextureFormats.DetectFormat(bgraExport, []);
+    Check(bgraFormat.Name == "PF_B8G8R8A8" && bgraFormat.IsUncompressed8BitColor,
+        $"从资产字节里认出未压缩格式（{bgraFormat.Name}）");
+
+    // 2090x2311 是那个资产的真实尺寸；未压缩格式按 1x1 像素块算，不是 4x4。
+    Check(bgraFormat.GetMipByteSize(2090, 2311) == 19_319_960,
+        "PF_B8G8R8A8 的 mip 字节数按 1x1 像素块算（2090x2311 → 19,319,960）");
+
+    // 通道顺序必须真的换位，否则替换出来的贴图会红蓝互换。
+    using (SharpImage probeImage = new(2, 1))
+    {
+        probeImage[0, 0] = new SixLabors.ImageSharp.PixelFormats.Rgba32(10, 20, 30, 40);
+        probeImage[1, 0] = new SixLabors.ImageSharp.PixelFormats.Rgba32(50, 60, 70, 80);
+
+        byte[] bgraBytes = TexturePixelEncoder.EncodeUncompressed(probeImage, bgraFormat);
+        Check(bgraBytes.SequenceEqual(new byte[] { 30, 20, 10, 40, 70, 60, 50, 80 }),
+            "PF_B8G8R8A8 编码把 RGBA 换成 BGRA 字节序");
+
+        byte[] rgbaBytes = TexturePixelEncoder.EncodeUncompressed(
+            probeImage, new TextureFormatInfo("PF_R8G8B8A8", 1, 1, 4));
+        Check(rgbaBytes.SequenceEqual(new byte[] { 10, 20, 30, 40, 50, 60, 70, 80 }),
+            "PF_R8G8B8A8 编码保持 RGBA 原序");
+    }
+
+    Section("纹理解析单一实现（UAssetCLI 直接引用 UAssetTexture.Core）");
+
+    // 历史包袱：CLI 是 AOT 单文件，原先为了不拖进 CUE4Parse，自带一份 TextureAssetParser /
+    // TextureFormats / TextureModels 副本。两份实现之间没有任何编译期约束：2600b0d
+    // （尺寸不能写死在固定偏移）就是同一个 bug 在两边各修一遍；这次 PF_B8G8R8A8
+    // 只在 Core 里补过、CLI 里漏掉，直接把"这张贴图能替换"打断了。
     //
-    // 代价已经付过一次：2600b0d（尺寸不能写死在固定偏移）就是同一个 bug 在两边各修
-    // 一遍才收工。所以这里用同一份真实资产分别走两条链路，把 format/尺寸/mip 数/
-    // 每一级 mip 的 (尺寸, 字节数, 存储位置, 偏移) 全部对齐比对 —— 只改一边就会红。
-    //
-    // 需要 UAssetCLI 产物（Release AOT 发布优先）。没有就跳过，与真实资产缺失的处理一致。
+    // 现在 UAssetTexture.Core 只依赖 UAssetAPI + ImageSharp（pak 相关逻辑拆到
+    // UAssetTexture.Pak），CLI 直接引用它 —— 下面既比对"CLI 与 Core 看到的布局一致"，
+    // 也真的让 CLI 替换一遍，确认它不只是会打印信息。
     string? cliPath = FindUAssetCli(realAssetDir);
     Console.WriteLine($"        UAssetCLI 产物: {cliPath ?? "未找到"}");
     if (!hasRealTexture || cliPath is null)
     {
-        Console.WriteLine("        !! 缺真实资产或 UAssetCLI 产物，跳过双副本一致性断言");
+        Console.WriteLine("        !! 缺真实资产或 UAssetCLI 产物，跳过 CLI 链路断言");
     }
     else
     {
         TextureAssetInfo coreTexture = TextureAssetParser.Load(realUasset, EngineVersion.VER_UE5_6, null);
-        string cliOutput = RunCliInspectTexture(cliPath, realUasset, "VER_UE5_6");
+        string cliInspect = RunCliInspectTexture(cliPath, realUasset, "VER_UE5_6");
 
-        string cliFormat = FieldOf(cliOutput, "Format");
+        string cliFormat = FieldOf(cliInspect, "Format");
         Check(string.Equals(coreTexture.Format.Name, cliFormat, StringComparison.OrdinalIgnoreCase),
             $"像素格式一致（Core={coreTexture.Format.Name} / CLI={cliFormat}）");
 
-        string cliSize = FieldOf(cliOutput, "Size");
+        string cliSize = FieldOf(cliInspect, "Size");
         Check(cliSize == $"{coreTexture.Width}x{coreTexture.Height}",
             $"纹理尺寸一致（Core={coreTexture.Width}x{coreTexture.Height} / CLI={cliSize}）");
 
-        int cliExternalMips = int.Parse(FieldOf(cliOutput, "External mips"));
+        int cliExternalMips = int.Parse(FieldOf(cliInspect, "External mips"));
         Check(coreTexture.ExternalMipCount == cliExternalMips,
             $"外部 mip（.ubulk）数量一致（Core={coreTexture.ExternalMipCount} / CLI={cliExternalMips}）");
 
-        int cliInlineMips = int.Parse(FieldOf(cliOutput, "Inline mips"));
+        int cliInlineMips = int.Parse(FieldOf(cliInspect, "Inline mips"));
         Check(coreTexture.InlineMips.Count == cliInlineMips,
             $"内联 mip（.uexp）数量一致（Core={coreTexture.InlineMips.Count} / CLI={cliInlineMips}）");
 
         List<(int Index, int Width, int Height, int ByteLength, string Storage, int Offset)> cliMips =
-            ParseMipLines(cliOutput);
+            ParseMipLines(cliInspect);
         Check(coreTexture.MipPlacements.Count == cliMips.Count,
             $"mip 总数一致（Core={coreTexture.MipPlacements.Count} / CLI={cliMips.Count}）");
 
@@ -1426,6 +1459,67 @@ try
             Check(same,
                 $"mip {placement.Index} 布局一致（{placement.Width}x{placement.Height}, " +
                 $"{placement.ByteLength} 字节, {placement.Storage}, 偏移 {placement.Offset}）");
+        }
+
+        // CLI 真的替换一遍：t_cromwell 是 PF_DXT1，走 CLI 内置的 BC1 编码器，
+        // 不需要 astcenc / texconv —— 正好覆盖"没有外部编码器也能替换"的路径。
+        string cliWork = Path.Combine(root, "cli-replace");
+        Directory.CreateDirectory(cliWork);
+        string cliAsset = Path.Combine(cliWork, "t_cromwell.uasset");
+        File.Copy(realUasset, cliAsset, true);
+        File.Copy(realUexp, Path.ChangeExtension(cliAsset, ".uexp"), true);
+        File.Copy(realUbulk, Path.ChangeExtension(cliAsset, ".ubulk"), true);
+
+        string cliSourceImage = Path.Combine(cliWork, "source.png");
+        using (SharpImage sourceImage = new(64, 64))
+        {
+            sourceImage.ProcessPixelRows(accessor =>
+            {
+                for (int y = 0; y < accessor.Height; y++)
+                {
+                    Span<SixLabors.ImageSharp.PixelFormats.Rgba32> row = accessor.GetRowSpan(y);
+                    for (int x = 0; x < row.Length; x++)
+                    {
+                        row[x] = new SixLabors.ImageSharp.PixelFormats.Rgba32((byte)(x * 4), (byte)(y * 4), 128, 255);
+                    }
+                }
+            });
+            SixLabors.ImageSharp.ImageExtensions.SaveAsPng(sourceImage, cliSourceImage);        }
+
+        string cliPatchedAsset = Path.Combine(cliWork, "t_cromwell.patched.uasset");
+        (int ExitCode, string StandardOutput, string StandardError) replaceRun = RunUAssetCli(
+            cliPath,
+            [
+                "replace-texture",
+                "--asset", cliAsset,
+                "--source", cliSourceImage,
+                "--output", cliPatchedAsset,
+                "--engine", "VER_UE5_6",
+                "--expected-format", coreTexture.Format.Name,
+            ],
+            300_000);
+
+        Check(replaceRun.ExitCode == 0,
+            $"UAssetCLI 替换退出码 0（实际 {replaceRun.ExitCode}{(replaceRun.ExitCode == 0 ? string.Empty : "：" + replaceRun.StandardError.Trim())}）");
+
+        string cliPatchedUexp = Path.ChangeExtension(cliPatchedAsset, ".uexp");
+        string cliPatchedUbulk = Path.ChangeExtension(cliPatchedAsset, ".ubulk");
+        Check(File.Exists(cliPatchedAsset) && File.Exists(cliPatchedUexp) && File.Exists(cliPatchedUbulk),
+            "UAssetCLI 替换写出 uasset/uexp/ubulk 三件套");
+
+        if (File.Exists(cliPatchedUexp))
+        {
+            Check(new FileInfo(cliPatchedUexp).Length == new FileInfo(realUexp).Length,
+                "UAssetCLI 替换后 uexp 长度不变（内联 mip 没有挪位）");
+
+            TextureAssetInfo cliPatched = TextureAssetParser.Load(cliPatchedAsset, EngineVersion.VER_UE5_6, null);
+            Check(cliPatched.MipPlacements.Count == coreTexture.MipPlacements.Count,
+                "UAssetCLI 替换结果仍能被 Core 解析出同样的 mip 数");
+
+            // 编译后至少有一级 mip 的字节变了，否则说明编码结果压根没写进去。
+            byte[] patchedMip0 = File.ReadAllBytes(cliPatchedUbulk).AsSpan(0, coreTexture.Mips[0].ByteLength).ToArray();
+            byte[] originalMip0 = File.ReadAllBytes(realUbulk).AsSpan(0, coreTexture.Mips[0].ByteLength).ToArray();
+            Check(!patchedMip0.SequenceEqual(originalMip0), "UAssetCLI 真的重编码了 mip0（载荷与原始不同）");
         }
     }
 
@@ -1535,8 +1629,11 @@ static string? FindUAssetCli(string repoRoot)
     return candidates.FirstOrDefault(File.Exists);
 }
 
-/// <summary>跑 <c>UAssetCLI inspect-texture</c>，返回 stdout。非零退出码抛异常（测试应显式失败）。</summary>
-static string RunCliInspectTexture(string cliPath, string assetPath, string engine)
+/// <summary>跑一次 UAssetCLI，返回退出码与两路输出（超时会杀掉整棵进程树）。</summary>
+static (int ExitCode, string StandardOutput, string StandardError) RunUAssetCli(
+    string cliPath,
+    IReadOnlyList<string> arguments,
+    int timeoutMs)
 {
     System.Diagnostics.ProcessStartInfo startInfo = new()
     {
@@ -1546,26 +1643,37 @@ static string RunCliInspectTexture(string cliPath, string assetPath, string engi
         UseShellExecute = false,
         CreateNoWindow = true,
     };
-    startInfo.ArgumentList.Add("inspect-texture");
-    startInfo.ArgumentList.Add("--asset");
-    startInfo.ArgumentList.Add(assetPath);
-    startInfo.ArgumentList.Add("--engine");
-    startInfo.ArgumentList.Add(engine);
+
+    foreach (string argument in arguments)
+    {
+        startInfo.ArgumentList.Add(argument);
+    }
 
     using System.Diagnostics.Process process = System.Diagnostics.Process.Start(startInfo)
-        ?? throw new InvalidOperationException("无法启动 UAssetCLI"); 
+        ?? throw new InvalidOperationException("无法启动 UAssetCLI");
     string stdout = process.StandardOutput.ReadToEnd();
     string stderr = process.StandardError.ReadToEnd();
 
-    if (!process.WaitForExit(120_000))
+    if (!process.WaitForExit(timeoutMs))
     {
         process.Kill(entireProcessTree: true);
-        throw new TimeoutException("UAssetCLI inspect-texture 超时（120s）");
+        throw new TimeoutException($"UAssetCLI {arguments.FirstOrDefault()} 超时（{timeoutMs} ms）");
     }
 
-    if (process.ExitCode != 0)
+    return (process.ExitCode, stdout, stderr);
+}
+
+/// <summary>跑 <c>UAssetCLI inspect-texture</c>，返回 stdout。非零退出码抛异常（测试应显式失败）。</summary>
+static string RunCliInspectTexture(string cliPath, string assetPath, string engine)
+{
+    (int exitCode, string stdout, string stderr) = RunUAssetCli(
+        cliPath,
+        ["inspect-texture", "--asset", assetPath, "--engine", engine],
+        120_000);
+
+    if (exitCode != 0)
     {
-        throw new InvalidOperationException($"UAssetCLI inspect-texture 退出码 {process.ExitCode}：{stderr}");
+        throw new InvalidOperationException($"UAssetCLI inspect-texture 退出码 {exitCode}：{stderr}");
     }
 
     return stdout;
