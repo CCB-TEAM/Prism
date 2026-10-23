@@ -5233,7 +5233,20 @@ public partial class MainViewModel : ViewModelBase
     private void InitializeSettings()
     {
         VersionText = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "未知";
-        Services.UAssetCliRunner? runner = Services.UAssetCliRunner.TryCreate();
+
+        // 依赖探测只回答"哪些工具能用"，绝不能让它把启动搞挂：1.3.3 / 1.3.4 的安卓版
+        // 就是探测时逐层向上枚举到了 /data/user/0（别人的目录）抛 UnauthorizedAccessException，
+        // 一路冒到构造函数外面，表现就是"点图标闪一下就回桌面"。
+        Services.UAssetCliRunner? runner = null;
+        try
+        {
+            runner = Services.UAssetCliRunner.TryCreate();
+        }
+        catch (Exception ex)
+        {
+            Services.AppLog.Exception(ex, "依赖探测");
+        }
+
         HasCli = runner is not null;
         HasAstcenc = runner?.HasAstcenc == true;
         HasTexconv = runner?.HasTexconv == true;

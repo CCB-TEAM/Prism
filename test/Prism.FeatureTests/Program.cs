@@ -713,6 +713,19 @@ try
     // ══════════════════════════════════════════════════════════════
     Section("F9 · 音频替换（BINKA 流式 SoundWave）与媒体文件替换");
 
+    // 依赖探测绝不能抛异常：安卓上它会从 app 私有目录往上找仓库根，走到 /data/user/0
+    // 时枚举被拒（UnauthorizedAccessException），而这在 MainViewModel 构造里跑 ——
+    // 1.3.3 / 1.3.4 的安卓版"点开就闪退"就是它。这里守住"不抛"这条底线。
+    try
+    {
+        Prism.Desktop.Services.UAssetCliRunner.TryCreate();
+        Check(true, "依赖探测不会抛异常（安卓启动闪退的根因）");
+    }
+    catch (Exception ex)
+    {
+        Check(false, $"依赖探测不应抛异常：{ex.GetType().Name}: {ex.Message}");
+    }
+
     // WAV 读写：binka_encode 只吃 16 位整型 PCM，24 位/浮点素材必须先折到 16 位。
     var sinePcm = new byte[1600];
     for (var i = 0; i < sinePcm.Length / 2; i++)

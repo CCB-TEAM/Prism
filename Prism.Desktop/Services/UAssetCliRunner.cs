@@ -252,17 +252,41 @@ public sealed class UAssetCliRunner
     /// </summary>
     private static IEnumerable<string> DevLayoutRoots(string baseDir)
     {
+        // 手机上没有 UAssetCLI（纹理由进程内的 libprism_codecs 做），往上找毫无意义：
+        // Android 的 baseDir 是 /data/user/0/<pkg>/files，越过包目录就是别人的地盘，
+        // Directory.GetFiles 会抛 UnauthorizedAccessException —— 而这里在 MainViewModel
+        // 构造里跑，一抛就是"点开就闪退"（1.3.3 / 1.3.4 的安卓版就是这么挂的）。
+        if (OperatingSystem.IsAndroid())
+        {
+            yield break;
+        }
+
         DirectoryInfo? dir = new(baseDir);
         var depth = 0;
         while (dir is not null && depth++ < 8)
         {
-            if (Directory.Exists(Path.Combine(dir.FullName, "UAssetCLI")) ||
-                Directory.GetFiles(dir.FullName, "*.slnx").Length > 0)
+            if (LooksLikeRepoRoot(dir.FullName))
             {
                 yield return dir.FullName;
             }
 
             dir = dir.Parent;
+        }
+    }
+
+    /// <summary>目录里有没有 UAssetCLI 子目录或 .slnx。看不见/读不了都按"不是"处理。</summary>
+    private static bool LooksLikeRepoRoot(string directory)
+    {
+        try
+        {
+            return Directory.Exists(Path.Combine(directory, "UAssetCLI")) ||
+                   Directory.GetFiles(directory, "*.slnx").Length > 0;
+        }
+        catch (Exception)
+        {
+            // 受保护目录（Android 的 /data/user/0、Windows 的 System Volume Information、
+            // 断开的网络盘……）：枚举失败不算错误，继续往上走。
+            return false;
         }
     }
 }
