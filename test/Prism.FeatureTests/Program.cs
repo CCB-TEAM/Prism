@@ -1554,6 +1554,68 @@ try
     }
 
     // ══════════════════════════════════════════════════════════════
+    Section("F13 · 导出当前文件夹（视图模型 → 真实 pak）");
+
+    string folderExportOut = Path.Combine(root, "folder-export-root");
+    Directory.CreateDirectory(folderExportOut);
+    var folderVm = new Prism.Desktop.ViewModels.MainViewModel
+    {
+        PakPath = mainPak,
+        ExportDirectory = folderExportOut,
+    };
+
+    RunVmCommand(folderVm, folderVm.OpenPakCommand);
+    Check(!folderVm.ShowPakEmptyState, "视图模型打开了 Pak（导出命令的前提）");
+    Check(folderVm.ExportFolderRawCommand.CanExecute(null), "打开 Pak 后「导出当前文件夹」可执行");
+
+    // 根目录（CurrentFolder 为空）：应当递归导出全部文件，并保留包内相对目录
+    RunVmCommand(folderVm, folderVm.ExportFolderRawCommand);
+    string[] rootExport = Directory.GetFiles(folderExportOut, "*", SearchOption.AllDirectories);
+    Check(rootExport.Length >= 4, $"根目录递归导出写出 {rootExport.Length} 个文件");
+    Check(rootExport.Any(p => p.Replace('\\', '/').EndsWith("Kards/Content/Config/Game.ini", StringComparison.OrdinalIgnoreCase)),
+        "导出保留了 Pak 内的相对目录结构");
+    string exportedIni = rootExport.FirstOrDefault(p =>
+        p.Replace('\\', '/').EndsWith("Kards/Content/Config/Game.ini", StringComparison.OrdinalIgnoreCase)) ?? string.Empty;
+    Check(exportedIni.Length > 0 && File.ReadAllText(exportedIni) == "MAIN-CONFIG",
+        "导出的文件内容与 Pak 内一致");
+    Check(folderVm.StatusText.Contains("文件夹导出完成", StringComparison.Ordinal),
+        $"状态栏给出结果摘要（{folderVm.StatusText}）");
+
+    // 子目录：只导出该目录下的文件，且不再多套一层目录
+    string folderExportSub = Path.Combine(root, "folder-export-sub");
+    Directory.CreateDirectory(folderExportSub);
+    folderVm.ExportDirectory = folderExportSub;
+    folderVm.CurrentFolder = "Kards/Content/Config";
+    RunVmCommand(folderVm, folderVm.ExportFolderRawCommand);
+    string[] subExport = Directory.GetFiles(folderExportSub, "*", SearchOption.AllDirectories);
+    Check(subExport.Length == 2, $"子目录导出只写出该目录的 2 个文件（实际 {subExport.Length}）");
+    Check(subExport.All(p => Path.GetFileName(p) is "Game.ini" or "MainOnly.txt"),
+        "子目录导出不会把别的目录一起带上");
+    Check(subExport.All(p => Path.GetDirectoryName(p) == folderExportSub),
+        "子目录导出的文件直接落在目标目录里（不多套一层 Kards/Content/Config）");
+
+    // 没设导出目录时必须是「有反馈的失败」，而不是静默什么都不做
+    string? promptedDir = null;
+    var unsetVm = new Prism.Desktop.ViewModels.MainViewModel
+    {
+        PakPath = mainPak,
+    };
+    unsetVm.ExportDirectory = string.Empty;
+    unsetVm.ExportFolderPromptOverride = () =>
+    {
+        promptedDir = Path.Combine(root, "folder-export-prompted");
+        Directory.CreateDirectory(promptedDir);
+        return Task.FromResult<string?>(promptedDir);
+    };
+    RunVmCommand(unsetVm, unsetVm.OpenPakCommand);
+    RunVmCommand(unsetVm, unsetVm.ExportFolderRawCommand);
+    Check(promptedDir is not null, "未设置导出目录时会即时询问一个目录（而不是只写一行状态）");
+    Check(Directory.Exists(promptedDir ?? string.Empty) &&
+          Directory.GetFiles(promptedDir!, "*", SearchOption.AllDirectories).Length > 0,
+        "询问到的目录里确实写出了文件");
+    Check(unsetVm.ExportDirectory == promptedDir, "选定后记进导出目录设置（下次不用再问）");
+
+    // ══════════════════════════════════════════════════════════════
     Section("F12 · 检查更新（发行版解析 / 版本比较 / 自更新脚本）");
 
     // ── 发行版 JSON 解析：字段缺失或 API 改版时不能把界面搞崩 ──

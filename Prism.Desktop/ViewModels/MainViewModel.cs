@@ -2994,16 +2994,19 @@ public partial class MainViewModel : ViewModelBase
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(ExportDirectory))
+        string? targetDirectory = OperatingSystem.IsAndroid()
+            ? (string.IsNullOrWhiteSpace(ExportDirectory) ? null : ExportDirectory)
+            : await ResolveExportDirectoryAsync();
+        if (targetDirectory is null)
         {
-            StatusText = "请先在设置中选择导出目录。";
+            StatusText = "已取消导出：还没有选择导出目录。";
             return;
         }
 
-        string outputPath = Path.Combine(ExportDirectory, suggested);
+        string outputPath = Path.Combine(targetDirectory, suggested);
         await File.WriteAllBytesAsync(outputPath, json);
         AddLog($"本地化 JSON 已导出：{outputPath}（{json.Length:N0} 字节）");
-        StatusText = $"本地化 JSON 已导出：{suggested}";
+        StatusText = $"本地化 JSON 已导出：{outputPath}";
     }
 
     private async Task<AudioPayloadDto> ReadAudioPayloadAsync(string path)
@@ -3113,9 +3116,10 @@ public partial class MainViewModel : ViewModelBase
                 return;
             }
 
-            if (string.IsNullOrWhiteSpace(ExportDirectory))
+            string? targetDirectory = await ResolveExportDirectoryAsync();
+            if (targetDirectory is null)
             {
-                StatusText = "请先选择导出目录。";
+                StatusText = "已取消导出：还没有选择导出目录。";
                 return;
             }
 
@@ -3123,7 +3127,7 @@ public partial class MainViewModel : ViewModelBase
             await _gate.WaitAsync();
             try
             {
-                result = await _session.ExportAsync(new ExportRequest([item.FullPath], ExportDirectory));
+                result = await _session.ExportAsync(new ExportRequest([item.FullPath], targetDirectory));
             }
             finally
             {
@@ -3131,7 +3135,7 @@ public partial class MainViewModel : ViewModelBase
             }
 
             StatusText = result.Failed == 0
-                ? $"已导出 {result.Succeeded:N0} 个文件到 {ExportDirectory}"
+                ? $"已导出 {result.Succeeded:N0} 个文件到 {targetDirectory}"
                 : $"导出：成功 {result.Succeeded:N0}，失败 {result.Failed:N0}。{string.Join("; ", result.Errors.Take(3))}";
         });
     }
@@ -3177,21 +3181,22 @@ public partial class MainViewModel : ViewModelBase
                 return;
             }
 
-            if (string.IsNullOrWhiteSpace(ExportDirectory))
+            string? targetDirectory = await ResolveExportDirectoryAsync();
+            if (targetDirectory is null)
             {
-                StatusText = "请先选择导出目录。";
+                StatusText = "已取消导出：还没有选择导出目录。";
                 return;
             }
 
             List<string> writtenPaths = [];
             foreach (PreviewExportFileDto file in export.Files)
             {
-                string outputPath = Path.Combine(ExportDirectory, SanitizeFileName(file.FileName));
+                string outputPath = Path.Combine(targetDirectory, SanitizeFileName(file.FileName));
                 await File.WriteAllBytesAsync(outputPath, file.Data);
                 writtenPaths.Add(outputPath);
             }
 
-            StatusText = $"已导出 {writtenPaths.Count:N0} 个预览文件。";
+            StatusText = $"已导出 {writtenPaths.Count:N0} 个预览文件到 {targetDirectory}。";
         });
     }
 
@@ -3301,6 +3306,61 @@ public partial class MainViewModel : ViewModelBase
 
     public bool CanExportFolder => IsPakOpen && !IsBusy;
 
+    // ============ 导出目录（用之前没设就当场问） ============
+
+    /// <summary>
+    /// 无头测试注入的"询问导出目录"实现；桌面端不注入，走系统文件夹选择器。
+    /// 返回 null 表示用户取消。
+    /// </summary>
+    public Func<Task<string?>>? ExportFolderPromptOverride { get; set; }
+
+    /// <summary>
+    /// 取桌面端的导出目录：已经设置过就直接用，没设置就当场问一次，并记进设置。
+    ///
+    /// 为什么要有这一步：以前没设导出目录时，「导出当前文件夹」只往状态栏写一行
+    /// "请先选择导出目录"，菜单随即关闭 —— 用户看到的就是"点了没反应"。
+    /// 既然单个文件导出都在用系统选择器，批量导出不该要求先去设置页配一遍。
+    /// 返回 null = 用户取消，调用方必须回一句明确的话，而不是静默返回。
+    /// </summary>
+    private async Task<string?> ResolveExportDirectoryAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(ExportDirectory))
+        {
+            return ExportDirectory;
+        }
+
+        if (ExportFolderPromptOverride is { } injected)
+        {
+            string? picked = await injected();
+            if (!string.IsNullOrWhiteSpace(picked))
+            {
+                ExportDirectory = picked;
+            }
+
+            return string.IsNullOrWhiteSpace(picked) ? null : picked;
+        }
+
+        if (TopLevel?.StorageProvider is null)
+        {
+            return null;
+        }
+
+        IReadOnlyList<IStorageFolder> folders = await TopLevel.StorageProvider.OpenFolderPickerAsync(
+            new FolderPickerOpenOptions
+            {
+                Title = "选择导出目录",
+                AllowMultiple = false,
+            });
+        if (folders.Count == 0 || folders[0].TryGetLocalPath() is not { } directory ||
+            string.IsNullOrWhiteSpace(directory))
+        {
+            return null;
+        }
+
+        ExportDirectory = directory;
+        return directory;
+    }
+
     [RelayCommand(CanExecute = nameof(CanExportFolder))]
     private Task ExportFolderRawAsync() => ExportFolderAsync("raw");
 
@@ -3321,16 +3381,27 @@ public partial class MainViewModel : ViewModelBase
 
         await RunBusyAsync(async () =>
         {
-            if (OperatingSystem.IsAndroid() && !await EnsureAndroidExportFolderAsync())
+            string targetDirectory;
+            if (OperatingSystem.IsAndroid())
             {
-                StatusText = "请先在设置中选择导出目录。";
-                return;
-            }
+                if (!await EnsureAndroidExportFolderAsync())
+                {
+                    StatusText = "请先在设置中选择导出目录。";
+                    return;
+                }
 
-            if (!OperatingSystem.IsAndroid() && string.IsNullOrWhiteSpace(ExportDirectory))
+                targetDirectory = ExportDirectory;
+            }
+            else
             {
-                StatusText = "请先选择导出目录。";
-                return;
+                string? resolved = await ResolveExportDirectoryAsync();
+                if (resolved is null)
+                {
+                    StatusText = "已取消导出：还没有选择导出目录。";
+                    return;
+                }
+
+                targetDirectory = resolved;
             }
 
             IReadOnlyList<ArchiveEntryDto> entries;
@@ -3409,7 +3480,7 @@ public partial class MainViewModel : ViewModelBase
                             }
                             else
                             {
-                                string outputPath = Path.Combine(ExportDirectory, SanitizeRelativePath(relativePath));
+                                string outputPath = Path.Combine(targetDirectory, SanitizeRelativePath(relativePath));
                                 Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
                                 await File.WriteAllBytesAsync(outputPath, data);
                             }
@@ -3473,7 +3544,7 @@ public partial class MainViewModel : ViewModelBase
                             }
                             else
                             {
-                                string outputDirectory = Path.Combine(ExportDirectory, SanitizeRelativePath(relativeDirectory));
+                                string outputDirectory = Path.Combine(targetDirectory, SanitizeRelativePath(relativeDirectory));
                                 Directory.CreateDirectory(outputDirectory);
                                 string outputPath = Path.Combine(outputDirectory, SanitizeFileName(file.FileName));
                                 await File.WriteAllBytesAsync(outputPath, file.Data);
@@ -3493,8 +3564,8 @@ public partial class MainViewModel : ViewModelBase
                 }
             }
 
-            StatusText = $"文件夹导出完成：{exportedAssets} 个资源 / {exportedFiles} 个文件，共 {FormatSize(totalBytes)}；跳过 {skipped}，失败 {failed}。";
-            AddLog($"文件夹导出完成（{kind}）：成功 {exportedAssets}，文件 {exportedFiles}，跳过 {skipped}，失败 {failed}");
+            StatusText = $"文件夹导出完成：{exportedAssets} 个资源 / {exportedFiles} 个文件，共 {FormatSize(totalBytes)}；跳过 {skipped}，失败 {failed}。输出到 {targetDirectory}";
+            AddLog($"文件夹导出完成（{kind}）：成功 {exportedAssets}，文件 {exportedFiles}，跳过 {skipped}，失败 {failed} → {targetDirectory}");
         });
     }
 
