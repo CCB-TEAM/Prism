@@ -2038,13 +2038,16 @@ public partial class MainViewModel : ViewModelBase
             return;
         }
 
-        // 不 await：启动流程不该等网络。延时 1.5 秒让首页先画出来。
-        _ = Task.Run(async () =>
+        // 整段都回到 UI 线程上跑：检查过程会改一堆被绑定的属性（版本号、说明块、
+        // 面板显隐、页面跳转）。以前这里是 Task.Run + ConfigureAwait(false)，
+        // 那些属性是从线程池线程上改的 —— 界面会不会刷新全靠运气。
+        _ = Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
         {
             try
             {
-                await Task.Delay(TimeSpan.FromSeconds(1.5)).ConfigureAwait(false);
-                await CheckForUpdatesAsync(manual: false).ConfigureAwait(false);
+                // 延时 1.5 秒让首屏先画出来，别和启动争抢
+                await Task.Delay(TimeSpan.FromSeconds(1.5));
+                await CheckForUpdatesAsync(manual: false);
             }
             catch
             {
@@ -2052,6 +2055,16 @@ public partial class MainViewModel : ViewModelBase
             }
         });
     }
+
+    /// <summary>
+    /// 自动查到更新时能否把用户直接带到欢迎页：前提是"刚启动、还没干活"。
+    /// 已经打开了 Pak、有替换任务、或正在忙的时候跳走会把用户从做的事上拽开。
+    /// </summary>
+    private bool CanLandOnWelcomeForUpdate =>
+        !IsBusy &&
+        !_session.IsOpen &&
+        PatchItems.Count == 0 &&
+        CurrentView is "Workspace" or "Home";
 
     [RelayCommand]
     private Task CheckUpdateAsync() => CheckForUpdatesAsync(manual: true);
@@ -2159,8 +2172,11 @@ public partial class MainViewModel : ViewModelBase
         HasUpdateResult = false;
     }
 
-    /// <summary>把查到的发行版落到界面状态上，并在 Android 上弹一次可跳过的对话框。</summary>
-    private void ApplyUpdate(UpdateInfo info, bool manual)
+    /// <summary>
+    /// 把查到的发行版落到界面状态上，并在 Android 上弹一次可跳过的对话框。
+    /// <paramref name="manual"/> 为 false 表示这是启动时的自动检查。
+    /// </summary>
+    internal void ApplyUpdate(UpdateInfo info, bool manual)
     {
         // 记住这份发行版信息 —— 下载、校验、"在 GitHub 上查看" 都要用它。
         // 曾经漏了这一行：界面（版本号 / 说明 / 安装包名）全靠下面这些字段拼出来，
@@ -2193,6 +2209,14 @@ public partial class MainViewModel : ViewModelBase
         }
 
         HasUpdate = true;
+
+        // 启动时自动查到新版本：直接把用户带到欢迎页 —— 那一页整页就是这一版的
+        // 更新说明。默认落点是「解包 & 模组」，不跳的话用户根本看不到这页。
+        // 手机端交给原生对话框，不切页面。
+        if (!manual && !OperatingSystem.IsAndroid() && CanLandOnWelcomeForUpdate)
+        {
+            CurrentView = "Home";
+        }
 
         if (OperatingSystem.IsAndroid())
         {

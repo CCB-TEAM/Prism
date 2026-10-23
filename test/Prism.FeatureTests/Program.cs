@@ -1746,6 +1746,41 @@ try
         "更新面板说明了从哪个版本升级");
     Check(previewVm.CanInstallUpdate, "有安装包时「下载并自动更新」可用");
     Check(previewVm.HasInstallTarget, "下载所需状态齐全（发行版信息 + 安装包都在，点了不会再报「没有可下载的安装包」）");
+    // ── 自动查到更新时，启动那一屏就该是欢迎页（默认落点是「解包 & 模组」） ──
+    var autoInfo = new Prism.Desktop.Services.UpdateInfo(
+        "v9.9.8", "9.9.8", "测试发行版", "## 更新\n- 一条\n", DateTimeOffset.Now,
+        "https://example.invalid", [new Prism.Desktop.Services.UpdateAsset("Prism-win-x64-9.9.8.zip", 1024, "https://example.invalid/a.zip", null)]);
+
+    var landingVm = new Prism.Desktop.ViewModels.MainViewModel();
+    landingVm.GoWorkspaceCommand.Execute(null);
+    Check(landingVm.IsWorkspaceVisible, "默认落点是「解包 & 模组」");
+    landingVm.ApplyUpdate(autoInfo, manual: false);
+    Check(landingVm.IsHomeVisible, "自动查到新版本时切到欢迎页（否则用户根本看不到更新说明）");
+    Check(landingVm.ShowUpdatePanel, "欢迎页此时显示的就是更新内容");
+
+    var manualVm = new Prism.Desktop.ViewModels.MainViewModel();
+    manualVm.GoWorkspaceCommand.Execute(null);
+    manualVm.ApplyUpdate(autoInfo, manual: true);
+    Check(manualVm.IsWorkspaceVisible, "手动检查时留在当前页（结果就显示在设置页里，不该把用户拽走）");
+
+    var busyVm = new Prism.Desktop.ViewModels.MainViewModel();
+    busyVm.GoWorkspaceCommand.Execute(null);
+    busyVm.IsBusy = true;
+    busyVm.ApplyUpdate(autoInfo, manual: false);
+    Check(busyVm.IsWorkspaceVisible, "正在忙的时候不打断（不跳页）");
+
+    var pakVm = new Prism.Desktop.ViewModels.MainViewModel { PakPath = mainPak };
+    pakVm.GoWorkspaceCommand.Execute(null);
+    // 真的打开（而不是只设了路径）：恢复的路径不算"在干活"，打开后的会话才算
+    RunVmCommand(pakVm, pakVm.OpenPakCommand);
+    pakVm.ApplyUpdate(autoInfo, manual: false);
+    Check(pakVm.IsWorkspaceVisible, $"已经打开了 Pak 时不跳走（当前：{(pakVm.IsHomeVisible ? "欢迎" : "工作区")}）");
+
+    var dismissedVm = new Prism.Desktop.ViewModels.MainViewModel { DismissedUpdateVersion = "9.9.8" };
+    dismissedVm.GoWorkspaceCommand.Execute(null);
+    dismissedVm.ApplyUpdate(autoInfo, manual: false);
+    Check(dismissedVm.IsWorkspaceVisible && !dismissedVm.ShowUpdatePanel, "点过「稍后」的版本不会再把人带到欢迎页");
+
     previewVm.DismissUpdateCommand.Execute(null);
     Check(!previewVm.ShowUpdatePanel, "点「稍后」后回到正常欢迎页");
     Check(previewVm.DismissedUpdateVersion == "9.9.9", "「稍后」记住的是这个版本号（更高版本还会再提示）");
