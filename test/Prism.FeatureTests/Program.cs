@@ -1745,6 +1745,7 @@ try
     Check(previewVm.UpdateIntroText.Contains(previewVm.VersionText, StringComparison.Ordinal),
         "更新面板说明了从哪个版本升级");
     Check(previewVm.CanInstallUpdate, "有安装包时「下载并自动更新」可用");
+    Check(previewVm.HasInstallTarget, "下载所需状态齐全（发行版信息 + 安装包都在，点了不会再报「没有可下载的安装包」）");
     previewVm.DismissUpdateCommand.Execute(null);
     Check(!previewVm.ShowUpdatePanel, "点「稍后」后回到正常欢迎页");
     Check(previewVm.DismissedUpdateVersion == "9.9.9", "「稍后」记住的是这个版本号（更高版本还会再提示）");

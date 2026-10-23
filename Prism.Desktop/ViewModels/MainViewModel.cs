@@ -2005,6 +2005,14 @@ public partial class MainViewModel : ViewModelBase
 
     public bool CanInstallUpdate => HasUpdate && !IsUpdateDownloading && _updateAsset is not null;
 
+    /// <summary>
+    /// 下载所需的两个前提都齐了：发行版信息 + 本平台的安装包。
+    /// 按钮的 CanExecute 只看 <see cref="CanInstallUpdate"/>（它是"界面状态"），
+    /// 这里额外要求 <c>_update</c> 也在 —— 下载代码真的会读它，缺一个就会在点下去之后
+    /// 才报「没有可下载的安装包」。曾经漏掉 <c>_update</c> 的赋值，就是这个症状。
+    /// </summary>
+    public bool HasInstallTarget => _update is not null && _updateAsset is not null;
+
     public string InstallButtonText => IsUpdateDownloading
         ? "正在更新…"
         : OperatingSystem.IsAndroid() ? "下载 APK" : "下载并自动更新";
@@ -2154,6 +2162,12 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>把查到的发行版落到界面状态上，并在 Android 上弹一次可跳过的对话框。</summary>
     private void ApplyUpdate(UpdateInfo info, bool manual)
     {
+        // 记住这份发行版信息 —— 下载、校验、"在 GitHub 上查看" 都要用它。
+        // 曾经漏了这一行：界面（版本号 / 说明 / 安装包名）全靠下面这些字段拼出来，
+        // 看起来一切正常，但点「下载并自动更新」时守卫读到 _update 是空的，
+        // 直接弹「没有可下载的安装包」—— 查到新版本却永远下不了。
+        _update = info;
+
         UpdateVersion = info.Version;
         UpdateTitle = info.Title;
         UpdatePublishedText = info.PublishedText;
