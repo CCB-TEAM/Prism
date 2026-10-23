@@ -312,6 +312,7 @@ public static class SoundWavePatcher
 
         writer.Write(layout.Flags);
         writer.Write(layout.CuePointCount);
+        writer.Write(layout.CueRegion);             // cue point 原样保留（记的是原始音频的时间线）
         writer.Write(Guid.NewGuid().ToByteArray()); // 新音频 = 新的压缩数据标识
         writer.Write(dataChunks.Count + 1);        // 头块 + N 个数据块
         writer.Write(layout.AudioFormatNameIndex);
@@ -370,22 +371,60 @@ public static class SoundWavePatcher
         if (extras is not { Length: > PrefixSize })
             throw new InvalidOperationException("SoundWave 的尾部数据太短，不像流式音频。");
 
-        var flags = BinaryPrimitives.ReadUInt32LittleEndian(extras);
         var cuePoints = BinaryPrimitives.ReadInt32LittleEndian(extras.AsSpan(4));
-        var chunkCount = BinaryPrimitives.ReadInt32LittleEndian(extras.AsSpan(24));
-        var formatNameIndex = BinaryPrimitives.ReadInt32LittleEndian(extras.AsSpan(28));
-        var formatNameNumber = BinaryPrimitives.ReadInt32LittleEndian(extras.AsSpan(32));
+        if (cuePoints is < 0 or > 4096)
+            throw new InvalidOperationException($"SoundWave 的 cue point 数量异常（{cuePoints}）。");
 
+        // 绝大多数资产的 cue point 数组是空的，前缀就是定长 36 字节
+        if (TryParseLayout(extras, asset, 0, strict: false, out StreamedLayout layout))
+            return layout;
+
+        // UE 5.4+ 的 SoundWave 会在 flags / cue 数量后面写一段 cue point（每个带一个 FString 标签，
+        // 长度随标签变）。这段的内部结构这里不解析，只扫它占多少字节：块记录必须正好吃到尾部，
+        // 每块尺寸还要和 data resource 一一对得上，两条同时成立才算命中。
+        if (cuePoints > 0)
+        {
+            for (var cueBytes = 1; cueBytes <= extras.Length - PrefixSize; cueBytes++)
+            {
+                if (TryParseLayout(extras, asset, cueBytes, strict: true, out layout))
+                    return layout;
+            }
+        }
+
+        throw new InvalidOperationException(
+            "SoundWave 的尾部数据和已知的流式布局对不上（引擎版本可能比这个版本支持的更新）。");
+    }
+
+    /// <summary>
+    /// 按"cue point 区块占 <paramref name="cueBytes"/> 字节"解析尾部。
+    /// <paramref name="strict"/> 时额外要求块数量和 data resource 一致、每块尺寸也相等，
+    /// 扫描 cue point 长度时用它排除误判。
+    /// </summary>
+    private static bool TryParseLayout(byte[] extras, UAsset asset, int cueBytes, bool strict, out StreamedLayout layout)
+    {
+        layout = default!;
+        var recordsStart = PrefixSize + cueBytes;
+        if (recordsStart + 8 > extras.Length)
+            return false;
+
+        var chunkCount = BinaryPrimitives.ReadInt32LittleEndian(extras.AsSpan(24 + cueBytes));
         if (chunkCount is < 1 or > 4096)
-            throw new InvalidOperationException($"SoundWave 的数据块数量异常（{chunkCount}）。");
+            return false;
 
         var resources = asset.DataResources;
+        if (strict && (resources is null || resources.Count != chunkCount))
+            return false;
+
+        var flags = BinaryPrimitives.ReadUInt32LittleEndian(extras);
+        var formatNameIndex = BinaryPrimitives.ReadInt32LittleEndian(extras.AsSpan(28 + cueBytes));
+        var formatNameNumber = BinaryPrimitives.ReadInt32LittleEndian(extras.AsSpan(32 + cueBytes));
+
         var chunks = new List<ChunkRecord>(chunkCount);
-        var position = PrefixSize;
+        var position = recordsStart;
         for (var i = 0; i < chunkCount; i++)
         {
             if (position + 8 > extras.Length)
-                throw new InvalidOperationException("SoundWave 的数据块记录被截断。");
+                return false;
 
             var chunkFlags = BinaryPrimitives.ReadUInt32LittleEndian(extras.AsSpan(position));
             var resourceIndex = BinaryPrimitives.ReadInt32LittleEndian(extras.AsSpan(position + 4));
@@ -395,18 +434,18 @@ public static class SoundWavePatcher
             if ((chunkFlags & ChunkIsInlined) != 0)
             {
                 if (resources is null || resourceIndex < 0 || resourceIndex >= resources.Count)
-                    throw new InvalidOperationException("内联数据块指向了不存在的 data resource。");
+                    return false;
 
                 var size = checked((int)resources[resourceIndex].SerialSize);
                 if (size < 0 || position + size > extras.Length)
-                    throw new InvalidOperationException("内联数据块的长度越界。");
+                    return false;
 
                 inline = extras.AsSpan(position, size).ToArray();
                 position += size;
             }
 
             if (position + 8 > extras.Length)
-                throw new InvalidOperationException("SoundWave 的数据块尺寸字段被截断。");
+                return false;
 
             var dataSize = BinaryPrimitives.ReadInt32LittleEndian(extras.AsSpan(position));
             var audioSize = BinaryPrimitives.ReadInt32LittleEndian(extras.AsSpan(position + 4));
@@ -416,34 +455,52 @@ public static class SoundWavePatcher
             if ((chunkFlags & ChunkHasSeekOffset) != 0)
             {
                 if (position + 4 > extras.Length)
-                    throw new InvalidOperationException("SoundWave 的 seek 偏移字段被截断。");
+                    return false;
 
                 seekOffset = BinaryPrimitives.ReadUInt32LittleEndian(extras.AsSpan(position));
                 position += 4;
             }
 
+            // 扫描模式下每块的大小必须和数据资源对得上，否则很可能是扫错了位置
+            if (strict && resources is not null &&
+                (resourceIndex < 0 || resourceIndex >= resources.Count ||
+                 resources[resourceIndex].SerialSize != dataSize))
+                return false;
+
             chunks.Add(new ChunkRecord(chunkFlags, resourceIndex, inline, dataSize, audioSize, seekOffset));
         }
 
         if (position != extras.Length)
-            throw new InvalidOperationException("SoundWave 的尾部数据和已知的流式布局对不上。");
+            return false;
 
-        return new StreamedLayout(
+        layout = new StreamedLayout(
             flags,
-            cuePoints,
+            BinaryPrimitives.ReadInt32LittleEndian(extras.AsSpan(4)),
             formatNameIndex,
             formatNameNumber,
-            asset.GetNameReference(formatNameIndex).ToString(),
+            NameText(asset, formatNameIndex),
             chunks,
-            chunks[0].Inline);
+            chunks[0].Inline,
+            extras.AsSpan(8, cueBytes).ToArray());
+        return true;
+    }
+
+    private static string NameText(UAsset asset, int index)
+    {
+        try
+        {
+            return asset.GetNameReference(index).ToString();
+        }
+        catch (Exception)
+        {
+            return string.Empty;
+        }
     }
 
     private static string? DescribeProblem(StreamedLayout layout)
     {
         if ((layout.Flags & WaveCookedFlag) == 0)
             return "这个音频不是 cook 过的资产，无法替换。";
-        if (layout.CuePointCount > 0)
-            return $"这个音频带 {layout.CuePointCount} 个 SoundWaveCuePoint，暂不支持替换。";
         if (layout.Chunks.Count < 2)
             return "这个音频是内嵌（非流式）存储，暂不支持替换。";
         if (layout.Chunks[0].Inline is null)
@@ -549,7 +606,8 @@ public static class SoundWavePatcher
         int AudioFormatNameNumber,
         string AudioFormatText,
         List<ChunkRecord> Chunks,
-        byte[]? Header)
+        byte[]? Header,
+        byte[] CueRegion)
     {
         public bool IsBinka =>
             AudioFormatText.Equals("BINKA", StringComparison.OrdinalIgnoreCase) ||

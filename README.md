@@ -306,7 +306,7 @@ A full repack needs temp space equal to the main pak.
 ## Verifying
 
 ```sh
-# Integration tests (316 assertions): mapping format detection, search-box path resolution,
+# Integration tests (341 assertions): mapping format detection, search-box path resolution,
 # pak conversion (both paths + all output modes), merge priority, locres <-> JSON round-trip,
 # non-ASCII pak path handling, headless UI loading and navigation, audio replacement
 # (BINKA round-trip through a real pak), media replacement, the replace-page flow driven

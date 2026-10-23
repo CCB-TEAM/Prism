@@ -924,6 +924,62 @@ try
             byte[] pakBulk = await session.ReadFileAsync("Kards/Content/Audio/AU_Replaced.ubulk");
             Check(pakBulk.SequenceEqual(replacement.Ubulk), "Pak 里的 ubulk 与重建结果逐字节一致");
         }
+
+        // UE 5.4+ 的 SoundWave 可能在 flags 后面带一段 cue point（每个带一个 FString 标签）。
+        // 游戏里的 AU_Mus_* / Main_menu_Play 就是这样；以前这段会被当成块记录，
+        // 报「SoundWave 的数据块数量异常（842080314）」这种完全看不懂的错误。
+        {
+            byte[] cueLabel = System.Text.Encoding.ASCII.GetBytes("Tempo: 120.0\0");
+            var cueRegion = new byte[7 + 4 + cueLabel.Length];
+            new byte[] { 0x80, 0x0b, 0x1c, 0x01, 0, 0, 0 }.CopyTo(cueRegion, 0); // 这部分内部结构未知，原样搬运
+            BitConverter.GetBytes(cueLabel.Length).CopyTo(cueRegion, 7);
+            cueLabel.CopyTo(cueRegion, 11);
+
+            var cueUsmap = new UAssetAPI.Unversioned.Usmap(audioUsmap);
+            var cueAsset = new UAssetAPI.UAsset(audioStem + ".uasset", EngineVersion.VER_UE5_6, cueUsmap);
+            UAssetAPI.ExportTypes.NormalExport cueExport = cueAsset.Exports
+                .OfType<UAssetAPI.ExportTypes.NormalExport>()
+                .First(candidate => candidate.Extras is { Length: > 0 });
+            byte[] plainExtras = cueExport.Extras;
+            var withCue = new List<byte>();
+            withCue.AddRange(plainExtras.AsSpan(0, 4).ToArray());   // flags
+            withCue.AddRange(BitConverter.GetBytes(1));            // cue point 数量
+            withCue.AddRange(cueRegion);
+            withCue.AddRange(plainExtras.AsSpan(8).ToArray());     // guid + 块记录原样
+            cueExport.Extras = withCue.ToArray();
+
+            string cueDir = Path.Combine(root, "audio-cue");
+            Directory.CreateDirectory(cueDir);
+            string cueStem = Path.Combine(cueDir, "AU_Cue");
+            cueAsset.Write(cueStem + ".uasset");
+            File.Copy(audioStem + ".ubulk", cueStem + ".ubulk", overwrite: true);
+
+            UAssetAudio.Core.SoundWaveInfo cueInfo =
+                UAssetAudio.Core.SoundWavePatcher.Inspect(cueStem + ".uasset", audioUsmap);
+            Check(cueInfo.CuePointCount == 1, $"能认出带 cue point 的资产（{cueInfo.CuePointCount} 个）");
+            Check(cueInfo.CanReplace, $"带 cue point 的资产也可以替换（{cueInfo.Problem ?? "无阻碍"}）");
+
+            UAssetAudio.Core.SoundWaveReplacement cueReplacement =
+                UAssetAudio.Core.SoundWavePatcher.Replace(cueStem + ".uasset", binkaBytes, audioUsmap);
+            string cuePatchedStem = Path.Combine(cueDir, "AU_CuePatched");
+            File.WriteAllBytes(cuePatchedStem + ".uasset", cueReplacement.Uasset);
+            File.WriteAllBytes(cuePatchedStem + ".uexp", cueReplacement.Uexp);
+            File.WriteAllBytes(cuePatchedStem + ".ubulk", cueReplacement.Ubulk);
+
+            UAssetAudio.Core.SoundWaveInfo cueAfter =
+                UAssetAudio.Core.SoundWavePatcher.Inspect(cuePatchedStem + ".uasset", audioUsmap);
+            Check(cueAfter.CuePointCount == 1, "替换后 cue point 数量不变");
+            Check(cueAfter.CanReplace && cueAfter.ChunkCount == cueInfo.ChunkCount,
+                $"替换后布局仍能解析，块数不变（{cueAfter.ChunkCount} 块）");
+
+            var patchedCueAsset = new UAssetAPI.UAsset(cuePatchedStem + ".uasset", EngineVersion.VER_UE5_6, cueUsmap);
+            byte[] patchedCueExtras = patchedCueAsset.Exports
+                .OfType<UAssetAPI.ExportTypes.NormalExport>()
+                .First(candidate => candidate.Extras is { Length: > 0 })
+                .Extras;
+            Check(patchedCueExtras.AsSpan(8, cueRegion.Length).SequenceEqual(cueRegion),
+                "cue point 区块逐字节原样保留");
+        }
     }
 
     Section("F4/F1/F7 · UI 层验证（headless 真实窗口）");
