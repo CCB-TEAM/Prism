@@ -16,20 +16,140 @@ namespace Prism.FeatureTests;
 /// 两种模式不能在同一进程共存，所以用命令行开关区分，并且必须在任何 Avalonia
 /// 初始化之前决定 —— 因此入口在 Program.cs 最前面就分流了。
 ///
-/// 用法：dotnet run --project test/Prism.FeatureTests -- --capture &lt;输出目录&gt;
+/// 用法：
+///   dotnet run --project test/Prism.FeatureTests -- --capture &lt;输出目录&gt;
+///   dotnet run --project test/Prism.FeatureTests -- --capture &lt;忽略&gt; --docs
+///
+/// <c>--docs</c> 是另一个用途：把「使用说明」里要用的截图按 light / dark 两套写进
+/// Prism.Desktop/Assets/help/ 下。文档里的图因此永远来自当前版本的真实界面，
+/// 不会出现"图上有个已经不存在的按钮"。
 /// </summary>
 internal static class UiCapture
 {
-    /// <summary>渲染所有页面，返回进程退出码。</summary>
-    public static int Run(string outputDirectory)
+    /// <summary>渲染所有页面（评审用），或把文档截图写进资源目录。</summary>
+    public static int Run(string outputDirectory, bool docsOnly = false)
     {
-        Directory.CreateDirectory(outputDirectory);
-
         AppBuilder.Configure<Prism.Desktop.App>()
             .UseSkia()
             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
             .WithInterFont()
             .SetupWithoutStarting();
+
+        return docsOnly ? CaptureDocs() : CapturePages(outputDirectory);
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  文档截图（--docs）
+    // ══════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// 文档用的页面截图。视口取 1240×780：跨过 1200 的宽屏阈值，截到的是桌面版排版；
+    /// 于是截到的是桌面版排版（字号放大一档），而宽度又不至于塞不进文档正文列。
+    /// </summary>
+    private static int CaptureDocs()
+    {
+        string? repoRoot = FindRepoRoot();
+        if (repoRoot is null)
+        {
+            Console.Error.WriteLine("!! 找不到仓库根（找不到 Prism.Desktop 目录），文档截图未生成");
+            return 1;
+        }
+
+        string assetsRoot = Path.Combine(repoRoot, "Prism.Desktop", "Assets", "help");
+
+        (string Key, string Command, int Tab, Action<MainViewModel>? Seed)[] shots =
+        [
+            ("welcome", "GoHome", 0, null),
+            ("workspace-config", "GoWorkspace", 0, null),
+            ("workspace-browse", "GoWorkspace", 1, vm => SeedPreviewDemo(vm, video: false)),
+            ("workspace-replace", "GoWorkspace", 2, vm => SeedPatchDemo(vm, selectMedia: false)),
+            ("merge", "GoMerge", 0, SeedMergeDemo),
+            ("convert", "GoConvert", 0, null),
+            ("settings", "GoSettings", 0, null),
+            ("update", "GoHome", 0, SeedUpdateDemo),
+        ];
+
+        int written = 0;
+        foreach (string theme in new[] { "light", "dark" })
+        {
+            string themeDir = Path.Combine(assetsRoot, theme);
+            Directory.CreateDirectory(themeDir);
+
+            (MainViewModel vm, MainWindow window) = CreateShell(1240, 780, theme, collapsed: false);
+            foreach ((string key, string command, int tab, Action<MainViewModel>? seed) in shots)
+            {
+                seed?.Invoke(vm);
+                Navigate(vm, command, tab);
+                Pump();
+
+                string path = Path.Combine(themeDir, key + ".png");
+                if (Capture(window, path))
+                {
+                    written++;
+                    long kb = new FileInfo(path).Length / 1024;
+                    Console.WriteLine($"  {theme}/{key}.png  ({kb:N0} KB)");
+                }
+            }
+
+            window.Close();
+        }
+
+        Console.WriteLine($"文档截图：{written} 张写入 {assetsRoot}");
+        RestoreSettings();
+        return written == 0 ? 1 : 0;
+    }
+
+    /// <summary>更新面板的示例内容：拿真实发行说明的形态（标题 / 列表 / 加粗）来截。</summary>
+    private static void SeedUpdateDemo(MainViewModel vm)
+    {
+        vm.ShowUpdatePreview(
+            version: "1.3.0",
+            title: "界面细化与自动更新",
+            notes: """
+                ## 界面
+                - 设置页重做成分组卡片，**删掉了和业务页重复的输入项**
+                - 使用说明变成独立页面，按章节配截图
+                - 窗口化时文字发虚的问题修好了
+
+                ## 更新
+                - 启动时检查 GitHub 发行版，欢迎页直接显示更新内容
+                - 下载完成后自动替换文件并重启
+                - 手机端弹出可跳过的提示，可在设置里重新触发
+                """,
+            assetName: "Prism-win-x64-1.3.0.zip",
+            assetSize: 124_724_173);
+    }
+
+    /// <summary>合并页示例：两条输入，展示优先级列表的排版。</summary>
+    private static void SeedMergeDemo(MainViewModel vm)
+    {
+        if (vm.MergePaks.Count > 0)
+        {
+            return;
+        }
+
+        vm.MergePaks.Add(new Prism.Desktop.Models.MergePakItem(
+            @"E:\pak\kards-Android_ASTC.pak", "kards-Android_ASTC.pak")
+        {
+            OrderLabel = "1",
+            Detail = "18,432 个文件",
+        });
+        vm.MergePaks.Add(new Prism.Desktop.Models.MergePakItem(
+            @"E:\pak\texture-pack.pak", "texture-pack.pak")
+        {
+            OrderLabel = "2",
+            Detail = "212 个文件",
+        });
+        Pump();
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  页面评审截图（--capture）
+    // ══════════════════════════════════════════════════════════════════
+
+    private static int CapturePages(string outputDirectory)
+    {
+        Directory.CreateDirectory(outputDirectory);
 
         (string Label, double Width, double Height, bool Collapsed)[] viewports =
         [
@@ -41,6 +161,7 @@ internal static class UiCapture
         (string Label, string Navigate, int Tab)[] pages =
         [
             ("home", "GoHome", 0),
+            ("home-update", "GoHome", 0),
             ("workspace-config", "GoWorkspace", 0),
             ("workspace-browse", "GoWorkspace", 1),
             ("workspace-replace-audio", "GoWorkspace", 2),
@@ -51,6 +172,9 @@ internal static class UiCapture
             ("merge", "GoMerge", 0),
             ("convert", "GoConvert", 0),
             ("settings", "GoSettings", 0),
+            ("docs-start", "GoDocs", 0),
+            ("docs-workspace", "GoDocsWorkspace", 0),
+            ("docs-settings", "GoDocsSettings", 0),
         ];
 
         int written = 0;
@@ -67,6 +191,12 @@ internal static class UiCapture
 
                 foreach ((string pageLabel, string command, int tab) in forViewport)
                 {
+                    // 更新面板要在欢迎页上截：先造一份"发现新版本"的状态
+                    if (pageLabel == "home-update")
+                    {
+                        SeedUpdateDemo(vm);
+                    }
+
                     Navigate(vm, command, tab);
 
                     // 替换页需要真的有任务才看得出来长什么样：塞两条示例（音频 / 视频）。
@@ -94,17 +224,12 @@ internal static class UiCapture
                         written++;
                         Console.WriteLine($"  {name}");
                     }
-                }
 
-                if (!collapsed)
-                {
-                    // 浮层单独截一张（它覆盖在页面之上，且是各页共用的同一个实现）。
-                    Navigate(vm, "GoConvert", 0);
-                    vm.OpenHelpCommand.Execute("convert");
-                    if (Capture(window, Path.Combine(outputDirectory, $"{theme}-{viewportLabel}-help.png")))
+                    // 更新状态是同一次 shell 里造的，后面截设置页时得清掉；
+                    // 否则设置页会带着"发现新版本"的结果面板，看着像默认状态。
+                    if (pageLabel == "home-update")
                     {
-                        written++;
-                        Console.WriteLine($"  {theme}-{viewportLabel}-help.png");
+                        vm.HideUpdatePreview();
                     }
                 }
 
@@ -122,7 +247,7 @@ internal static class UiCapture
     ///
     /// 截图要关掉过渡动画（否则截到淡入中间态），而 <c>IsAnimationsEnabled</c> 是写进
     /// 设置文件的真设置 —— 不还原的话，紧接着跑常规测试就会读到"动画默认关闭"，
-    /// 让那条断言莫名其妙地失败。窗口尺寸同理。
+    /// 让那条断言莫名其妙地失败。窗口尺寸与"已忽略的更新版本"同理。
     /// </summary>
     private static void RestoreSettings()
     {
@@ -139,6 +264,23 @@ internal static class UiCapture
         {
             Console.Error.WriteLine($"  !! 设置文件清理失败（不影响截图）：{ex.Message}");
         }
+    }
+
+    /// <summary>从输出目录往上找仓库根（含 Prism.Desktop 目录的那一层）。</summary>
+    private static string? FindRepoRoot()
+    {
+        DirectoryInfo? dir = new(AppContext.BaseDirectory);
+        for (var i = 0; i < 8 && dir is not null; i++)
+        {
+            if (Directory.Exists(Path.Combine(dir.FullName, "Prism.Desktop", "Assets")))
+            {
+                return dir.FullName;
+            }
+
+            dir = dir.Parent;
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -307,6 +449,9 @@ internal static class UiCapture
             // 关掉过渡动画：截到淡入中间态会得到半透明页面，评审时看不出真实观感。
             // 该属性的 setter 会写设置文件，但那是测试输出目录里的副本，不影响应用。
             IsAnimationsEnabled = false,
+
+            // 关掉启动检查更新：截图不能依赖网络，更不能把 GitHub 的限流提示截进去。
+            AutoCheckUpdates = false,
             WindowWidth = width,
             WindowHeight = height,
             IsSidebarCollapsed = collapsed,
@@ -327,7 +472,7 @@ internal static class UiCapture
         // 关掉次像素（ClearType）抗锯齿：真实屏幕上眼睛会把 RGB 条纹合成为清晰文字，
         // 但只要把画面存成 PNG 放大看，字形边缘就会出现彩色重影，评审时会被误当成
         // "文字画了两遍"。灰度抗锯齿更接近截图该有的样子。
-        RenderOptions.SetTextRenderingMode(window, TextRenderingMode.Antialias);
+        TextOptions.SetTextRenderingMode(window, TextRenderingMode.Antialias);
 
         window.Show();
         Pump();
@@ -345,6 +490,9 @@ internal static class UiCapture
             case "GoMerge": vm.GoMergeCommand.Execute(null); break;
             case "GoConvert": vm.GoConvertCommand.Execute(null); break;
             case "GoSettings": vm.GoSettingsCommand.Execute(null); break;
+            case "GoDocs": vm.OpenDocsCommand.Execute("start"); break;
+            case "GoDocsWorkspace": vm.OpenDocsCommand.Execute("workspace"); break;
+            case "GoDocsSettings": vm.OpenDocsCommand.Execute("settings"); break;
         }
 
         Pump();

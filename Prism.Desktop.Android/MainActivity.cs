@@ -49,6 +49,8 @@ public class MainActivity : AvaloniaMainActivity
             app.MainVm.NativeAudioStopAsync = StopAudioAsync;
             app.MainVm.NativeAudioSeekAsync = SeekAudioAsync;
             app.MainVm.NativeAudioSetPausedAsync = SetAudioPausedAsync;
+            app.MainVm.NativeUpdateDialogAsync = ShowUpdateDialogAsync;
+            app.MainVm.NativeInstallApkAsync = InstallApkAsync;
         }
     }
 
@@ -68,6 +70,8 @@ public class MainActivity : AvaloniaMainActivity
             app.MainVm.NativeAudioStopAsync = null;
             app.MainVm.NativeAudioSeekAsync = null;
             app.MainVm.NativeAudioSetPausedAsync = null;
+            app.MainVm.NativeUpdateDialogAsync = null;
+            app.MainVm.NativeInstallApkAsync = null;
         }
 
         base.OnDestroy();
@@ -462,6 +466,122 @@ public class MainActivity : AvaloniaMainActivity
             ".pak" or ".utoc" or ".ucas" => "application/octet-stream",
             _ => "application/octet-stream"
         };
+
+    /// <summary>
+    /// 「发现新版本」弹窗：标题 + 更新内容摘要 + 「立即更新」/「稍后」。
+    /// 用原生 AlertDialog 而不是应用内浮层 —— 用户可能正停在别的页面，
+    /// 系统的对话框才盖得住、也才在返回键上表现正常（可跳过）。
+    /// </summary>
+    private Task<bool> ShowUpdateDialogAsync(string title, string message, string positive, string negative)
+    {
+        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        RunOnUiThread(() =>
+        {
+            try
+            {
+                new AlertDialog.Builder(this)
+                    .SetTitle(title)
+                    .SetMessage(message)
+                    .SetPositiveButton(positive, (_, _) => tcs.TrySetResult(true))
+                    .SetNegativeButton(negative, (_, _) => tcs.TrySetResult(false))
+                    .SetOnCancelListener(new DialogCancelListener(() => tcs.TrySetResult(false)))
+                    .Show();
+            }
+            catch (Exception ex)
+            {
+                tcs.TrySetException(ex);
+            }
+        });
+        return tcs.Task;
+    }
+
+    /// <summary>取消回调（点外部 / 返回键）→ 当作"稍后"。</summary>
+    private sealed class DialogCancelListener : Java.Lang.Object, IDialogInterfaceOnCancelListener
+    {
+        private readonly Action _onCancel;
+
+        public DialogCancelListener(Action onCancel) => _onCancel = onCancel;
+
+        public void OnCancel(IDialogInterface? dialog) => _onCancel();
+    }
+
+    /// <summary>
+    /// 把下载好的 APK 交给系统安装器。
+    ///
+    /// 关键点：APK 必须先落到 FileProvider 授权的目录（cache/shared），
+    /// 再用 content:// URI + GrantReadUriPermission 启动，否则 Android 8+ 会拒绝安装。
+    /// 另外 Android 8+ 还需要「安装未知来源应用」权限 —— 没有时跳系统设置页让用户开。
+    /// </summary>
+    private Task InstallApkAsync(string apkPath)
+    {
+        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!System.IO.File.Exists(apkPath))
+        {
+            tcs.TrySetException(new InvalidOperationException("安装包不存在：" + apkPath));
+            return tcs.Task;
+        }
+
+        string authority = $"{PackageName}.fileprovider";
+        Java.IO.File shareDir = new(CacheDir, "shared");
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                if (!shareDir.Exists())
+                {
+                    shareDir.Mkdirs();
+                }
+
+                string target = System.IO.Path.Combine(shareDir.AbsolutePath, System.IO.Path.GetFileName(apkPath));
+                System.IO.File.Copy(apkPath, target, overwrite: true);
+                Java.IO.File apkFile = new(target);
+                AndroidUri uri = FileProvider.GetUriForFile(
+                    global::Android.App.Application.Context,
+                    authority,
+                    apkFile);
+
+                RunOnUiThread(() =>
+                {
+                    try
+                    {
+                        // Android 8+ 需要用户授权"安装未知应用"，没有就直接把设置页打开
+                        if (Build.VERSION.SdkInt >= BuildVersionCodes.O && !PackageManager!.CanRequestPackageInstalls())
+                        {
+                            try
+                            {
+                                // 命名空间必须从 global 起：本程序集叫 Prism.Desktop.Android，
+                                // 直接写 Android.Provider.* 会被解析成 Prism.Desktop.Android.Provider。
+                                var settings = new Intent(
+                                    global::Android.Provider.Settings.ActionManageUnknownAppSources,
+                                    AndroidUri.Parse("package:" + PackageName));
+                                StartActivity(settings);
+                            }
+                            catch
+                            {
+                                // 个别 ROM 没有这个页面，继续尝试直接安装
+                            }
+                        }
+
+                        var intent = new Intent(Intent.ActionView);
+                        intent.SetDataAndType(uri, "application/vnd.android.package-archive");
+                        intent.AddFlags(ActivityFlags.GrantReadUriPermission);
+                        intent.AddFlags(ActivityFlags.NewTask);
+                        StartActivity(intent);
+                        tcs.TrySetResult(true);
+                    }
+                    catch (Exception ex)
+                    {
+                        tcs.TrySetException(ex);
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                tcs.TrySetException(ex);
+            }
+        });
+        return tcs.Task;
+    }
 
     /// <summary>
     /// 返回键按页面层级返回：子目录→上级目录，其他页面→主页，主页才退出。

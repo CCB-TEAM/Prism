@@ -62,6 +62,16 @@ public partial class MainViewModel : ViewModelBase
         ConvertOutputPath = _settings.ConvertOutputPath;
         ThemeMode = _settings.Theme;
         AesKey = _settings.AesKey;
+        AutoCheckUpdates = _settings.AutoCheckUpdates;
+        DismissedUpdateVersion = _settings.DismissedUpdateVersion;
+
+        // 字号资源统一由 LayoutDensity 落一遍：App.axaml 里的紧凑档只是"窗口还没跨过
+        // 阈值"时的兜底，两边值必须一致；这里主动对齐一次，避免将来改漏一处。
+        Services.LayoutDensity.Apply(IsWideLayout);
+
+        // 文档页启动就要有内容（绑定在进入页面前就在求值），默认停在「快速开始」。
+        SelectedChapter = DocChapters.FirstOrDefault();
+
         InitializeSettings();
         _loaded = true;
         SaveSettings();
@@ -106,6 +116,25 @@ public partial class MainViewModel : ViewModelBase
     /// </summary>
     public int SettingsColumns => IsWideLayout ? 2 : 1;
 
+    /// <summary>
+    /// 设置页卡片的槽宽（像素）。WrapPanel 用它决定一行放几张：
+    /// 宽屏 = 内容宽度的一半，窄窗/手机 = 整行。
+    ///
+    /// 为什么自己算而不是让 WrapPanel 自己排：WrapPanel 在水平方向以无限宽度量孩子，
+    /// 卡片会缩成"内容想要的那点宽度"，两列排不出来。给一个确定的槽宽最省事，
+    /// 也让两列的宽度永远一致。减 2 是留给行内取整误差的余量 —— 差 1px 就会掉成单列。
+    /// </summary>
+    public double SettingsCardWidth
+    {
+        get
+        {
+            // 页面内容区 = 窗口宽 - 侧栏 - 页面左右边距(20+20)
+            double content = Math.Max(300d, WindowWidth - SidebarWidth - 40d);
+            double usable = Math.Min(content, 1060d);
+            return IsWideLayout ? Math.Floor((usable - 2d) / 2d) : usable;
+        }
+    }
+
     /// <summary>合并页卡片列数：宽屏把「待合并的 Pak」与「输出 Pak」并排。</summary>
     public int MergeColumns => IsWideLayout ? 2 : 1;
 
@@ -149,6 +178,7 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(SettingsColumns));
         OnPropertyChanged(nameof(MergeColumns));
         OnPropertyChanged(nameof(CardGapMargin));
+        OnPropertyChanged(nameof(SettingsCardWidth));
     }
 
     partial void OnWindowWidthChanged(double value)
@@ -182,6 +212,7 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(ShowWelcomeBranding));
         OnPropertyChanged(nameof(ShowWideCards));
         OnPropertyChanged(nameof(ShowNarrowCards));
+        OnPropertyChanged(nameof(SettingsCardWidth));
 
         // 窄窗没有侧栏：宽度归零，内容边距随之消失
         if (!_sidebarAnimating)
@@ -207,6 +238,8 @@ public partial class MainViewModel : ViewModelBase
     public bool IsConvertVisible => CurrentView == "Convert";
 
     public bool IsSettingsVisible => CurrentView == "Settings";
+
+    public bool IsDocsVisible => CurrentView == "Docs";
 
     /// <summary>
     /// 是否显示左侧导航栏。
@@ -253,7 +286,11 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     public partial double SidebarWidth { get; set; } = 216;
 
-    partial void OnSidebarWidthChanged(double value) => OnPropertyChanged(nameof(ContentMargin));
+    partial void OnSidebarWidthChanged(double value)
+    {
+        OnPropertyChanged(nameof(ContentMargin));
+        OnPropertyChanged(nameof(SettingsCardWidth));
+    }
 
     private const double SidebarExpandedWidth = 216d;
 
@@ -350,17 +387,18 @@ public partial class MainViewModel : ViewModelBase
         cts.Dispose();
     }
 
-    /// <summary>页头标题：由当前视图决定，五个页面共用同一处渲染。</summary>
+    /// <summary>页头标题：由当前视图决定，各页面共用同一处渲染。</summary>
     public string PageTitle => CurrentView switch
     {
         "Workspace" => "解包 & 模组",
         "Merge" => "Pak 合并",
         "Convert" => "Pak 转换",
         "Settings" => "设置",
+        "Docs" => "使用说明",
         _ => "欢迎",
     };
 
-    /// <summary>当前页对应的使用说明主题；概览页没有说明，返回空串。</summary>
+    /// <summary>当前页对应的使用说明章节；没有对应章节的页面（欢迎 / 文档页）返回空串。</summary>
     public string PageHelpTopic => CurrentView switch
     {
         "Workspace" => "workspace",
@@ -379,6 +417,7 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsMergeVisible));
         OnPropertyChanged(nameof(IsConvertVisible));
         OnPropertyChanged(nameof(IsSettingsVisible));
+        OnPropertyChanged(nameof(IsDocsVisible));
         OnPropertyChanged(nameof(PageTitle));
         OnPropertyChanged(nameof(PageHelpTopic));
         OnPropertyChanged(nameof(HasPageHelp));
@@ -390,6 +429,14 @@ public partial class MainViewModel : ViewModelBase
 
     [RelayCommand]
     private void GoWorkspace() => CurrentView = "Workspace";
+
+    /// <summary>设置页「前往配置」：直接落到工作区的配置标签（路径都在那里）。</summary>
+    [RelayCommand]
+    private void GoWorkspaceConfig()
+    {
+        CurrentTabIndex = 0;
+        CurrentView = "Workspace";
+    }
 
     /// <summary>
     /// 主页「搜索 &amp; 导出」入口：直接进入工作区的浏览标签。
@@ -1559,6 +1606,8 @@ public partial class MainViewModel : ViewModelBase
         // 同 MergeOutputPath：Android 上是 SAF 会话句柄，重启后需重新选择。
         _settings.ConvertOutputPath = OperatingSystem.IsAndroid() ? string.Empty : ConvertOutputPath;
         _settings.AesKey = AesKey;
+        _settings.AutoCheckUpdates = AutoCheckUpdates;
+        _settings.DismissedUpdateVersion = DismissedUpdateVersion;
         AppSettingsStore.Save(_settings);
     }
 
@@ -1695,47 +1744,97 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     public partial bool ConvertIncludeModFiles { get; set; }
 
-    /// <summary>
-    /// 当前打开的「使用说明」主题；空字符串表示浮层关闭。
-    ///
-    /// 各页共用一个浮层（挂在 MainView 顶层），而不是每页各写一份：
-    /// 页面正文只留必要信息，说明集中到这里，按主题切换内容。
-    /// 用页内浮层而不是独立 Window —— Android 上 TopLevel 不一定是 Window，
-    /// ShowDialog 找不到宿主；浮层两端行为一致。
-    /// </summary>
-    [ObservableProperty]
-    public partial string HelpTopic { get; set; } = string.Empty;
+    // ============ 使用说明（独立页面） ============
 
-    partial void OnHelpTopicChanged(string value)
+    /// <summary>
+    /// 文档章节（内容见 <see cref="Docs.PrismDocs"/>）。
+    ///
+    /// 原来是挂在 MainView 顶层的一个浮层：600px 宽的模态里塞图 + 长文，正文被
+    /// 「知道了」按钮裁掉半截，浅色截图压在深色底上像一块白板。现在它是一个正经页面 ——
+    /// 版式与欢迎页同一套（引题带 + 分隔线 + 编号小节），左边是章节列表，右边是正文与截图。
+    /// </summary>
+    public IReadOnlyList<Docs.DocChapter> DocChapters => Docs.PrismDocs.Chapters;
+
+    [ObservableProperty]
+    public partial Docs.DocChapter? SelectedChapter { get; set; }
+
+    partial void OnSelectedChapterChanged(Docs.DocChapter? value)
     {
-        OnPropertyChanged(nameof(IsHelpOpen));
-        OnPropertyChanged(nameof(HelpTitle));
-        OnPropertyChanged(nameof(IsHelpConvert));
-        OnPropertyChanged(nameof(IsHelpWorkspace));
-        OnPropertyChanged(nameof(IsHelpMerge));
-        OnPropertyChanged(nameof(IsHelpSettings));
+        OnPropertyChanged(nameof(DocBlocks));
+        OnPropertyChanged(nameof(HasDocContent));
+        OnPropertyChanged(nameof(DocChapterNumber));
+        OnPropertyChanged(nameof(CanGoPreviousDoc));
+        OnPropertyChanged(nameof(CanGoNextDoc));
+        OnPropertyChanged(nameof(PreviousDocTitle));
+        OnPropertyChanged(nameof(NextDocTitle));
     }
 
-    public bool IsHelpOpen => HelpTopic.Length > 0;
-    public bool IsHelpConvert => HelpTopic == "convert";
-    public bool IsHelpWorkspace => HelpTopic == "workspace";
-    public bool IsHelpMerge => HelpTopic == "merge";
-    public bool IsHelpSettings => HelpTopic == "settings";
+    public IReadOnlyList<Docs.DocBlock> DocBlocks => SelectedChapter?.Blocks ?? [];
 
-    public string HelpTitle => HelpTopic switch
+    public bool HasDocContent => SelectedChapter is not null;
+
+    /// <summary>章号（01 / 02 …）：欢迎页与配置页都用两位编号做视觉锚点。</summary>
+    public string DocChapterNumber =>
+        SelectedChapterIndex < 0 ? string.Empty : (SelectedChapterIndex + 1).ToString("D2");
+
+    private int SelectedChapterIndex =>
+        SelectedChapter is null ? -1 : DocChapters.ToList().IndexOf(SelectedChapter);
+
+    public bool CanGoPreviousDoc => SelectedChapterIndex > 0;
+
+    public bool CanGoNextDoc => SelectedChapterIndex >= 0 && SelectedChapterIndex < DocChapters.Count - 1;
+
+    public string PreviousDocTitle => CanGoPreviousDoc ? DocChapters[SelectedChapterIndex - 1].Title : string.Empty;
+
+    public string NextDocTitle => CanGoNextDoc ? DocChapters[SelectedChapterIndex + 1].Title : string.Empty;
+
+    /// <summary>页头的「使用说明」按钮：带着当前页的主题跳进文档页。</summary>
+    [RelayCommand]
+    private void OpenDocs(string? topic)
     {
-        "convert" => "Pak 转换 · 使用说明",
-        "workspace" => "解包 & Mod · 使用说明",
-        "merge" => "Pak 合并 · 使用说明",
-        "settings" => "设置 · 使用说明",
-        _ => "使用说明",
-    };
+        Docs.DocChapter? chapter = DocChapters.FirstOrDefault(item =>
+            string.Equals(item.Key, topic, StringComparison.Ordinal));
+
+        SelectedChapter = chapter ?? SelectedChapter ?? DocChapters.FirstOrDefault();
+        CurrentView = "Docs";
+    }
 
     [RelayCommand]
-    private void OpenHelp(string? topic) => HelpTopic = topic ?? string.Empty;
+    private void GoPreviousDoc()
+    {
+        if (CanGoPreviousDoc)
+        {
+            SelectedChapter = DocChapters[SelectedChapterIndex - 1];
+        }
+    }
 
     [RelayCommand]
-    private void CloseHelp() => HelpTopic = string.Empty;
+    private void GoNextDoc()
+    {
+        if (CanGoNextDoc)
+        {
+            SelectedChapter = DocChapters[SelectedChapterIndex + 1];
+        }
+    }
+
+    /// <summary>
+    /// 文档里那张被点开的截图（null = 没开）。
+    ///
+    /// 正文里的图是缩略的（一整页截图按原尺寸铺满正文列，会把下面的文字挤出屏幕），
+    /// 点一下开全屏看原尺寸 —— 想看清某个按钮叫什么时不用去开原图。
+    /// </summary>
+    [ObservableProperty]
+    public partial IImage? DocImagePreview { get; set; }
+
+    public bool IsDocImageOpen => DocImagePreview is not null;
+
+    partial void OnDocImagePreviewChanged(IImage? value) => OnPropertyChanged(nameof(IsDocImageOpen));
+
+    [RelayCommand]
+    private void OpenDocImage(string? key) => DocImagePreview = Docs.DocImageProvider.Get(key);
+
+    [RelayCommand]
+    private void CloseDocImage() => DocImagePreview = null;
 
     /// <summary>
     /// 主题："system" / "light" / "dark"。
@@ -1771,6 +1870,15 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsThemeDark));
         ApplyTheme(value);
         SaveSettings();
+
+        // 文档截图按主题分两套（浅色图压在深色底上像一块白板）。换主题后要丢掉缓存，
+        // 并且重建当前章节 —— 图片是通过转换器取的，不重建模板就还是旧主题那张。
+        Docs.DocImageProvider.ClearCache();
+        if (IsDocsVisible && SelectedChapter is { } chapter)
+        {
+            SelectedChapter = null;
+            SelectedChapter = chapter;
+        }
     }
 
     /// <summary>把主题选择落到 Application.RequestedThemeVariant（Default 即跟随系统）。</summary>
@@ -1788,6 +1896,524 @@ public partial class MainViewModel : ViewModelBase
             _ => ThemeVariant.Default,
         };
     }
+
+    /// <summary>设置页的主题分段控件（跟随系统 / 浅色 / 深色）。</summary>
+    [RelayCommand]
+    private void SetTheme(string? mode) => ThemeMode = string.IsNullOrWhiteSpace(mode) ? "system" : mode;
+
+    // ============ 检查更新（GitHub 发行版） ============
+
+    /// <summary>
+    /// 上一次查到的发行版信息（null 表示还没查到 / 没有）。
+    /// 注意：这里是"服务端的真相"，界面上还要再和 <see cref="DismissedUpdateVersion"/> 比一次。
+    /// </summary>
+    private UpdateInfo? _update;
+
+    private UpdateAsset? _updateAsset;
+    private CancellationTokenSource? _updateCts;
+
+    /// <summary>启动时自动检查更新。关掉后仍可在设置页手动检查。</summary>
+    [ObservableProperty]
+    public partial bool AutoCheckUpdates { get; set; } = true;
+
+    partial void OnAutoCheckUpdatesChanged(bool value) => SaveSettings();
+
+    /// <summary>用户点过「稍后」的版本号。同一版本不再弹，出现更高版本时自然失效。</summary>
+    [ObservableProperty]
+    public partial string DismissedUpdateVersion { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial bool IsCheckingUpdate { get; set; }
+
+    /// <summary>设置页里那行说明（检查中 / 已是最新 / 发现新版本 / 失败原因）。</summary>
+    [ObservableProperty]
+    public partial string UpdateStatus { get; set; } = "尚未检查更新。";
+
+    /// <summary>检查过至少一次（决定设置页要不要显示结果面板，别在没查时先占一块地方）。</summary>
+    [ObservableProperty]
+    public partial bool HasUpdateResult { get; set; }
+
+    /// <summary>是否查到了比当前版本更高的发行版。</summary>
+    [ObservableProperty]
+    public partial bool HasUpdate { get; set; }
+
+    [ObservableProperty]
+    public partial string UpdateVersion { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string UpdateTitle { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string UpdatePublishedText { get; set; } = string.Empty;
+
+    /// <summary>安装包描述，例如 <c>Prism-win-x64-1.3.0.zip · 124.7 MB</c>。</summary>
+    [ObservableProperty]
+    public partial string UpdatePackageText { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial bool IsUpdateDownloading { get; set; }
+
+    /// <summary>下载进度 0~1（只在下载期间有意义）。</summary>
+    [ObservableProperty]
+    public partial double UpdateProgress { get; set; }
+
+    /// <summary>下载 / 解压 / 重启过程中的一句话状态。</summary>
+    [ObservableProperty]
+    public partial string UpdateActionStatus { get; set; } = string.Empty;
+
+    partial void OnHasUpdateChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ShowUpdatePanel));
+        OnPropertyChanged(nameof(UpdateBadgeText));
+        OnPropertyChanged(nameof(UpdateIntroText));
+        OnPropertyChanged(nameof(CanInstallUpdate));
+        OnPropertyChanged(nameof(InstallButtonText));
+    }
+
+    partial void OnUpdateVersionChanged(string value)
+    {
+        OnPropertyChanged(nameof(ShowUpdatePanel));
+        OnPropertyChanged(nameof(UpdateBadgeText));
+        OnPropertyChanged(nameof(UpdateIntroText));
+        OnPropertyChanged(nameof(InstallButtonText));
+    }
+
+    partial void OnIsUpdateDownloadingChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanInstallUpdate));
+        OnPropertyChanged(nameof(InstallButtonText));
+    }
+
+    /// <summary>当前发行版的更新内容（欢迎页正文 / 原生对话框文案）。</summary>
+    public ObservableCollection<UpdateNote> UpdateNoteBlocks { get; } = [];
+
+    public bool HasUpdateNotes => UpdateNoteBlocks.Count > 0;
+
+    /// <summary>这个版本已经被「稍后」忽略掉了。</summary>
+    public bool IsUpdateDismissed =>
+        UpdateVersion.Length > 0 && string.Equals(DismissedUpdateVersion, UpdateVersion, StringComparison.Ordinal);
+
+    /// <summary>欢迎页整体换成更新说明（桌面）/ 显示更新卡片（手机）。</summary>
+    public bool ShowUpdatePanel => HasUpdate && !IsUpdateDismissed;
+
+    public string UpdateBadgeText => HasUpdate ? $"v{UpdateVersion}" : string.Empty;
+
+    /// <summary>更新面板的说明行：说清从哪个版本升级，以及这一页为什么会变。</summary>
+    public string UpdateIntroText =>
+        $"从 v{VersionText} 升级。下面是这一版在 GitHub 上发布的更新内容，" +
+        "装好之后这一页会恢复成正常的欢迎页。";
+
+    public bool CanInstallUpdate => HasUpdate && !IsUpdateDownloading && _updateAsset is not null;
+
+    public string InstallButtonText => IsUpdateDownloading
+        ? "正在更新…"
+        : OperatingSystem.IsAndroid() ? "下载 APK" : "下载并自动更新";
+
+    /// <summary>原生「发现新版本」对话框（Android 注入；桌面不注入，走欢迎页）。</summary>
+    public Func<string, string, string, string, Task<bool>>? NativeUpdateDialogAsync { get; set; }
+
+    /// <summary>拉起系统安装器（Android 注入；桌面走就地替换）。参数为下载好的 apk 路径。</summary>
+    public Func<string, Task>? NativeInstallApkAsync { get; set; }
+
+    /// <summary>启动流程调用：按设置与节流策略在后台查一次更新（失败静默，只写日志）。</summary>
+    public void BeginStartupUpdateCheck()
+    {
+        if (!AutoCheckUpdates)
+        {
+            return;
+        }
+
+        if (DateTimeOffset.TryParse(_settings.LastUpdateCheckUtc, out DateTimeOffset last) &&
+            DateTimeOffset.UtcNow - last < TimeSpan.FromHours(6))
+        {
+            // 6 小时内查过就不再打扰 GitHub（手动检查不受限制）
+            return;
+        }
+
+        // 不 await：启动流程不该等网络。延时 1.5 秒让首页先画出来。
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(1.5)).ConfigureAwait(false);
+                await CheckForUpdatesAsync(manual: false).ConfigureAwait(false);
+            }
+            catch
+            {
+                // 自动检查失败永远不该影响使用
+            }
+        });
+    }
+
+    [RelayCommand]
+    private Task CheckUpdateAsync() => CheckForUpdatesAsync(manual: true);
+
+    /// <summary>
+    /// 查询发行版。<paramref name="manual"/> 为 true（设置页点按钮）时，
+    /// 即使当前版本已被「稍后」忽略也会重新展示；Android 上会弹原生对话框。
+    /// </summary>
+    public async Task CheckForUpdatesAsync(bool manual)
+    {
+        if (IsCheckingUpdate)
+        {
+            return;
+        }
+
+        _updateCts?.Cancel();
+        _updateCts = new CancellationTokenSource();
+        CancellationToken token = _updateCts.Token;
+
+        IsCheckingUpdate = true;
+        UpdateStatus = manual ? "正在检查…" : "正在检查更新…";
+        try
+        {
+            _update = null;
+            UpdateCheckResult result = await UpdateService
+                .CheckAsync(ParseCurrentVersion(), token)
+                .ConfigureAwait(true);
+
+            UpdateStatus = result.Message;
+            if (result.Update is { } info)
+            {
+                ApplyUpdate(info, manual);
+            }
+            else
+            {
+                ClearUpdate();
+            }
+
+            if (result.Succeeded)
+            {
+                _settings.LastUpdateCheckUtc = DateTimeOffset.UtcNow.ToString("O");
+                SaveSettings();
+            }
+
+            if (!result.Succeeded)
+            {
+                AppLog.Warn("更新", result.Message);
+            }
+            else if (result.HasUpdate)
+            {
+                AppLog.Info("更新", $"发现新版本 v{result.Update!.Version}（{result.Update.AssetSummary}）");
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            UpdateStatus = "已取消检查。";
+        }
+        finally
+        {
+            IsCheckingUpdate = false;
+            HasUpdateResult = true;
+            RefreshLog();
+        }
+    }
+
+    /// <summary>
+    /// 不联网地把一段发行说明当成「发现新版本」展示出来（截图与离线测试用）。
+    ///
+    /// 更新面板的全部绑定都能在没有网络的情况下被验证：解析、渲染、按钮文案、下载前的
+    /// 状态。传了 <paramref name="assetName"/> 就会显示「下载并自动更新」按钮。
+    /// </summary>
+    public void ShowUpdatePreview(string version, string title, string notes, string? assetName = null, long assetSize = 0)
+    {
+        var info = new UpdateInfo(
+            Tag: $"v{version}",
+            Version: version,
+            Title: title,
+            Notes: notes,
+            PublishedAt: DateTimeOffset.Now,
+            HtmlUrl: UpdateService.ReleasesPageUrl,
+            Assets: []);
+
+        ApplyUpdate(info, manual: true);
+        if (assetName is { Length: > 0 })
+        {
+            _updateAsset = new UpdateAsset(assetName, assetSize, UpdateService.ReleasesPageUrl, null);
+            UpdatePackageText = $"{assetName} · {_updateAsset.SizeText}";
+        }
+
+        UpdateStatus = $"发现新版本 v{version}。";
+        HasUpdateResult = true;
+        OnPropertyChanged(nameof(CanInstallUpdate));
+    }
+
+    /// <summary>
+    /// 清掉 <see cref="ShowUpdatePreview"/> 造出来的状态（截图流程在截完更新面板后调用）。
+    /// 只是把界面恢复成"还没查过"，不写设置、不影响真实的检查结果。
+    /// </summary>
+    public void HideUpdatePreview()
+    {
+        ClearUpdate();
+        UpdateStatus = "尚未检查更新。";
+        UpdateActionStatus = string.Empty;
+        UpdateProgress = 0;
+        HasUpdateResult = false;
+    }
+
+    /// <summary>把查到的发行版落到界面状态上，并在 Android 上弹一次可跳过的对话框。</summary>
+    private void ApplyUpdate(UpdateInfo info, bool manual)
+    {
+        UpdateVersion = info.Version;
+        UpdateTitle = info.Title;
+        UpdatePublishedText = info.PublishedText;
+        UpdateNoteBlocks.Clear();
+        foreach (UpdateNote note in info.NoteBlocks)
+        {
+            UpdateNoteBlocks.Add(note);
+        }
+
+        OnPropertyChanged(nameof(HasUpdateNotes));
+
+        _updateAsset = UpdateService.SelectAsset(info);
+        UpdatePackageText = _updateAsset is null
+            ? "发行版没有可下载的安装包，请到 GitHub 下载。"
+            : $"{_updateAsset.Name} · {_updateAsset.SizeText}";
+
+        // 用户已经为这个版本点过「稍后」，自动检查就不要再翻出来；
+        // 手动检查必须展示，否则"点了没反应"。
+        if (!manual && string.Equals(DismissedUpdateVersion, info.Version, StringComparison.Ordinal))
+        {
+            HasUpdate = false;
+            return;
+        }
+
+        HasUpdate = true;
+
+        if (OperatingSystem.IsAndroid())
+        {
+            _ = PromptAndroidUpdateAsync(info);
+        }
+    }
+
+    /// <summary>Android：原生对话框（可跳过），确认后走下载 + 安装器。</summary>
+    private async Task PromptAndroidUpdateAsync(UpdateInfo info)
+    {
+        if (NativeUpdateDialogAsync is null)
+        {
+            return;
+        }
+
+        string body = InfoMessageForDialog(info);
+        bool install;
+        try
+        {
+            install = await NativeUpdateDialogAsync(
+                $"发现新版本 v{info.Version}",
+                body,
+                "立即更新",
+                "稍后");
+        }
+        catch
+        {
+            return;
+        }
+
+        if (install)
+        {
+            await InstallUpdateAsync().ConfigureAwait(true);
+        }
+        else
+        {
+            DismissUpdate();
+        }
+    }
+
+    private string InfoMessageForDialog(UpdateInfo info)
+    {
+        string notes = UpdateNotes.ToPlainText(UpdateNoteBlocks.Take(12).ToList());
+        return notes.Length == 0
+            ? $"{info.Title}\n\n发布于 {info.PublishedText}。是否现在下载？"
+            : $"{notes}\n\n发布于 {info.PublishedText}。是否现在下载？";
+    }
+
+    private void ClearUpdate()
+    {
+        HasUpdate = false;
+        UpdateVersion = string.Empty;
+        UpdateTitle = string.Empty;
+        UpdatePublishedText = string.Empty;
+        UpdatePackageText = string.Empty;
+        UpdateNoteBlocks.Clear();
+        OnPropertyChanged(nameof(HasUpdateNotes));
+        _update = null;
+        _updateAsset = null;
+    }
+
+    /// <summary>「稍后」：记住这个版本号，回到正常欢迎页。</summary>
+    [RelayCommand]
+    private void DismissUpdate()
+    {
+        if (UpdateVersion.Length > 0)
+        {
+            DismissedUpdateVersion = UpdateVersion;
+            SaveSettings();
+        }
+
+        OnPropertyChanged(nameof(IsUpdateDismissed));
+        OnPropertyChanged(nameof(ShowUpdatePanel));
+        UpdateActionStatus = string.Empty;
+    }
+
+    /// <summary>在系统浏览器里打开发行版页面（拿不到安装包时的兜底）。</summary>
+    [RelayCommand]
+    private async Task OpenReleasePageAsync()
+    {
+        string url = _update?.HtmlUrl is { Length: > 0 } html ? html : UpdateService.ReleasesPageUrl;
+        try
+        {
+            if (TopLevel?.Launcher is { } launcher && Uri.TryCreate(url, UriKind.Absolute, out Uri? uri))
+            {
+                await launcher.LaunchUriAsync(uri);
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("更新", $"打开浏览器失败：{ex.Message}");
+        }
+
+        UpdateActionStatus = $"请手动访问：{url}";
+    }
+
+    [RelayCommand]
+    private async Task InstallUpdateAsync()
+    {
+        if (_update is not { } info || _updateAsset is not { } asset)
+        {
+            UpdateActionStatus = "没有可下载的安装包，请用「在 GitHub 上查看」。";
+            return;
+        }
+
+        if (IsUpdateDownloading)
+        {
+            return;
+        }
+
+        IsUpdateDownloading = true;
+        UpdateProgress = 0;
+        UpdateActionStatus = OperatingSystem.IsAndroid() ? "正在下载 APK…" : "正在下载更新包…";
+        var progress = new Progress<double>(value => UpdateProgress = value);
+        try
+        {
+            if (OperatingSystem.IsAndroid())
+            {
+                await InstallOnAndroidAsync(info, asset, progress).ConfigureAwait(true);
+                return;
+            }
+
+            var status = new Progress<string>(text => UpdateActionStatus = text);
+            UpdatePrepareResult prepared = await UpdateInstaller
+                .PrepareAsync(info, asset, progress, status, CancellationToken.None)
+                .ConfigureAwait(true);
+
+            UpdateActionStatus = prepared.Message;
+            if (!prepared.Succeeded)
+            {
+                AppLog.Error("更新", prepared.Message);
+                RefreshLog();
+                if (prepared.PackagePath.Length > 0 && File.Exists(prepared.PackagePath))
+                {
+                    // 不能自动替换（目录只读之类），至少把下载好的包交给用户
+                    _ = OpenContainingFolderAsync(prepared.PackagePath);
+                }
+
+                return;
+            }
+
+            AppLog.Info("更新", $"已准备 v{info.Version}，正在重启完成替换");
+            RefreshLog();
+            UpdateActionStatus = "正在重启完成更新…";
+            await Task.Delay(1200).ConfigureAwait(true);
+            if (!UpdateInstaller.LaunchApplier(prepared.ApplierPath, Path.GetDirectoryName(prepared.ApplierPath) ?? Path.GetTempPath()))
+            {
+                UpdateActionStatus = $"无法启动更新脚本，请手动解压 {prepared.PackagePath}。";
+                return;
+            }
+
+            ShutdownApplication();
+        }
+        catch (Exception ex)
+        {
+            UpdateActionStatus = $"更新失败：{ex.Message}";
+            AppLog.Error("更新", ex.Message);
+            RefreshLog();
+        }
+        finally
+        {
+            IsUpdateDownloading = false;
+        }
+    }
+
+    private async Task InstallOnAndroidAsync(UpdateInfo info, UpdateAsset asset, IProgress<double> progress)
+    {
+        string path = Path.Combine(Path.GetTempPath(), asset.Name);
+        try
+        {
+            await UpdateService.DownloadAsync(asset, path, progress, CancellationToken.None).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            UpdateActionStatus = $"下载失败：{ex.Message}";
+            AppLog.Error("更新", UpdateActionStatus);
+            RefreshLog();
+            return;
+        }
+
+        UpdateActionStatus = "下载完成，正在打开安装器…";
+        if (NativeInstallApkAsync is null)
+        {
+            UpdateActionStatus = $"APK 已下载到 {path}，请手动安装。";
+            return;
+        }
+
+        try
+        {
+            await NativeInstallApkAsync(path).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            UpdateActionStatus = $"无法打开安装器：{ex.Message}（APK 在 {path}）";
+        }
+    }
+
+    private async Task OpenContainingFolderAsync(string filePath)
+    {
+        try
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{filePath}\"");
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("更新", $"打开目录失败：{ex.Message}");
+        }
+    }
+
+    /// <summary>关掉桌面窗口（自更新脚本在等本进程退出）。</summary>
+    private static void ShutdownApplication()
+    {
+        if (Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            desktop.Shutdown();
+        }
+    }
+
+    /// <summary>当前程序集版本；解析失败时返回 null（此时把任何发行版都视为更新）。</summary>
+    private static Version? ParseCurrentVersion() =>
+        Version.TryParse(
+            System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? string.Empty,
+            out Version? version)
+            ? version
+            : null;
+
+    /// <summary>设置页「关于」里的版本行：<c>v1.3.0 · Windows x64</c>。</summary>
+    public string VersionLine =>
+        $"v{VersionText} · {(OperatingSystem.IsAndroid() ? "Android" : "Windows")} " +
+        $"{(System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture ==
+            System.Runtime.InteropServices.Architecture.X64 ? "x64" : System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString().ToLowerInvariant())}";
 
     /// <summary>
     /// 浏览页搜索框宽度：宽屏给足，避免占位提示被截断（原来写死 170 太窄）。
@@ -4319,6 +4945,8 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     public partial string VersionText { get; set; }
 
+    partial void OnVersionTextChanged(string value) => OnPropertyChanged(nameof(VersionLine));
+
     [ObservableProperty]
     public partial string CliStatus { get; set; }
 
@@ -4327,6 +4955,24 @@ public partial class MainViewModel : ViewModelBase
 
     [ObservableProperty]
     public partial string TexconvStatus { get; set; }
+
+    // ── 工具状态：设置页把「依赖探测」画成一行一条带状态点的清单，
+    //    而不是三行同色的句子（"已找到 xxx" / "未找到 xxx" 扫不出来）。
+    [ObservableProperty]
+    public partial bool HasCli { get; set; }
+
+    [ObservableProperty]
+    public partial bool HasAstcenc { get; set; }
+
+    [ObservableProperty]
+    public partial bool HasTexconv { get; set; }
+
+    public bool HasOodle => OodleNative.IsAvailable;
+
+    public string CliValue => HasCli ? "已就绪" : "缺失 · 贴图替换不可用";
+    public string AstcencValue => HasAstcenc ? "已就绪" : "缺失 · ASTC 贴图不可用";
+    public string TexconvValue => HasTexconv ? "已就绪" : "缺失 · DXT/BC 贴图不可用";
+    public string OodleValue => HasOodle ? "已就绪" : "缺失 · 自动降级为不压缩";
 
     /// <summary>
     /// Oodle 原生库状态。显示出来是因为：请求 Oodle 压缩而本机没有它时，
@@ -4478,9 +5124,16 @@ public partial class MainViewModel : ViewModelBase
     {
         VersionText = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "未知";
         Services.UAssetCliRunner? runner = Services.UAssetCliRunner.TryCreate();
-        CliStatus = runner is not null ? "已找到 UAssetCLI" : "未找到 UAssetCLI（替换功能不可用）";
-        AstcencStatus = runner?.HasAstcenc == true ? "已找到 astcenc" : "未找到 astcenc";
-        TexconvStatus = runner?.HasTexconv == true ? "已找到 texconv" : "未找到 texconv";
+        HasCli = runner is not null;
+        HasAstcenc = runner?.HasAstcenc == true;
+        HasTexconv = runner?.HasTexconv == true;
+        CliStatus = HasCli ? "已找到 UAssetCLI" : "未找到 UAssetCLI（替换功能不可用）";
+        AstcencStatus = HasAstcenc ? "已找到 astcenc" : "未找到 astcenc";
+        TexconvStatus = HasTexconv ? "已找到 texconv" : "未找到 texconv";
+        OnPropertyChanged(nameof(CliValue));
+        OnPropertyChanged(nameof(AstcencValue));
+        OnPropertyChanged(nameof(TexconvValue));
+        OnPropertyChanged(nameof(OodleValue));
         TempDirectory = Path.GetTempPath();
         _cliRunnerStatusForLog = CliStatus;
         _astcencStatusForLog = AstcencStatus;

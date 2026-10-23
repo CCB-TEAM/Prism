@@ -52,14 +52,16 @@ public partial class WorkspaceView : UserControl
     {
         InitializeComponent();
         _drawerTransitions = PortraitDrawer.Transitions;
-        // 双保险：布局容器自身宽度变化时也刷新响应式状态
-        SizeChanged += (_, e) =>
-        {
-            if (DataContext is MainViewModel vm)
-            {
-                vm.WindowWidth = e.NewSize.Width;
-            }
-        };
+
+        // 这里刻意不再监听 SizeChanged 去写 WindowWidth。
+        //
+        // 曾经有一份「双保险」：本控件的宽度变化也回写 vm.WindowWidth。但本控件在侧栏
+        // 右侧，宽度 = 窗口宽 - 216，于是 vm.WindowWidth 被改成了内容区宽度。所有按
+        // 宽度判断的档位（IsWideLayout 阈值 1200、画布宽度上限）因此按"窗口 - 216"算：
+        // 1280 的窗口被判定成 1064 → 落回紧凑档（10.5 / 12.5 这种小数号字），在 100%
+        // 缩放的屏幕上小数号字会渲染成半像素、看着发虚；而最大化后内容区也变宽，
+        // 又跳回宽屏档的整数号字——于是"只有窗口化时字模糊"。
+        // 窗口宽度由 MainWindow / MainView 提供，这里只消费，不生产。
         DataContextChanged += (_, _) =>
         {
             if (_vm is not null)

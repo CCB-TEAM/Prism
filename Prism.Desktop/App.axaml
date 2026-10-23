@@ -46,21 +46,25 @@
             <SolidColorBrush x:Key="DangerBrush" Color="#b43a2a" />
 
             <!--
-                字号资源（这里的值是「紧凑档」，即手机与窄窗用的那一套，与原设计一致）。
+                字号资源（这里的值是「紧凑档」，即手机与窄窗用的那一套）。
                 宽屏时由 Services/LayoutDensity 把这些键改成放大一档的值 —— 视图里用
                 {DynamicResource FsXX} 取值，于是只有文字变大，内边距与控件尺寸不变。
 
                 为什么不做「整体缩放」：把整个界面按比例放大，内边距、控件、行高会一起变大，
                 看起来像把手机界面拉大，而不是桌面版。只放大文字才对。
+
+                数值必须与 Services/LayoutDensity.cs 的紧凑档逐项一致（启动时那边会整体
+                重写一遍，但窗口没跨过阈值之前用的是这里的值）。一律取整数：半像素字号
+                在 100% 缩放的屏幕上会被抗锯齿涂成灰边，看着发虚。
             -->
             <x:Double x:Key="Fs8">8</x:Double>
             <x:Double x:Key="Fs10">10</x:Double>
             <x:Double x:Key="Fs11">11</x:Double>
             <x:Double x:Key="Fs12">12</x:Double>
-            <x:Double x:Key="Fs10_5">10.5</x:Double>
-            <x:Double x:Key="Fs11_5">11.5</x:Double>
-            <x:Double x:Key="Fs12_5">12.5</x:Double>
-            <x:Double x:Key="Fs13_5">13.5</x:Double>
+            <x:Double x:Key="Fs10_5">11</x:Double>
+            <x:Double x:Key="Fs11_5">12</x:Double>
+            <x:Double x:Key="Fs12_5">13</x:Double>
+            <x:Double x:Key="Fs13_5">14</x:Double>
             <x:Double x:Key="Fs13">13</x:Double>
             <x:Double x:Key="Fs14">14</x:Double>
             <x:Double x:Key="Fs15">15</x:Double>

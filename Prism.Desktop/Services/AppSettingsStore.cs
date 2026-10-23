@@ -90,6 +90,21 @@ internal sealed class AppSettings
     /// 保存窗口尺寸时就会生成，用它判断"首次"会把第二次启动也当成第一次。
     /// </summary>
     public bool WelcomeShown { get; set; }
+
+    /// <summary>
+    /// 启动时自动去 GitHub 查有没有新发行版（欢迎页会改成更新内容）。
+    /// 关掉之后仍可在「设置 › 关于」里手动检查。
+    /// </summary>
+    public bool AutoCheckUpdates { get; set; } = true;
+
+    /// <summary>
+    /// 用户点了「稍后」的那个版本号。同一个版本不再反复打扰；
+    /// 更高版本号出现时自动失效（比较的是版本号本身，不是"永远不再提示"）。
+    /// </summary>
+    public string DismissedUpdateVersion { get; set; } = string.Empty;
+
+    /// <summary>上次成功检查更新的时间（UTC，ISO 8601）。用于节流，避免每次启动都请求 GitHub。</summary>
+    public string LastUpdateCheckUtc { get; set; } = string.Empty;
 }
 
 internal static class AppSettingsStore

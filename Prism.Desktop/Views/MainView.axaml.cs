@@ -18,6 +18,10 @@ public partial class MainView : UserControl
                 {
                     _ = vm.RestoreAndroidExportFolderAsync();
                 }
+
+                // 启动检查更新只在这里触发一次：视图模型自己不发起网络请求，
+                // 于是 headless 测试与 --smoke 都不会因为构造 VM 而联网。
+                vm.BeginStartupUpdateCheck();
             }
         };
         SizeChanged += (_, e) =>

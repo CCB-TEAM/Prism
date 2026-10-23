@@ -49,15 +49,11 @@ public sealed class UAssetCliRunner
     {
         string baseDir = AppContext.BaseDirectory;
 
-        // 开发布局：应用输出在 <repo>/Prism.Desktop.Desktop/bin/<配置>/net10.0[/<rid>]/，
-        // 带 RID 的产物多一层，所以仓库根可能是往上 4 层也可能 5 层，两档都试。
-        //
-        // 历史坑：原先一律按 5 层写死。但 dotnet build 的 Debug 产物没有 RID 子目录，
-        // 5 层正好越过仓库根落到仓库外 —— 所有开发布局候选一个都不存在。应用当时看似
-        // 正常，只是因为 csproj 已经把 CLI 复制进了输出目录（候选一）。一旦复制目标
-        // 失效（构建警告过的那种情况），这个兜底本该接手，却永远接不上。
-        string up4 = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", ".."));
-        string up5 = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", ".."));
+        // 开发布局：从输出目录往上找仓库根。带 RID 的产物、发布目录、测试工程的输出
+        // 深度各不相同（应用是向上 4 层，测试是 6 层），写死层数的历史版本在测试与
+        // 发布目录里永远接不上，于是"依赖探测"只在那一种布局下是对的。
+        // 现在逐层试，直到找到带 UAssetCLI 子目录或 .slnx 的目录为止。
+        string[] roots = DevLayoutRoots(baseDir).ToArray();
 
         string[] cliCandidates =
         [
@@ -65,8 +61,7 @@ public sealed class UAssetCliRunner
             Path.Combine(baseDir, "UAssetCLI", "UAssetCLI.dll"),
             Path.Combine(baseDir, "UAssetCLI", "win-x64", "UAssetCLI.exe"),
             Path.Combine(baseDir, "UAssetCLI", "win-x64", "UAssetCLI.dll"),
-            ..DevLayoutCliCandidates(up4),
-            ..DevLayoutCliCandidates(up5),
+            ..roots.SelectMany(DevLayoutCliCandidates),
         ];
 
         string? cli = cliCandidates.FirstOrDefault(File.Exists);
@@ -78,8 +73,7 @@ public sealed class UAssetCliRunner
         string[] encoderCandidates =
         [
             Path.Combine(baseDir, "tools"),
-            Path.Combine(up4, "tools"),
-            Path.Combine(up5, "tools"),
+            ..roots.Select(root => Path.Combine(root, "tools")),
         ];
 
         string? Find(string fileName) => encoderCandidates.Select(p => Path.Combine(p, fileName)).FirstOrDefault(File.Exists);
@@ -249,5 +243,26 @@ public sealed class UAssetCliRunner
         Path.Combine(repoRoot, "UAssetCLI", "bin", "Release", "net10.0", "UAssetCLI.exe"),
         Path.Combine(repoRoot, "UAssetCLI", "bin", "Debug", "net10.0", "win-x64", "UAssetCLI.exe"),
         Path.Combine(repoRoot, "UAssetCLI", "bin", "Debug", "net10.0", "UAssetCLI.exe"),
+        Path.Combine(repoRoot, "artifacts", "dist", "win-x64", "UAssetCLI", "UAssetCLI.exe"),
     ];
+
+    /// <summary>
+    /// 从输出目录逐层向上，返回看起来像仓库根的目录（有 UAssetCLI 子目录或 .slnx）。
+    /// 最多试 8 层，且全部返回 —— 发布目录里可能既有 UAssetCLI 子目录又有上层仓库根。
+    /// </summary>
+    private static IEnumerable<string> DevLayoutRoots(string baseDir)
+    {
+        DirectoryInfo? dir = new(baseDir);
+        var depth = 0;
+        while (dir is not null && depth++ < 8)
+        {
+            if (Directory.Exists(Path.Combine(dir.FullName, "UAssetCLI")) ||
+                Directory.GetFiles(dir.FullName, "*.slnx").Length > 0)
+            {
+                yield return dir.FullName;
+            }
+
+            dir = dir.Parent;
+        }
+    }
 }

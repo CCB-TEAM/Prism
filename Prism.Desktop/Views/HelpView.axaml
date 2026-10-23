@@ -1,0 +1,347 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Prism.Desktop.ViewModels"
+             xmlns:views="using:Prism.Desktop.Views"
+             xmlns:docs="using:Prism.Desktop.Docs"
+             x:Class="Prism.Desktop.Views.HelpView"
+             x:DataType="vm:MainViewModel">
+
+    <!--
+        ═══ 使用说明（独立页面）═══
+
+        原来是一个 600px 宽的模态浮层：正文被"知道了"按钮裁掉半截，浅色截图压在深色
+        底上像一块白板，翻页只能靠滚轮。现在改成与欢迎页同一套版式的独立页面：
+        引题带（左侧主色细条 + 章节号 + 大标题）→ 分隔线 → 左目录右正文。
+        正文按"块"渲染（标题 / 段 / 步骤 / 要点 / 截图 / 提示），模板只写一份，
+        内容在 Docs/PrismDocs.cs 里按章维护。
+    -->
+
+    <UserControl.Styles>
+        <!-- 左目录：用 ListBox 是为了拿键盘上下键与选中态，外观按导航按钮重画 -->
+        <Style Selector="ListBox.doc-nav">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+        <Style Selector="ListBox.doc-nav ListBoxItem">
+            <Setter Property="Padding" Value="10,7" />
+            <Setter Property="Margin" Value="0,1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="FontSize" Value="{DynamicResource Fs12}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+        <Style Selector="ListBox.doc-nav ListBoxItem:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource PrimaryWashBrush}" />
+        </Style>
+        <Style Selector="ListBox.doc-nav ListBoxItem:selected">
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="ListBox.doc-nav ListBoxItem:selected /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource PrimaryWashBrush}" />
+            <Setter Property="TextBlock.Foreground" Value="{DynamicResource PrimaryBrush}" />
+        </Style>
+
+        <!-- 章节列表项：序号 + 标题 -->
+        <Style Selector="TextBlock.doc-toc-label">
+            <Setter Property="FontSize" Value="{DynamicResource Fs12}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <!-- 文档截图：去掉按钮自己的底与内边距，只留图片本身 -->
+        <Style Selector="Button.figure">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+        </Style>
+        <Style Selector="Button.figure:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Opacity" Value="0.92" />
+        </Style>
+    </UserControl.Styles>
+
+    <!-- 内容块的模板：按类型隐式匹配（DocHeading / DocParagraph / DocSteps / …） -->
+    <UserControl.DataTemplates>
+        <DataTemplate x:DataType="docs:DocHeading">
+            <TextBlock Text="{Binding Text}"
+                       FontSize="{DynamicResource Fs13}"
+                       FontWeight="SemiBold"
+                       Margin="0,8,0,0" />
+        </DataTemplate>
+
+        <DataTemplate x:DataType="docs:DocParagraph">
+            <TextBlock Text="{Binding Text}"
+                       FontSize="{DynamicResource Fs12}"
+                       TextWrapping="Wrap"
+                       LineHeight="{DynamicResource Fs20}" />
+        </DataTemplate>
+
+        <DataTemplate x:DataType="docs:DocSteps">
+            <ItemsControl ItemsSource="{Binding Numbered}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Spacing="10" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="docs:DocNumberedStep">
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                            <Border Grid.Column="0"
+                                    Width="22" Height="22" CornerRadius="11"
+                                    Background="{DynamicResource PrimaryWashBrush}"
+                                    VerticalAlignment="Top">
+                                <TextBlock Text="{Binding NumberText}"
+                                           FontSize="{DynamicResource Fs10}"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource PrimaryBrush}"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center" />
+                            </Border>
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding Text}"
+                                       FontSize="{DynamicResource Fs12}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,2,0,0" />
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </DataTemplate>
+
+        <DataTemplate x:DataType="docs:DocBullets">
+            <ItemsControl ItemsSource="{Binding Items}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Spacing="7" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="x:String">
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="9">
+                            <TextBlock Grid.Column="0"
+                                       Text="·"
+                                       FontSize="{DynamicResource Fs14}"
+                                       Foreground="{DynamicResource PrimaryBrush}"
+                                       Margin="0,-2,0,0" />
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding}"
+                                       FontSize="{DynamicResource Fs12}"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       TextWrapping="Wrap" />
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </DataTemplate>
+
+        <DataTemplate x:DataType="docs:DocFigure">
+            <StackPanel Spacing="8" Margin="0,4,0,2">
+                <!--
+                    正文里的图是"缩略图"：整页截图按原尺寸铺满正文列会有 600px 高，
+                    把下面的步骤全部推到屏幕外。这里限高 420，点一下开全屏看原尺寸。
+                -->
+                <Button Classes="figure"
+                        HorizontalAlignment="Left"
+                        ToolTip.Tip="点击查看原尺寸"
+                        Command="{Binding $parent[UserControl].DataContext.OpenDocImageCommand}"
+                        CommandParameter="{Binding ImageKey}">
+                    <Border CornerRadius="10"
+                            ClipToBounds="True"
+                            BorderBrush="{DynamicResource DividerBrush}"
+                            BorderThickness="1"
+                            Background="{DynamicResource SurfaceBrush}">
+                        <Image Source="{Binding ImageKey, Converter={x:Static views:DocImageConverter.Instance}}"
+                               Stretch="Uniform"
+                               MaxHeight="420" />
+                    </Border>
+                </Button>
+                <TextBlock Text="{Binding Caption}"
+                           FontSize="{DynamicResource Fs10}"
+                           Foreground="{DynamicResource TextMutedBrush}"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+        </DataTemplate>
+
+        <DataTemplate x:DataType="docs:DocCallout">
+            <Border Background="{DynamicResource PrimaryWashBrush}"
+                    CornerRadius="10"
+                    Padding="14,12">
+                <StackPanel Spacing="5">
+                    <TextBlock Text="{Binding Title}"
+                               FontSize="{DynamicResource Fs12}"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource PrimaryBrush}" />
+                    <TextBlock Text="{Binding Text}"
+                               FontSize="{DynamicResource Fs11}"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+    </UserControl.DataTemplates>
+
+    <Panel>
+    <ScrollViewer>
+        <StackPanel MaxWidth="1120"
+                    HorizontalAlignment="Stretch"
+                    Margin="24,28,24,36"
+                    Spacing="0">
+
+            <!-- ── 引题带：左侧主色细条 + 章节号 + 大标题（与欢迎页同一套） ── -->
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                <Border Grid.Column="0"
+                        Width="3"
+                        CornerRadius="2"
+                        Background="{DynamicResource PrimaryBrush}"
+                        Margin="0,5,0,5" />
+                <StackPanel Grid.Column="1" Spacing="8">
+                    <TextBlock FontSize="{DynamicResource Fs10}"
+                               Foreground="{DynamicResource PrimaryBrush}"
+                               LetterSpacing="1.4">
+                        <Run Text="PRISM · 使用说明 · 第 " />
+                        <Run Text="{Binding DocChapterNumber}" />
+                        <Run Text=" 章" />
+                    </TextBlock>
+                    <TextBlock Text="{Binding SelectedChapter.Title}"
+                               FontSize="{DynamicResource Fs25}"
+                               FontWeight="SemiBold"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </Grid>
+
+            <TextBlock Text="{Binding SelectedChapter.Summary}"
+                       MaxWidth="760"
+                       HorizontalAlignment="Left"
+                       Margin="0,14,0,0"
+                       FontSize="{DynamicResource Fs13}"
+                       Foreground="{DynamicResource TextMutedBrush}"
+                       TextWrapping="Wrap" />
+
+            <Border Height="1"
+                    Background="{DynamicResource DividerBrush}"
+                    Margin="0,26,0,22" />
+
+            <!--
+                ── 左目录 / 右正文 ──
+                列宽用 Auto + 目录自己给宽度：窄窗（手机）时目录整块收起来，
+                Auto 列自然塌成 0，正文独占整行；此时顶部换成下拉选择章节。
+                这样一份正文不用为两种宽度各写一遍。
+            -->
+            <Grid ColumnDefinitions="Auto,*">
+
+                <StackPanel Grid.Column="0"
+                            Spacing="10"
+                            Width="200"
+                            Margin="0,0,34,0"
+                            IsVisible="{Binding CanCollapseSidebar}">
+                    <TextBlock Text="目录"
+                               FontSize="{DynamicResource Fs10}"
+                               LetterSpacing="1.2"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               Margin="10,0" />
+                    <ListBox Classes="doc-nav"
+                             ItemsSource="{Binding DocChapters}"
+                             SelectedItem="{Binding SelectedChapter}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="docs:DocChapter">
+                                <TextBlock Text="{Binding Label}" Classes="doc-toc-label" TextWrapping="Wrap" />
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <Border Height="1" Background="{DynamicResource DividerBrush}" Margin="10,8,10,6" />
+                    <TextBlock FontSize="{DynamicResource Fs10}"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               TextWrapping="Wrap"
+                               Margin="10,0"
+                               Text="文档随版本更新，截图取自当前版本的实际界面。" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Spacing="16">
+                    <!-- 窄窗：目录换成下拉，正文独占整行 -->
+                    <ComboBox ItemsSource="{Binding DocChapters}"
+                              SelectedItem="{Binding SelectedChapter}"
+                              IsVisible="{Binding !CanCollapseSidebar}"
+                              HorizontalAlignment="Stretch">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="docs:DocChapter">
+                                <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+
+                    <ItemsControl ItemsSource="{Binding DocBlocks}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Spacing="14" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+
+                    <!-- ── 上一章 / 下一章 ── -->
+                    <Border Height="1" Background="{DynamicResource DividerBrush}" Margin="0,10,0,0" />
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                        <Button Grid.Column="0"
+                                HorizontalAlignment="Left"
+                                Classes="ghost"
+                                IsVisible="{Binding CanGoPreviousDoc}"
+                                Command="{Binding GoPreviousDocCommand}">
+                            <TextBlock FontSize="{DynamicResource Fs11}">
+                                <Run Text="← " />
+                                <Run Text="{Binding PreviousDocTitle}" />
+                            </TextBlock>
+                        </Button>
+                        <Button Grid.Column="1"
+                                HorizontalAlignment="Right"
+                                Classes="ghost"
+                                IsVisible="{Binding CanGoNextDoc}"
+                                Command="{Binding GoNextDocCommand}">
+                            <TextBlock FontSize="{DynamicResource Fs11}">
+                                <Run Text="{Binding NextDocTitle}" />
+                                <Run Text=" →" />
+                            </TextBlock>
+                        </Button>
+                    </Grid>
+                </StackPanel>
+            </Grid>
+        </StackPanel>
+    </ScrollViewer>
+
+    <!--
+        ═══ 截图全屏查看 ═══
+        点正文里的缩略图打开，点任意处关闭。放在 ScrollViewer 外面，
+        所以它盖住整页、也不会跟着正文滚走。
+    -->
+    <Border IsVisible="{Binding IsDocImageOpen}"
+            Background="#C0000000"
+            IsHitTestVisible="True">
+        <Button Background="Transparent"
+                BorderThickness="0"
+                Padding="0"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch"
+                Command="{Binding CloseDocImageCommand}">
+            <Panel>
+                <Border Background="{DynamicResource CardBrush}"
+                        CornerRadius="12"
+                        BorderBrush="{DynamicResource DividerBrush}"
+                        BorderThickness="1"
+                        ClipToBounds="True"
+                        Margin="40"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center">
+                    <Image Source="{Binding DocImagePreview}" Stretch="Uniform" />
+                </Border>
+                <Button Content="✕"
+                        Classes="ghost"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Top"
+                        Margin="0,48,52,0"
+                        Command="{Binding CloseDocImageCommand}" />
+            </Panel>
+        </Button>
+    </Border>
+    </Panel>
+</UserControl>

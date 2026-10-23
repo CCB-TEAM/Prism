@@ -10,4 +10,10 @@
     </provider>
   </application>
   <uses-permission android:name="android.permission.INTERNET" />
+  <!--
+    应用内更新：下载完 APK 后交给系统安装器。Android 8 起这需要 REQUEST_INSTALL_PACKAGES，
+    否则 startActivity(ACTION_VIEW .apk) 会直接被拦掉（用户只看到"没有权限"）。
+    这是唯一一处需要"安装"权限的地方 —— 不是为了绕过商店，而是本项目本来就不在商店分发。
+  -->
+  <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 </manifest>

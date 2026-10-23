@@ -13,8 +13,10 @@ using SharpImage = SixLabors.ImageSharp.Image<SixLabors.ImageSharp.PixelFormats.
 // （不绘制），截图要挂 Skia 真正光栅化，两者不能在同一进程共存。
 if (args.Length > 0 && args[0] == "--capture")
 {
+    bool docsOnly = args.Contains("--docs", StringComparer.OrdinalIgnoreCase);
     return Prism.FeatureTests.UiCapture.Run(
-        args.Length > 1 ? args[1] : Path.Combine(AppContext.BaseDirectory, "ui-capture"));
+        args.Length > 1 ? args[1] : Path.Combine(AppContext.BaseDirectory, "ui-capture"),
+        docsOnly);
 }
 
 // 新功能集成测试：映射格式识别 / 搜索路径解析 / Pak 转换 / 合并优先级。
@@ -984,28 +986,56 @@ try
         // 打开后才把源 Pak 的蓝图/本地化等双端通用文件一并塞进输出 Pak。
         Check(!vm.ConvertIncludeModFiles, "「并入模组文件」开关默认关闭（默认只转换贴图）");
 
-        // 「使用说明」浮层：各页共用一个，按 HelpTopic 切换内容，默认收起。
-        // 用页内浮层而非独立 Window，是为了 Android 上也能用（TopLevel 不一定是 Window）。
-        Check(!vm.IsHelpOpen, "「使用说明」浮层默认收起");
-        if (typeof(Prism.Desktop.ViewModels.MainViewModel).GetProperty("OpenHelpCommand")?.GetValue(vm)
-                is CommunityToolkit.Mvvm.Input.IRelayCommand openHelp
-            && typeof(Prism.Desktop.ViewModels.MainViewModel).GetProperty("CloseHelpCommand")?.GetValue(vm)
-                is CommunityToolkit.Mvvm.Input.IRelayCommand closeHelp)
-        {
-            openHelp.Execute("convert");
-            Check(vm.IsHelpOpen && vm.IsHelpConvert, "OpenHelp(\"convert\") 展开转换说明");
-            Check(vm.HelpTitle.Contains("转换"), $"标题随主题切换（{vm.HelpTitle}）");
+        // 「使用说明」从浮层改成了独立页面：章节由 Docs/PrismDocs 提供，
+        // 页头的「使用说明」按钮带着当前页的主题跳进去（见 OpenDocs 命令）。
+        Check(!vm.IsDocsVisible, "「使用说明」页面默认不显示");
+        Check(vm.DocChapters.Count >= 8, $"使用说明有 {vm.DocChapters.Count} 个章节");
+        Check(vm.DocChapters.All(chapter => chapter.Blocks.Count > 0), "每个章节都有内容（不会点开是空的）");
+        Check(vm.DocChapters.Select(chapter => chapter.Key).Distinct().Count() == vm.DocChapters.Count,
+            "章节 Key 唯一（页头跳转按 Key 定位）");
+        Check(vm.SelectedChapter is not null, "启动时就选中了第一章（绑定在进页面前就求值）");
 
-            openHelp.Execute("merge");
-            Check(vm.IsHelpMerge && !vm.IsHelpConvert, "切到合并主题时旧主题不再显示");
+        vm.OpenDocsCommand.Execute("convert");
+        Check(vm.IsDocsVisible && vm.SelectedChapter?.Key == "convert", "OpenDocs(\"convert\") 跳进转换章节");
+        Check(vm.DocBlocks.Count > 0, "当前章节的正文块可枚举");
+        Check(vm.DocChapterNumber == "07", $"章号按目录序号给出（{vm.DocChapterNumber}）");
 
-            closeHelp.Execute(null);
-            Check(!vm.IsHelpOpen, "CloseHelpCommand 收起浮层");
-        }
-        else
+        vm.GoNextDocCommand.Execute(null);
+        Check(vm.SelectedChapter?.Key == "settings", "「下一章」走到更新之后的设置章节");
+        vm.GoPreviousDocCommand.Execute(null);
+        Check(vm.SelectedChapter?.Key == "convert", "「上一章」退回转换章节");
+
+        // 文档里的每张截图都必须真有资源（缺图时页面只剩图注，读者会以为功能没了）。
+        // 直接查源码树：文档截图是构建期打进程序的 avares 资源，磁盘上有就一定编进去了。
+        string? assetRepoRoot = null;
+        DirectoryInfo? assetProbe = new(AppContext.BaseDirectory);
+        for (var i = 0; i < 8 && assetProbe is not null; i++, assetProbe = assetProbe.Parent)
         {
-            Check(false, "找不到使用说明的开合命令");
+            if (Directory.Exists(Path.Combine(assetProbe.FullName, "Prism.Desktop", "Assets")))
+            {
+                assetRepoRoot = assetProbe.FullName;
+                break;
+            }
         }
+
+        Check(assetRepoRoot is not null, "能找到仓库根以校验文档截图");
+        var figureKeys = Prism.Desktop.Docs.PrismDocs.Chapters
+            .SelectMany(chapter => chapter.Blocks)
+            .OfType<Prism.Desktop.Docs.DocFigure>()
+            .Select(figure => figure.ImageKey)
+            .Distinct()
+            .ToList();
+        var missingFigures = assetRepoRoot is null
+            ? []
+            : figureKeys
+                .Where(key => !new[] { "light", "dark" }.All(theme => File.Exists(
+                    Path.Combine(assetRepoRoot, "Prism.Desktop", "Assets", "help", theme, key + ".png"))))
+                .ToList();
+        Check(figureKeys.Count >= 6, $"文档引用了 {figureKeys.Count} 张截图");
+        Check(missingFigures.Count == 0,
+            missingFigures.Count == 0
+                ? "文档截图 light / dark 两套都齐全"
+                : $"缺少文档截图：{string.Join(", ", missingFigures)}");
 
         // 宽屏档位：整体放大 + 内容列与搜索框放宽；窄窗必须回到原值（手机布局一行不改）。
         Check(!vm.IsWideLayout, "默认窗口宽度下不是宽屏档位");
@@ -1521,6 +1551,172 @@ try
             byte[] originalMip0 = File.ReadAllBytes(realUbulk).AsSpan(0, coreTexture.Mips[0].ByteLength).ToArray();
             Check(!patchedMip0.SequenceEqual(originalMip0), "UAssetCLI 真的重编码了 mip0（载荷与原始不同）");
         }
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    Section("F12 · 检查更新（发行版解析 / 版本比较 / 自更新脚本）");
+
+    // ── 发行版 JSON 解析：字段缺失或 API 改版时不能把界面搞崩 ──
+    const string releaseJson = """
+        {
+          "tag_name": "v1.3.0",
+          "name": "界面细化与自动更新",
+          "body": "## 界面\n- 设置页重做\n- **修好**窗口化发虚\n",
+          "html_url": "https://github.com/CCB-TEAM/Prism/releases/tag/v1.3.0",
+          "published_at": "2026-02-11T08:30:00Z",
+          "assets": [
+            { "name": "Prism-win-x64-1.3.0.zip", "size": 124724173,
+              "browser_download_url": "https://example.invalid/a.zip",
+              "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" },
+            { "name": "Prism-android-1.3.0.apk", "size": 94284432,
+              "browser_download_url": "https://example.invalid/a.apk" }
+          ]
+        }
+        """;
+
+    Prism.Desktop.Services.UpdateInfo? parsed = Prism.Desktop.Services.UpdateService.ParseRelease(releaseJson);
+    Check(parsed is not null, "发行版 JSON 能解析");
+    Check(parsed?.Version == "1.3.0", $"tag 归一化 v1.3.0 → {parsed?.Version}");
+    Check(parsed?.Assets.Count == 2, "资产列表解析出 2 个文件");
+    Check(parsed?.Assets[0].Sha256 is { Length: 64 }, "digest 的 sha256 被取出（下载后可校验）");
+    Check(parsed?.Assets[1].Sha256 is null, "没有 digest 的资产不硬编校验值");
+    Check(parsed?.PublishedText == DateTimeOffset.Parse("2026-02-11T08:30:00Z").ToLocalTime().ToString("yyyy-MM-dd"),
+        $"发布日期按本地时区格式化（{parsed?.PublishedText}）");
+    Check(parsed?.NoteBlocks.Count >= 3, $"正文解析出 {parsed?.NoteBlocks.Count} 块");
+
+    Check(Prism.Desktop.Services.UpdateService.ParseRelease("{}") is null, "缺 tag_name 的 JSON 返回 null（不抛）");
+    Check(Prism.Desktop.Services.UpdateService.NormalizeVersion("V1.2.3") == "1.2.3", "大写 V 前缀也能归一化");
+    Check(Prism.Desktop.Services.UpdateService.NormalizeVersion("1.2.3") == "1.2.3", "没有前缀时原样返回");
+
+    // ── 版本比较：等于 / 小于都不算更新，解析不了按"有更新"处理 ──
+    var v123 = new Version(1, 2, 3);
+    Check(Prism.Desktop.Services.UpdateService.IsNewer("1.3.0", v123), "1.3.0 > 1.2.3 → 有更新");
+    Check(!Prism.Desktop.Services.UpdateService.IsNewer("1.2.3", v123), "同版本不算更新");
+    Check(!Prism.Desktop.Services.UpdateService.IsNewer("1.2.2", v123), "旧版本不算更新");
+    Check(Prism.Desktop.Services.UpdateService.IsNewer("1.2.10", v123), "字符串比较会错的 1.2.10 > 1.2.3（按数值比）");
+    Check(Prism.Desktop.Services.UpdateService.IsNewer("abc", v123), "版本号看不懂时按有更新处理（不静默）");
+    Check(Prism.Desktop.Services.UpdateService.IsNewer("1.0.0", null), "当前版本读不出来时按有更新处理");
+
+    // ── 资产选择：Windows 挑 win 的 zip ──
+    Prism.Desktop.Services.UpdateAsset? chosenAsset =
+        parsed is null ? null : Prism.Desktop.Services.UpdateService.SelectAsset(parsed);
+    Check(chosenAsset?.Name.Contains("win-x64", StringComparison.OrdinalIgnoreCase) == true,
+        $"桌面端挑到 Windows 包（{chosenAsset?.Name}）");
+
+    // ── 发行说明解析：标题 / 列表 / 加粗 / 图片 / 链接 ──
+    IReadOnlyList<Prism.Desktop.Services.UpdateNote> notes = Prism.Desktop.Services.UpdateNotes.Parse(
+        """
+        # 大标题
+        普通一行
+        - 列表项 **加粗**
+        - `code` 与 [链接](https://example.invalid)
+        ![截图](https://example.invalid/x.png)
+        ---
+        """);
+    Check(notes.Count == 4, $"解析出 4 块内容（标题/段落/2 条列表，图片与分隔线被丢掉）：{notes.Count}");
+    Check(notes[0].IsHeading, "第一块是标题");
+    Check(notes[1].Kind == Prism.Desktop.Services.UpdateNoteKind.Paragraph, "第二块是段落");
+    Check(notes[2].IsBullet, "第三块是列表项");
+    Check(notes[2].Runs.Any(run => run.Bold && run.Text == "加粗"), "列表里的 **加粗** 单独成一个加粗片段");
+    Check(notes[3].Runs.Any(run => run.Code && run.Text == "code"), "行内代码被识别");
+    Check(notes[3].Runs.Any(run => run.Link && run.Text == "链接"), "链接只保留文字（不当作 UI 元素）");
+    Check(!notes.Any(note => note.PlainText.Contains("example.invalid", StringComparison.Ordinal)),
+        "图片与链接的 URL 不会漏进正文");
+    Check(Prism.Desktop.Services.UpdateNotes.Parse("", 10).Count == 0, "空正文解析出 0 块");
+    Check(Prism.Desktop.Services.UpdateNotes.Parse("- a\n- b\n- c", 2).Count == 2, "maxBlocks 生效（欢迎页只展示前几块）");
+
+    // ── 自更新脚本：真的跑一遍"等进程退出 → 覆盖 → 不重启"的路径 ──
+    string updateWork = Path.Combine(root, "self-update");
+    string payloadDir = Path.Combine(updateWork, "payload");
+    string targetDir = Path.Combine(updateWork, "target");
+    Directory.CreateDirectory(Path.Combine(payloadDir, "tools"));
+    Directory.CreateDirectory(targetDir);
+    File.WriteAllText(Path.Combine(payloadDir, "Prism.Desktop.Desktop.exe"), "NEW-BUILD");
+    File.WriteAllText(Path.Combine(payloadDir, "tools", "astcenc-avx2.exe"), "NEW-TOOL");
+    File.WriteAllText(Path.Combine(targetDir, "Prism.Desktop.Desktop.exe"), "OLD-BUILD");
+    File.WriteAllText(Path.Combine(targetDir, "Prism.Desktop.settings.json"), "{ \"theme\": \"dark\" }");
+
+    string applierScript = Prism.Desktop.Services.UpdateInstaller.BuildApplierScript(
+        payloadDir,
+        targetDir,
+        "Prism.Desktop.Desktop.exe",
+        // 一个几乎不可能存在的 PID：脚本的等待循环会立刻放行
+        processId: 999_997,
+        restart: false);
+
+    Check(applierScript.Contains("robocopy", StringComparison.Ordinal), "脚本用 robocopy 覆盖");
+    Check(applierScript.Contains("tasklist", StringComparison.Ordinal), "脚本会等本进程退出");
+    Check(applierScript.Contains(payloadDir, StringComparison.OrdinalIgnoreCase), "脚本引用了解压目录");
+    Check(applierScript.Contains(targetDir, StringComparison.OrdinalIgnoreCase), "脚本引用了应用目录");
+    Check(applierScript.Contains("999997", StringComparison.Ordinal), "脚本等待的是真实的 PID");
+    Check(!applierScript.Contains("start \"\"", StringComparison.Ordinal), "restart=false 时不自动再拉起应用");
+
+    string applierPath = Path.Combine(updateWork, "apply-update.cmd");
+    File.WriteAllText(applierPath, applierScript);
+    var applierRun = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+    {
+        FileName = "cmd.exe",
+        Arguments = $"/c \"\"{applierPath}\"\"",
+        WorkingDirectory = updateWork,
+        UseShellExecute = false,
+        CreateNoWindow = true,
+    });
+    applierRun?.WaitForExit(60_000);
+
+    Check(File.ReadAllText(Path.Combine(targetDir, "Prism.Desktop.Desktop.exe")) == "NEW-BUILD",
+        "更新脚本真的把主程序换成了新版本");
+    Check(File.Exists(Path.Combine(targetDir, "tools", "astcenc-avx2.exe")), "新版本新增的文件也被复制过去");
+    Check(File.Exists(Path.Combine(targetDir, "Prism.Desktop.Desktop.exe.bak")), "旧主程序留了一份 .bak");
+    Check(File.Exists(Path.Combine(targetDir, "Prism.Desktop.settings.json")), "用户设置文件不会被删除");
+    Check(!File.Exists(applierPath), "脚本跑完自删");
+
+    // ── 文档页：截图资源与更新面板的状态机 ──
+    var previewVm = new Prism.Desktop.ViewModels.MainViewModel();
+    Check(!previewVm.ShowUpdatePanel, "没有新版本时不显示更新面板");
+    previewVm.ShowUpdatePreview(
+        "9.9.9",
+        "测试版本",
+        "## 标题\n- 一条\n",
+        assetName: "Prism-win-x64-9.9.9.zip",
+        assetSize: 1024);
+    Check(previewVm.HasUpdate && previewVm.ShowUpdatePanel, "注入发行版后欢迎页切成更新内容");
+    Check(previewVm.UpdateIntroText.Contains(previewVm.VersionText, StringComparison.Ordinal),
+        "更新面板说明了从哪个版本升级");
+    Check(previewVm.CanInstallUpdate, "有安装包时「下载并自动更新」可用");
+    previewVm.DismissUpdateCommand.Execute(null);
+    Check(!previewVm.ShowUpdatePanel, "点「稍后」后回到正常欢迎页");
+    Check(previewVm.DismissedUpdateVersion == "9.9.9", "「稍后」记住的是这个版本号（更高版本还会再提示）");
+    previewVm.HideUpdatePreview();
+    Check(!previewVm.HasUpdate && !previewVm.ShowUpdatePanel, "清掉预览状态后欢迎页恢复");
+
+    // ── 设置页不再重复业务页的输入项（这是这次改版的核心：一份状态只有一处入口）──
+    string? settingsRepoRoot = null;
+    DirectoryInfo? settingsProbe = new(AppContext.BaseDirectory);
+    for (var i = 0; i < 8 && settingsProbe is not null; i++, settingsProbe = settingsProbe.Parent)
+    {
+        if (Directory.Exists(Path.Combine(settingsProbe.FullName, "Prism.Desktop", "Views")))
+        {
+            settingsRepoRoot = settingsProbe.FullName;
+            break;
+        }
+    }
+
+    string? settingsXamlPath = settingsRepoRoot is null
+        ? null
+        : Path.Combine(settingsRepoRoot, "Prism.Desktop", "Views", "SettingsView.axaml");
+    if (settingsXamlPath is not null && File.Exists(settingsXamlPath))
+    {
+        string settingsXaml = File.ReadAllText(settingsXamlPath);
+        Check(!settingsXaml.Contains("<TextBox", StringComparison.Ordinal),
+            "设置页里没有输入框（Pak / 映射 / 输出路径都只在业务页里改）");
+        Check(!settingsXaml.Contains("Command=\"{Binding Browse", StringComparison.Ordinal),
+            "设置页里没有「浏览…」按钮（不再重复业务页的选择器）");
+        Check(settingsXaml.Contains("SettingsCardWidth", StringComparison.Ordinal),
+            "设置页卡片宽度由视图模型算（宽屏两列 / 窄窗单列）");
+    }
+    else
+    {
+        Check(false, "找不到 SettingsView.axaml（无法校验设置页不再重复输入项）");
     }
 
     Section("结果");

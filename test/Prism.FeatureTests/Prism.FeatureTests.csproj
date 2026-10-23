@@ -20,6 +20,15 @@
           Condition="Exists('..\..\third_party\lib\win-x64\prism_binka.dll')"
           Link="prism_binka.dll"
           CopyToOutputDirectory="PreserveNewest" />
+    <!--
+      Oodle 原生库：截图（capture）里「设置 › 依赖与诊断」会显示它是否就位。
+      不复制的话截图里永远是红色的"缺失"，和用户实际看到的发行版状态不一致。
+      文件不进仓库（third_party/lib 已 gitignore），没有就跳过。
+    -->
+    <None Include="..\..\third_party\lib\win-x64\oo2core_*.dll"
+          Condition="Exists('..\..\third_party\lib\win-x64\oo2core_9_win64.dll')"
+          Link="%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

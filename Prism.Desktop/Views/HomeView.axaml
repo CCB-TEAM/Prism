@@ -1,6 +1,8 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Prism.Desktop.ViewModels"
+             xmlns:services="using:Prism.Desktop.Services"
+             xmlns:local="using:Prism.Desktop.Views"
              x:Class="Prism.Desktop.Views.HomeView"
              x:DataType="vm:MainViewModel">
 
@@ -20,9 +22,27 @@
             <Setter Property="Padding" Value="14,11" />
             <Setter Property="MinHeight" Value="68" />
         </Style>
+
+        <!-- 更新说明的一行：小标题更重更亮，正文弱一档 -->
+        <Style Selector="TextBlock.note-line">
+            <Setter Property="FontSize" Value="{DynamicResource Fs12}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+        </Style>
+        <Style Selector="TextBlock.note-line.heading">
+            <Setter Property="FontSize" Value="{DynamicResource Fs13}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+            <Setter Property="Margin" Value="0,10,0,2" />
+        </Style>
     </UserControl.Styles>
 
     <ScrollViewer>
+        <!--
+            两个互斥的根：正常欢迎页 / 「有新版本」面板。
+            前者由下面这段（原版欢迎页）渲染，后者把整页换成 GitHub 上的更新说明 ——
+            用户的原话是"检测到新发行版就把欢迎界面改为更新内容"。
+        -->
+        <Panel>
         <!--
             外层改成 Stretch、由内部元素自己定宽并居中：
             原先外层是 Center，宽度由内容撑开，于是下面那张 MaxWidth=1200 的网格
@@ -32,7 +52,8 @@
         <StackPanel HorizontalAlignment="Stretch"
                     VerticalAlignment="Top"
                     Margin="24,32"
-                    Spacing="28">
+                    Spacing="28"
+                    IsVisible="{Binding !ShowUpdatePanel}">
             <StackPanel Spacing="6" IsVisible="{Binding ShowWelcomeBranding}">
                 <TextBlock Text="Prism"
                            FontSize="{DynamicResource Fs40}"
@@ -422,5 +443,120 @@
             </StackPanel>
 
         </StackPanel>
+
+        <!--
+            ═══ 更新面板 ═══
+            与欢迎页同一套排版语言：左侧主色细条 + 标签行 + 大标题 → 分隔线 →「更新内容」。
+            发行说明是 markdown，已由 Services/UpdateNotes 解析成块，这里只负责画出来。
+        -->
+        <StackPanel IsVisible="{Binding ShowUpdatePanel}"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Top"
+                    MaxWidth="880"
+                    Margin="24,32,24,40"
+                    Spacing="0">
+
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                <Border Grid.Column="0"
+                        Width="3"
+                        CornerRadius="2"
+                        Background="{DynamicResource PrimaryBrush}"
+                        Margin="0,5,0,5" />
+                <StackPanel Grid.Column="1" Spacing="8">
+                    <TextBlock FontSize="{DynamicResource Fs10}"
+                               Foreground="{DynamicResource PrimaryBrush}"
+                               LetterSpacing="1.4">
+                        <Run Text="新版本可用 · v" />
+                        <Run Text="{Binding UpdateVersion}" />
+                        <Run Text="　·　" Foreground="{DynamicResource TextMutedBrush}" />
+                        <Run Text="{Binding UpdatePublishedText}" Foreground="{DynamicResource TextMutedBrush}" />
+                    </TextBlock>
+                    <TextBlock Text="{Binding UpdateTitle}"
+                               FontSize="{DynamicResource Fs25}"
+                               FontWeight="SemiBold"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </Grid>
+
+            <TextBlock Text="{Binding UpdateIntroText}"
+                       MaxWidth="620"
+                       HorizontalAlignment="Left"
+                       Margin="0,14,0,0"
+                       FontSize="{DynamicResource Fs13}"
+                       Foreground="{DynamicResource TextMutedBrush}"
+                       TextWrapping="Wrap" />
+
+            <Border Height="1"
+                    Background="{DynamicResource DividerBrush}"
+                    Margin="0,26,0,20" />
+
+            <TextBlock Text="更新内容"
+                       FontSize="{DynamicResource Fs10}"
+                       LetterSpacing="1.2"
+                       Foreground="{DynamicResource TextMutedBrush}" />
+
+            <ItemsControl ItemsSource="{Binding UpdateNoteBlocks}" Margin="0,14,0,0">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Spacing="7" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="services:UpdateNote">
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="9">
+                            <TextBlock Grid.Column="0"
+                                       Text="·"
+                                       FontSize="{DynamicResource Fs14}"
+                                       Foreground="{DynamicResource PrimaryBrush}"
+                                       Margin="0,-2,0,0"
+                                       IsVisible="{Binding IsBullet}" />
+                            <TextBlock Grid.Column="1"
+                                       Classes="note-line"
+                                       Classes.heading="{Binding IsHeading}"
+                                       TextWrapping="Wrap"
+                                       local:RichText.Runs="{Binding Runs}" />
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <Border Height="1"
+                    Background="{DynamicResource DividerBrush}"
+                    Margin="0,24,0,18" />
+
+            <!-- 安装包与动作 -->
+            <TextBlock Text="{Binding UpdatePackageText}"
+                       FontSize="{DynamicResource Fs11}"
+                       Foreground="{DynamicResource TextMutedBrush}"
+                       TextWrapping="Wrap"
+                       Margin="0,0,0,12" />
+
+            <StackPanel Orientation="Horizontal" Spacing="10">
+                <Button Content="{Binding InstallButtonText}"
+                        Classes="primary"
+                        Command="{Binding InstallUpdateCommand}"
+                        IsEnabled="{Binding CanInstallUpdate}" />
+                <Button Content="在 GitHub 上查看"
+                        Classes="accent"
+                        Command="{Binding OpenReleasePageCommand}" />
+                <Button Content="稍后再说"
+                        Classes="ghost"
+                        Command="{Binding DismissUpdateCommand}" />
+            </StackPanel>
+
+            <ProgressBar Height="3"
+                         Minimum="0" Maximum="1"
+                         Margin="0,14,0,0"
+                         Value="{Binding UpdateProgress}"
+                         IsVisible="{Binding IsUpdateDownloading}" />
+
+            <TextBlock Text="{Binding UpdateActionStatus}"
+                       FontSize="{DynamicResource Fs11}"
+                       Foreground="{DynamicResource PrimaryBrush}"
+                       TextWrapping="Wrap"
+                       Margin="0,12,0,0"
+                       IsVisible="{Binding UpdateActionStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </StackPanel>
+        </Panel>
     </ScrollViewer>
 </UserControl>
