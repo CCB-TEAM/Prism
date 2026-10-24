@@ -113,6 +113,47 @@
                         <TextBlock Grid.Column="1"
                                    Text="{Binding PageTitle}"
                                    Classes="page-title" />
+                        <!--
+                            工程标识：有工程时显示工程名，只有改动时显示「未保存的改动」。
+                            它在这里而不是设置页，是因为"存下来"这件事必须在干活的当口顺手能点。
+                        -->
+                        <StackPanel Grid.Column="2"
+                                    Orientation="Horizontal"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Center"
+                                    Margin="0,0,10,0"
+                                    Spacing="6"
+                                    IsVisible="{Binding ShowProjectChip}">
+                            <TextBlock Text="●"
+                                       FontSize="{DynamicResource Fs10}"
+                                       Foreground="{DynamicResource PrimaryBrush}"
+                                       VerticalAlignment="Center"
+                                       ToolTip.Tip="有未保存的改动"
+                                       IsVisible="{Binding IsProjectDirty}" />
+                            <Button Content="{Binding ProjectChipText}"
+                                    Classes="ghost"
+                                    FontSize="{DynamicResource Fs11}"
+                                    VerticalAlignment="Center"
+                                    MaxWidth="220"
+                                    ToolTip.Tip="{Binding ProjectChipTooltip}">
+                                <Button.Flyout>
+                                    <MenuFlyout>
+                                        <MenuItem Header="保存工程" InputGesture="Ctrl+S"
+                                                  Command="{Binding SaveProjectCommand}" />
+                                        <MenuItem Header="另存为…" Command="{Binding SaveProjectAsCommand}" />
+                                        <Separator />
+                                        <MenuItem Header="把素材收进工程"
+                                                  ToggleType="CheckBox"
+                                                  IsChecked="{Binding CollectProjectAssets}"
+                                                  ToolTip.Tip="保存时把素材复制到旁边的 &lt;工程名&gt;.assets/，工程才能搬走或发给别人" />
+                                        <Separator />
+                                        <MenuItem Header="打开工程…" InputGesture="Ctrl+O"
+                                                  Command="{Binding OpenProjectCommand}" />
+                                        <MenuItem Header="关闭工程" Command="{Binding CloseProjectCommand}" />
+                                    </MenuFlyout>
+                                </Button.Flyout>
+                            </Button>
+                        </StackPanel>
                         <Button Grid.Column="3"
                                 Content="使用说明"
                                 Classes="ghost"

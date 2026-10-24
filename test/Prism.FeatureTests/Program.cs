@@ -1067,7 +1067,9 @@ try
         vm.OpenDocsCommand.Execute("convert");
         Check(vm.IsDocsVisible && vm.SelectedChapter?.Key == "convert", "OpenDocs(\"convert\") 跳进转换章节");
         Check(vm.DocBlocks.Count > 0, "当前章节的正文块可枚举");
-        Check(vm.DocChapterNumber == "07", $"章号按目录序号给出（{vm.DocChapterNumber}）");
+        int convertChapterIndex = vm.DocChapters.ToList().FindIndex(chapter => chapter.Key == "convert");
+        Check(vm.DocChapterNumber == (convertChapterIndex + 1).ToString("D2"),
+            $"章号按目录序号给出（{vm.DocChapterNumber}，位于第 {convertChapterIndex + 1} 章）");
 
         vm.GoNextDocCommand.Execute(null);
         Check(vm.SelectedChapter?.Key == "settings", "「下一章」走到更新之后的设置章节");
@@ -1886,6 +1888,185 @@ try
         Check(false, "找不到 SettingsView.axaml（无法校验设置页不再重复输入项）");
     }
 
+    // ── 模组工程：改天还能接着改 ──
+    Section("F14 · 模组工程（.prismproj）");
+
+    // 1) 纯读写层：格式往返、相对路径、素材收集
+    string projectHome = Path.Combine(root, "project-home");
+    Directory.CreateDirectory(projectHome);
+    var roundTrip = new Prism.Desktop.Models.ModProject
+    {
+        Name = "往返测试",
+        Paks = ["kards.pak"],
+        Usmap = "../Mapping.usmap",
+        Oodle = true,
+        Tasks =
+        [
+            new Prism.Desktop.Models.ModProjectTask
+            {
+                Type = "texture",
+                Asset = "Kards/Content/T_Card.uasset",
+                Source = "assets/a.png",
+                Format = "PF_BC7",
+                SizeLabel = "512×512",
+            },
+            new Prism.Desktop.Models.ModProjectTask
+            {
+                Type = "locres",
+                Asset = "Kards/Content/Localization/Game.locres",
+                Edits = [new Prism.Desktop.Models.ModProjectLocresEdit { Ns = "Card", Key = "Moonlight_Name", Text = "月光小夜曲" }],
+            },
+        ],
+    };
+    string roundTripPath = Path.Combine(projectHome, "roundtrip.prismproj");
+    Prism.Desktop.Services.ProjectStore.Save(roundTripPath, roundTrip);
+    Prism.Desktop.Models.ModProject reloaded =
+        Prism.Desktop.Services.ProjectStore.Load(roundTripPath);
+    Check(reloaded.Name == "往返测试" && reloaded.Tasks.Count == 2,
+        $"工程存了再读回来内容一致（{reloaded.Name} / {reloaded.Tasks.Count} 项）");
+    Check(reloaded.Oodle && reloaded.Tasks[0].Format == "PF_BC7",
+        "打包选项与显示缓存都跟着存（读工程时列表能立刻画出来）");
+    Check(reloaded.Tasks[1].Edits?[0].Text == "月光小夜曲",
+        "本地化只存改动集（key → 译文）");
+    Check(!File.ReadAllText(roundTripPath).Contains("aesKey", StringComparison.OrdinalIgnoreCase),
+        "工程文件里没有 aesKey 字段（工程是要发给别人的）");
+
+    string storedRelative = Prism.Desktop.Services.ProjectStore.ToStored(projectHome, Path.Combine(projectHome, "assets", "a.png"));
+    Check(storedRelative == "assets/a.png", $"同盘路径存成相对路径（{storedRelative}）");
+    Check(Prism.Desktop.Services.ProjectStore.ToAbsolute(projectHome, storedRelative) == Path.Combine(projectHome, "assets", "a.png"),
+        "相对路径能还原回绝对路径（工程整个目录搬走仍然能用）");
+    string outsideRelative = Prism.Desktop.Services.ProjectStore.ToStored(projectHome, Path.Combine(root, "elsewhere", "b.png"));
+    Check(outsideRelative.Contains("..", StringComparison.Ordinal) && !Path.IsPathRooted(outsideRelative),
+        $"工程外的素材用 ../ 相对引用（{outsideRelative}）");
+
+    string collectDir = Path.Combine(projectHome, "collect.assets");
+    string sourceA = Path.Combine(projectHome, "a.png");
+    File.WriteAllBytes(sourceA, [1, 2, 3, 4]);
+    string firstCollect = Prism.Desktop.Services.ProjectStore.CollectAsset(collectDir, sourceA);
+    string secondCollect = Prism.Desktop.Services.ProjectStore.CollectAsset(collectDir, sourceA);
+    Check(firstCollect == secondCollect, "同样内容重复收集会复用同一个素材文件");
+    string otherDir = Path.Combine(projectHome, "other");
+    Directory.CreateDirectory(otherDir);
+    string sourceA2 = Path.Combine(otherDir, "a.png");
+    File.WriteAllBytes(sourceA2, [9, 9, 9]);
+    string thirdCollect = Prism.Desktop.Services.ProjectStore.CollectAsset(collectDir, sourceA2);
+    Check(Path.GetFileName(thirdCollect) == "a_2.png",
+        $"同名但内容不同的素材另起一个名字，绝不覆盖（{Path.GetFileName(thirdCollect)}）");
+
+    // 2) 真的存一个工程：打开 pak → 加替换 → 选素材 → 保存
+    if (File.Exists(mediaPak))
+    {
+        var saveVm = new Prism.Desktop.ViewModels.MainViewModel { PakPath = mediaPak };
+        RunVmCommand(saveVm, saveVm.OpenPakCommand);
+        EnterFolder(saveVm, "Kards");
+        EnterFolder(saveVm, "Content");
+        EnterFolder(saveVm, "Movies");
+        saveVm.SelectedItem = saveVm.Entries.First(entry => !entry.IsDirectory && entry.Name.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase));
+        RunVmCommand(saveVm, saveVm.AddSelectedToPatchCommand);
+        saveVm.FilePickerOverride = (_, _) => Task.FromResult<string?>(newVideoPath);
+        RunVmCommand(saveVm, saveVm.PickReplacementCommand);
+        Check(saveVm.IsProjectDirty, "有改动就带未保存标记");
+        Check(saveVm.ShowProjectChip && saveVm.ProjectChipText.Contains("未保存", StringComparison.Ordinal),
+            $"页头出现工程标识（{saveVm.ProjectChipText}）");
+
+        // 密钥只在本机设置里：先塞一个假的，再断言它没被写进工程
+        saveVm.AesKey = "00112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF";
+
+        string savedProjectDir = Path.Combine(root, "saved-project");
+        Directory.CreateDirectory(savedProjectDir);
+        string savedProjectPath = Path.Combine(savedProjectDir, "intro.prismproj");
+        Pump(saveVm.SaveProjectToAsync(savedProjectPath));
+        Check(File.Exists(savedProjectPath), "工程文件写出来了");
+        Check(!saveVm.IsProjectDirty && saveVm.ProjectPath == savedProjectPath,
+            "保存后不再显示未保存");
+
+        string savedJson = File.ReadAllText(savedProjectPath);
+        Check(!savedJson.Contains("00112233445566778899AABBCCDDEEFF", StringComparison.OrdinalIgnoreCase),
+            "AES 密钥没有被写进工程文件");
+        Check(!savedJson.Contains("prism-desktop-patch", StringComparison.Ordinal),
+            "工作目录之类的缓存路径没有进工程（那是每次重建的）");
+        Check(Directory.Exists(Path.Combine(savedProjectDir, "intro.assets")),
+            "素材被收进 <工程名>.assets 目录");
+        Check(savedJson.Contains("intro.assets/Intro-new.mp4", StringComparison.Ordinal),
+            "工程里素材记的是收集副本的相对路径");
+
+        // 3) 打开工程 = 重开 Pak + 重建替换列表 + 重新应用素材
+        var loadVm = new Prism.Desktop.ViewModels.MainViewModel();
+        Pump(loadVm.OpenProjectFromAsync(savedProjectPath));
+        Prism.Desktop.Models.PatchItem? restored = loadVm.PatchItems.FirstOrDefault();
+        Check(loadVm.PatchItems.Count == 1, $"打开工程还原出替换列表（{loadVm.PatchItems.Count} 项）");
+        Check(restored?.IsReplaced == true, $"素材重新应用成功（{restored?.Error ?? "无错误"}）");
+        Check(restored is not null && restored.PatchedFiles.Count == 1 &&
+              File.ReadAllBytes(restored.PatchedFiles.Values.First()).SequenceEqual(File.ReadAllBytes(newVideoPath)),
+            "还原出来的就是那份素材的字节");
+        Check(!loadVm.IsProjectDirty, "刚打开的工程不该显示未保存");
+        Check(loadVm.RecentProjects.Any(item => item.Path == savedProjectPath),
+            "打开过的工程进「最近工程」");
+
+        // 4) 缺素材：只要标在那一行上，工程照样打得开
+        foreach (string assetFile in Directory.GetFiles(Path.Combine(savedProjectDir, "intro.assets")))
+        {
+            File.Delete(assetFile);
+        }
+
+        var missingVm = new Prism.Desktop.ViewModels.MainViewModel();
+        Pump(missingVm.OpenProjectFromAsync(savedProjectPath));
+        Prism.Desktop.Models.PatchItem? missing = missingVm.PatchItems.FirstOrDefault();
+        Check(missingVm.PatchItems.Count == 1, "素材没了也不丢任务（留一行让人看见）");
+        Check(missing?.Status == "失败" && (missing.Error?.Contains("素材", StringComparison.Ordinal) ?? false),
+            $"缺素材标在行上（{missing?.Error}）");
+
+        // 5) 资产在 Pak 里没了：同样只标在行上
+        string brokenProjectPath = Path.Combine(savedProjectDir, "broken.prismproj");
+        File.WriteAllText(brokenProjectPath, savedJson.Replace("Movies/Intro.mp4", "Movies/NotThere.mp4"));
+        var brokenVm = new Prism.Desktop.ViewModels.MainViewModel();
+        Pump(brokenVm.OpenProjectFromAsync(brokenProjectPath));
+        Prism.Desktop.Models.PatchItem? broken = brokenVm.PatchItems.FirstOrDefault();
+        Check(broken?.Status == "失败" && (broken.Error?.Contains("找不到", StringComparison.Ordinal) ?? false),
+            $"资产不在了标在行上（{broken?.Error}）");
+    }
+    else
+    {
+        Console.WriteLine("        跳过工程流程断言（测试 pak 未生成）");
+    }
+
+    // 6) 本地化：工程只存改动集，读回来套在当前 .locres 上
+    if (File.Exists(locresPak))
+    {
+        var locresSaveVm = new Prism.Desktop.ViewModels.MainViewModel { PakPath = locresPak };
+        RunVmCommand(locresSaveVm, locresSaveVm.OpenPakCommand);
+        EnterFolder(locresSaveVm, "Kards");
+        EnterFolder(locresSaveVm, "Content");
+        EnterFolder(locresSaveVm, "Config");
+        locresSaveVm.SelectedItem = locresSaveVm.Entries.First(entry => !entry.IsDirectory && entry.Name.EndsWith(".locres", StringComparison.OrdinalIgnoreCase));
+        RunVmCommand(locresSaveVm, locresSaveVm.AddSelectedToPatchCommand);
+
+        Prism.Desktop.Models.PatchItem locresTask = locresSaveVm.PatchItems.First();
+        locresTask.LocresEntries[0].Text = "工程里的译文";
+        RunVmCommand(locresSaveVm, locresSaveVm.UpdateLocresEntryCommand, locresTask);
+
+        string locresProjectDir = Path.Combine(root, "locres-project");
+        Directory.CreateDirectory(locresProjectDir);
+        string locresProjectPath = Path.Combine(locresProjectDir, "locres.prismproj");
+        Pump(locresSaveVm.SaveProjectToAsync(locresProjectPath));
+        string locresJson = File.ReadAllText(locresProjectPath);
+        Check(locresJson.Contains("工程里的译文", StringComparison.Ordinal), "译文进了工程的改动集");
+        Check(!locresJson.Contains("你好", StringComparison.Ordinal),
+            "没改的条目不会写进工程（否则等于把整份 .locres 塞进来）");
+
+        var locresLoadVm = new Prism.Desktop.ViewModels.MainViewModel();
+        Pump(locresLoadVm.OpenProjectFromAsync(locresProjectPath));
+        Prism.Desktop.Models.PatchItem? restoredLocres = locresLoadVm.PatchItems.FirstOrDefault();
+        Check(restoredLocres?.IsLocres == true && restoredLocres.Status == "已编辑",
+            $"打开工程后本地化仍是已编辑（{restoredLocres?.Status}）");
+        Check(restoredLocres?.LocresEntries.Any(entry => entry.Text == "工程里的译文") == true,
+            "改动集套回了当前 .locres 的词条");
+    }
+    else
+    {
+        Console.WriteLine("        跳过工程里的本地化断言（locres.pak 未生成）");
+    }
+
     Section("结果");
 }
 finally
@@ -2205,6 +2386,12 @@ static bool SeekTableFollowsUeRule(byte[] chunk, out int blockCount, out uint fr
 static void RunVmCommand(Prism.Desktop.ViewModels.MainViewModel vm, CommunityToolkit.Mvvm.Input.IAsyncRelayCommand command, object? parameter = null)
 {
     Task task = command.ExecuteAsync(parameter);
+    Pump(task);
+}
+
+/// <summary>把任意异步操作推完（工程保存/打开不是命令，但同样要 Pump）。</summary>
+static void Pump(Task task)
+{
     DateTime deadline = DateTime.UtcNow.AddSeconds(120);
     while (!task.IsCompleted && DateTime.UtcNow < deadline)
     {

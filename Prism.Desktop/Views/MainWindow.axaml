@@ -1,13 +1,21 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:views="using:Prism.Desktop.Views"
+        xmlns:vm="using:Prism.Desktop.ViewModels"
         x:Class="Prism.Desktop.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
         Icon="/Assets/prism.ico"
         Title="Prism"
         Width="1280"
         Height="820"
         Background="{DynamicResource SurfaceBrush}"
         Foreground="{DynamicResource TextPrimaryBrush}">
+
+    <Window.KeyBindings>
+        <!-- 工程快捷键：桌面工具的肌肉记忆，比在页头点两下快 -->
+        <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveProjectCommand}" />
+        <KeyBinding Gesture="Ctrl+O" Command="{Binding OpenProjectCommand}" />
+    </Window.KeyBindings>
 
     <views:MainView />
 </Window>

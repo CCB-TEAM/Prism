@@ -41,6 +41,21 @@ Browse pak contents, preview textures / audio / 3D meshes / localization, export
   committed — see [tools/README.md](tools/README.md)) when the native library is missing.
 - Video replacement follows the same rail and works on both platforms as well.
 
+**Mod projects (`.prismproj`)**
+- Save the replacement list as a project. It stores a **recipe, not a snapshot** — which assets,
+  which source files, which options — and re-extracts and re-encodes on build. So an old project
+  still builds after a game update changes texture formats or pak layout.
+- Source files are collected into `<name>.assets/` next to the project, so the whole folder can be
+  moved or shared (the menu can turn that off).
+- Opening a project reopens the pak and replays every replacement. A missing source file, or an asset
+  that no longer exists in the pak, only marks that one row as failed with the reason; everything else
+  is restored.
+- Localization stores just the **edited entries** (key → text) and applies them to the current
+  `.locres`, so a translation never overwrites strings the game changed.
+- The welcome page lists recent projects; closing with unsaved changes asks once. `Ctrl+S` / `Ctrl+O`.
+- **The AES key never goes into the project file** — it stays in local settings, so whoever you send
+  the project to supplies their own.
+
 **Pak merging**
 - Select multiple paks at once and drag to reorder; **the higher entry wins** on conflicting paths.
   Every entry is removable and reorderable — there is no pinned "main pak".
@@ -306,7 +321,7 @@ A full repack needs temp space equal to the main pak.
 ## Verifying
 
 ```sh
-# Integration tests (342 assertions): mapping format detection, search-box path resolution,
+# Integration tests (371 assertions): mapping format detection, search-box path resolution,
 # pak conversion (both paths + all output modes), merge priority, locres <-> JSON round-trip,
 # non-ASCII pak path handling, headless UI loading and navigation, audio replacement
 # (BINKA round-trip through a real pak), media replacement, the replace-page flow driven

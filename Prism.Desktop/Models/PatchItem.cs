@@ -201,6 +201,15 @@ public sealed partial class PatchItem : ObservableObject
     [ObservableProperty]
     public partial string? ReplacementName { get; set; }
 
+    /// <summary>
+    /// 选中的素材文件（贴图/音频/媒体的原始路径）。
+    ///
+    /// 存在这里是为了保存工程：工程只记"用哪个文件"，编码在构建时重做。
+    /// 本地化没有素材文件（改的是词条本身），所以它是 null。
+    /// </summary>
+    [ObservableProperty]
+    public partial string? ReplacementSourcePath { get; set; }
+
     partial void OnReplacementNameChanged(string? value) => OnPropertyChanged(nameof(ReplacementText));
 
     /// <summary>替换项的文件名；没选之前给一句占位，免得详情面板空着一块。</summary>

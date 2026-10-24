@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Prism.Desktop.ViewModels"
              xmlns:services="using:Prism.Desktop.Services"
+             xmlns:models="using:Prism.Desktop.Models"
              xmlns:local="using:Prism.Desktop.Views"
              x:Class="Prism.Desktop.Views.HomeView"
              x:DataType="vm:MainViewModel">
@@ -64,6 +65,56 @@
                            FontSize="{DynamicResource Fs13}"
                            Foreground="{DynamicResource TextMutedBrush}"
                            HorizontalAlignment="Center" />
+            </StackPanel>
+
+            <!--
+                最近工程：欢迎页原来只有"选一个工作区开始"，而真正接着干活时想要的是
+                "上次那个工程"。卡片直接打开工程（重开 Pak、重建替换列表），
+                没有工程时给一句怎么存下来的提示。
+            -->
+            <StackPanel Spacing="8"
+                        MaxWidth="{Binding HomeGridMaxWidth}"
+                        HorizontalAlignment="Stretch"
+                        IsVisible="{Binding HasRecentProjects}">
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Grid.Column="0"
+                               Text="最近工程"
+                               FontSize="{DynamicResource Fs13}"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center" />
+                    <Button Grid.Column="1"
+                            Content="打开工程…"
+                            Classes="ghost"
+                            FontSize="{DynamicResource Fs11}"
+                            Command="{Binding OpenProjectCommand}" />
+                </Grid>
+
+                <ItemsControl ItemsSource="{Binding RecentProjects}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel Orientation="Horizontal" ItemWidth="220" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="models:RecentProjectItem">
+                            <Button Classes="card home-entry narrow"
+                                    Margin="0,0,8,8"
+                                    Command="{Binding $parent[UserControl].DataContext.OpenRecentProjectCommand}"
+                                    CommandParameter="{Binding}"
+                                    ToolTip.Tip="{Binding Path}">
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="{Binding Name}"
+                                               FontSize="{DynamicResource Fs13}"
+                                               FontWeight="SemiBold"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding MetaText}"
+                                               FontSize="{DynamicResource Fs10}"
+                                               Foreground="{DynamicResource TextMutedBrush}" />
+                                </StackPanel>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
             </StackPanel>
 
             <!--

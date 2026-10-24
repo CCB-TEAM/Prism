@@ -64,6 +64,8 @@ public partial class MainViewModel : ViewModelBase
         AesKey = _settings.AesKey;
         AutoCheckUpdates = _settings.AutoCheckUpdates;
         DismissedUpdateVersion = _settings.DismissedUpdateVersion;
+        CollectProjectAssets = _settings.CollectProjectAssets;
+        ReloadRecentProjects();
 
         // 字号资源统一由 LayoutDensity 落一遍：App.axaml 里的紧凑档只是"窗口还没跨过
         // 阈值"时的兜底，两边值必须一致；这里主动对齐一次，避免将来改漏一处。
@@ -1416,7 +1418,11 @@ public partial class MainViewModel : ViewModelBase
         if (temp is not null)
         {
             TryDeleteFile(temp);
-            TryDeleteDirectory(Path.GetDirectoryName(temp));
+            string? tempDirectory = Path.GetDirectoryName(temp);
+            if (!string.IsNullOrEmpty(tempDirectory))
+            {
+                TryDeleteDirectory(tempDirectory);
+            }
         }
     }
 
@@ -1451,13 +1457,20 @@ public partial class MainViewModel : ViewModelBase
         NotifyPatchItemsState();
     }
 
-    private void OnPatchItemsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e) => NotifyPatchItemsState();
+    private void OnPatchItemsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        NotifyPatchItemsState();
+        MarkProjectDirty();
+    }
 
     private void NotifyPatchItemsState()
     {
         OnPropertyChanged(nameof(CanBuildPatchPak));
         OnPropertyChanged(nameof(HasPatchItems));
         OnPropertyChanged(nameof(HasNoPatchItems));
+        // 页头的工程标识也要跟着变：没有工程时它是「未保存的改动」，
+        // 而且整列替换集合被换掉（而不是 Add/Remove）时也必须重新求值。
+        NotifyProjectState();
         BuildPatchPakCommand.NotifyCanExecuteChanged();
     }
 
@@ -2547,27 +2560,37 @@ public partial class MainViewModel : ViewModelBase
 
         await RunBusyAsync(async () =>
         {
-            PakOpenResult result;
-            await _gate.WaitAsync();
-            try
-            {
-                _session.Dispose();
-                _session = new PakArchiveSession();
-                result = await _session.OpenAsync(new PakOpenOptions(
-                    [PakPath],
-                    NullIfWhiteSpace(AesKey),
-                    NullIfWhiteSpace(UsmapPath)));
-            }
-            finally
-            {
-                _gate.Release();
-            }
-
+            PakOpenResult result = await OpenPakCoreAsync();
             StatusText = $"已打开 {Path.GetFileName(PakPath)}：{result.FileCount:N0} 个文件。";
             AddLog($"打开 Pak：{Path.GetFileName(PakPath)}（{result.FileCount:N0} 个文件）");
             CurrentTabIndex = 1;
             await NavigateToAsync(string.Empty);
         });
+    }
+
+    /// <summary>
+    /// 真正打开 Pak（不碰界面状态）。加载工程时要先把包打开才能重建任务，
+    /// 而那时已经在一层忙碌状态里了 —— 所以把这段单独拿出来，不套 <see cref="RunBusyAsync"/>。
+    /// </summary>
+    private async Task<PakOpenResult> OpenPakCoreAsync()
+    {
+        PakOpenResult result;
+        await _gate.WaitAsync();
+        try
+        {
+            _session.Dispose();
+            _session = new PakArchiveSession();
+            result = await _session.OpenAsync(new PakOpenOptions(
+                [PakPath],
+                NullIfWhiteSpace(AesKey),
+                NullIfWhiteSpace(UsmapPath)));
+        }
+        finally
+        {
+            _gate.Release();
+        }
+
+        return result;
     }
 
     // ============ 浏览导航 ============
@@ -3812,6 +3835,25 @@ public partial class MainViewModel : ViewModelBase
 
         await RunBusyAsync(async () =>
         {
+            PatchItem patch = await CreatePatchItemAsync(item.FullPath);
+            PatchItems.Add(patch);
+            SelectedPatchItem = patch;
+            CurrentTabIndex = 2;
+            NotifyPatchItemsState();
+            MarkProjectDirty();
+        });
+    }
+
+    /// <summary>
+    /// 把 Pak 里的一个资产做成一个替换项：解到临时工作目录，按类型登记
+    /// （贴图 / 音频 / 媒体裸文件 / 本地化）。不能替换时抛 <see cref="InvalidOperationException"/>。
+    ///
+    /// 单独抽出来是因为"加载工程"要走同一条路：工程里存的是资产路径，
+    /// 打开工程等于把每条任务重新造一遍 —— 两套解包逻辑迟早会判得不一样。
+    /// </summary>
+    private async Task<PatchItem> CreatePatchItemAsync(string assetPath)
+    {
+        {
             // 1. 先用预览判断类型：本地化 / 音频 / 媒体源 / 纹理
             AssetPreviewDto? originalPreview = null;
             await _gate.WaitAsync();
@@ -3819,7 +3861,7 @@ public partial class MainViewModel : ViewModelBase
             {
                 try
                 {
-                    originalPreview = await _session.ReadPreviewAsync(item.FullPath);
+                    originalPreview = await _session.ReadPreviewAsync(assetPath);
                 }
                 catch
                 {
@@ -3832,17 +3874,17 @@ public partial class MainViewModel : ViewModelBase
             }
 
             bool isLocres = originalPreview is { Kind: "locres" } || originalPreview?.Locres is not null;
-            bool isPackage = item.FullPath.EndsWith(".uasset", StringComparison.OrdinalIgnoreCase) ||
-                             item.FullPath.EndsWith(".umap", StringComparison.OrdinalIgnoreCase);
+            bool isPackage = assetPath.EndsWith(".uasset", StringComparison.OrdinalIgnoreCase) ||
+                             assetPath.EndsWith(".umap", StringComparison.OrdinalIgnoreCase);
 
             // 媒体源资产（UFileMediaSource 等）：要替换的是它引用的那个视频文件
-            string targetPath = item.FullPath;
+            string targetPath = assetPath;
             if (originalPreview is { Kind: "video" })
             {
                 await _gate.WaitAsync();
                 try
                 {
-                    targetPath = await _session.ResolveMediaSourceFileAsync(item.FullPath) ?? string.Empty;
+                    targetPath = await _session.ResolveMediaSourceFileAsync(assetPath) ?? string.Empty;
                 }
                 catch
                 {
@@ -3871,7 +3913,7 @@ public partial class MainViewModel : ViewModelBase
             //    注意：.locres 大多是"裸文件"（不是 .uasset 包），必须在按包/非包分流之前
             //    把本地化排除掉，否则会掉进"直接替换字节"分支，翻译编辑器就再也出不来了。
             bool isMediaTarget = !isLocres &&
-                                 (!isPackage || !string.Equals(targetPath, item.FullPath, StringComparison.Ordinal));
+                                 (!isPackage || !string.Equals(targetPath, assetPath, StringComparison.Ordinal));
             if (isMediaTarget)
             {
                 IReadOnlyDictionary<string, byte[]> mediaFiles;
@@ -3921,7 +3963,7 @@ public partial class MainViewModel : ViewModelBase
                 await _gate.WaitAsync();
                 try
                 {
-                    rawFiles = await _session.ReadRelatedRawFilesAsync(item.FullPath);
+                    rawFiles = await _session.ReadRelatedRawFilesAsync(assetPath);
                 }
                 finally
                 {
@@ -3933,7 +3975,7 @@ public partial class MainViewModel : ViewModelBase
                     throw new InvalidOperationException("该资源没有可替换的关联文件。");
                 }
 
-                string baseName = Path.GetFileNameWithoutExtension(item.FullPath);
+                string baseName = Path.GetFileNameWithoutExtension(assetPath);
                 foreach ((string pakPath, byte[] data) in rawFiles)
                 {
                     string localPath = Path.Combine(inputDir, Path.GetFileName(pakPath));
@@ -3947,7 +3989,7 @@ public partial class MainViewModel : ViewModelBase
                     await _gate.WaitAsync();
                     try
                     {
-                        locres = await _session.ReadLocresPreviewAsync(item.FullPath);
+                        locres = await _session.ReadLocresPreviewAsync(assetPath);
                     }
                     finally
                     {
@@ -3956,7 +3998,7 @@ public partial class MainViewModel : ViewModelBase
 
                     patch = new PatchItem(
                         kind: "locres",
-                        sourcePath: item.FullPath,
+                        sourcePath: assetPath,
                         name: baseName,
                         format: "LOCRES",
                         sizeLabel: $"{locres.EntryCount:N0} 条词条",
@@ -3985,7 +4027,7 @@ public partial class MainViewModel : ViewModelBase
 
                     if (originalPreview is { Kind: "audio" })
                     {
-                        patch = CreateAudioPatch(item.FullPath, baseName, inputUassetPath, workDir);
+                        patch = CreateAudioPatch(assetPath, baseName, inputUassetPath, workDir);
                     }
                     else
                     {
@@ -3997,7 +4039,7 @@ public partial class MainViewModel : ViewModelBase
 
                         patch = new PatchItem(
                             kind: "texture",
-                            sourcePath: item.FullPath,
+                            sourcePath: assetPath,
                             name: baseName,
                             format: inspect.Format,
                             sizeLabel: $"{inspect.Width}×{inspect.Height}",
@@ -4020,11 +4062,8 @@ public partial class MainViewModel : ViewModelBase
                 patch.OriginalFiles[pakPath] = localPath;
             }
 
-            PatchItems.Add(patch);
-            SelectedPatchItem = patch;
-            CurrentTabIndex = 2;
-            NotifyPatchItemsState();
-        });
+            return patch;
+        }
     }
 
     /// <summary>音频替换项：先确认这是个可替换的流式 SoundWave，再登记声道/时长等展示信息。</summary>
@@ -4099,7 +4138,16 @@ public partial class MainViewModel : ViewModelBase
             return;
         }
 
-        await RunBusyAsync(async () =>
+        await RunBusyAsync(() => ApplyTextureReplacementAsync(patch, imagePath));
+    }
+
+    /// <summary>
+    /// 把一张图片按原资产的格式重新编码后写回 .uasset/.uexp/.ubulk。
+    /// 桌面走 UAssetCLI，Android 走进程内编码器 —— 两条路都在这里，调用方只管给图。
+    /// 加载工程时也走这个，所以它不能弹任何选择器。
+    /// </summary>
+    private async Task ApplyTextureReplacementAsync(PatchItem patch, string imagePath)
+    {
         {
             string outputDir = Path.Combine(patch.WorkDirectory, "output");
             Directory.CreateDirectory(outputDir);
@@ -4169,10 +4217,12 @@ public partial class MainViewModel : ViewModelBase
             }
 
             patch.ReplacementName = Path.GetFileName(imagePath);
+            patch.ReplacementSourcePath = imagePath;
             patch.ReplacementPreview = LoadImage(imagePath, 512);
             patch.Status = "已替换";
             StatusText = $"已替换 {patch.Name}（{patch.Format}）。";
-        });
+            MarkProjectDirty();
+        }
     }
 
     /// <summary>视频 / 原始文件：挑一个同名扩展名的文件，直接按字节替换。</summary>
@@ -4192,7 +4242,12 @@ public partial class MainViewModel : ViewModelBase
             return;
         }
 
-        await RunBusyAsync(async () =>
+        await RunBusyAsync(() => ApplyMediaReplacementAsync(patch, picked));
+    }
+
+    /// <summary>视频 / 任意裸露文件：直接按字节替换，不解析资产结构。</summary>
+    private Task ApplyMediaReplacementAsync(PatchItem patch, string picked)
+    {
         {
             string outputDir = Path.Combine(patch.WorkDirectory, "output");
             Directory.CreateDirectory(outputDir);
@@ -4207,11 +4262,13 @@ public partial class MainViewModel : ViewModelBase
             }
 
             patch.ReplacementName = Path.GetFileName(picked);
+            patch.ReplacementSourcePath = picked;
             patch.ReplacementDetail = FormatSize(size);
             patch.Status = "已替换";
             StatusText = $"已替换 {patch.Name}（{FormatSize(size)}）。";
-            await Task.CompletedTask;
-        });
+            MarkProjectDirty();
+            return Task.CompletedTask;
+        }
     }
 
     /// <summary>音频：解码素材 → 编成 BINKA → 重建 SoundWave 三件套。</summary>
@@ -4227,7 +4284,12 @@ public partial class MainViewModel : ViewModelBase
             return;
         }
 
-        await RunBusyAsync(async () =>
+        await RunBusyAsync(() => ApplyAudioReplacementAsync(patch, picked));
+    }
+
+    /// <summary>音频：解码素材 → 编成 BINKA → 重建 SoundWave 三件套。</summary>
+    private async Task ApplyAudioReplacementAsync(PatchItem patch, string picked)
+    {
         {
             try
             {
@@ -4266,11 +4328,13 @@ public partial class MainViewModel : ViewModelBase
                 }
 
                 patch.ReplacementName = Path.GetFileName(picked);
+                patch.ReplacementSourcePath = picked;
                 patch.ReplacementDetail =
                     $"{replacement.Channels} 声道 / {replacement.SampleRate:N0} Hz / {replacement.Seconds:0.##} 秒 · " +
                     $"编码后 {FormatSize(replacement.Ubulk.Length)}";
                 patch.Status = "已替换";
                 StatusText = $"已替换 {patch.Name}：{replacement.Seconds:0.##} 秒，{FormatSize(replacement.Ubulk.Length)}。";
+                MarkProjectDirty();
             }
             catch (Exception ex)
             {
@@ -4278,7 +4342,7 @@ public partial class MainViewModel : ViewModelBase
                 patch.Error = ex.Message;
                 StatusText = $"音频替换失败：{ex.Message}";
             }
-        });
+        }
     }
 
     [RelayCommand(CanExecute = nameof(CanRemovePatchItem))]
@@ -4295,6 +4359,7 @@ public partial class MainViewModel : ViewModelBase
         TryDeleteDirectory(patch.WorkDirectory);
         StatusText = $"已移除替换项：{patch.Name}";
         NotifyPatchItemsState();
+        MarkProjectDirty();
     }
 
     /// <summary>本地化条目修改后写回（失焦/回车触发），写出的 patched.locres 供构建补丁 Pak。</summary>
@@ -4307,6 +4372,18 @@ public partial class MainViewModel : ViewModelBase
         }
 
         await RunBusyAsync(async () =>
+        {
+            await ApplyLocresEditsAsync(patch);
+            MarkProjectDirty();
+        });
+    }
+
+    /// <summary>
+    /// 把当前词条表写回一份 patched.locres。加载工程时也走这里：
+    /// 工程只存改动集，套在 Pak 里的**新**原文上再写回。
+    /// </summary>
+    private async Task ApplyLocresEditsAsync(PatchItem patch)
+    {
         {
             string originalPath = patch.OriginalFiles
                 .OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase)
@@ -4331,7 +4408,7 @@ public partial class MainViewModel : ViewModelBase
             patch.PatchedFiles[patch.SourcePath] = outputPath;
             patch.Status = "已编辑";
             StatusText = $"本地化已更新：{patch.Name}（{patch.LocresEntries.Count:N0} 条），可构建补丁 Pak。";
-        });
+        }
     }
 
     [RelayCommand(CanExecute = nameof(CanBuildPatchPak))]
@@ -4343,10 +4420,12 @@ public partial class MainViewModel : ViewModelBase
             return;
         }
 
+        IStorageFolder? startFolder = await TryGetProjectOutputFolderAsync(top);
         IStorageFile? output = await top.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             Title = "保存补丁 Pak",
-            SuggestedFileName = $"patch_{DateTime.Now:yyyyMMdd_HHmmss}.pak",
+            SuggestedFileName = SuggestedPakFileName,
+            SuggestedStartLocation = startFolder,
             FileTypeChoices = [new FilePickerFileType("Pak 文件") { Patterns = ["*.pak"] }],
         });
         if (output is null)
@@ -4398,6 +4477,7 @@ public partial class MainViewModel : ViewModelBase
                 }
 
                 StatusText = $"补丁 Pak 已保存：{output.Name}（{files.Count} 个文件）";
+                long androidBytes = new FileInfo(tempPakPath).Length;
                 try
                 {
                     await InvokeNativeShareAsync([tempPakPath], $"Prism 补丁 Pak：{output.Name}");
@@ -4410,6 +4490,8 @@ public partial class MainViewModel : ViewModelBase
                 {
                     TryDeleteFile(tempPakPath);
                 }
+
+                RecordPatchBuild(null, files.Count, androidBytes);
             }
             else
             {
@@ -4422,6 +4504,7 @@ public partial class MainViewModel : ViewModelBase
 
                 StatusText = $"补丁 Pak 已构建：{Path.GetFileName(outputPath)}（{files.Count} 个文件）";
             AddLog($"构建补丁 Pak：{Path.GetFileName(outputPath)}（{files.Count} 个文件）");
+                RecordPatchBuild(outputPath, files.Count, new FileInfo(outputPath!).Length);
             }
         });
     }

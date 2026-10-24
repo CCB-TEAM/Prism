@@ -105,6 +105,30 @@ internal sealed class AppSettings
 
     /// <summary>上次成功检查更新的时间（UTC，ISO 8601）。用于节流，避免每次启动都请求 GitHub。</summary>
     public string LastUpdateCheckUtc { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 最近打开的模组工程（最新的在前，最多 8 条）。
+    ///
+    /// 存成记录而不是每次启动去扫盘：欢迎页要在第一帧就画出来，
+    /// 扫目录会让首屏闪一下空白。
+    /// </summary>
+    public List<RecentProjectRecord> RecentProjects { get; set; } = [];
+
+    /// <summary>保存工程时把素材收集进 <c>&lt;工程名&gt;.assets/</c>（Android 上强制开启）。</summary>
+    public bool CollectProjectAssets { get; set; } = true;
+}
+
+/// <summary>最近工程的一条记录（只存显示需要的字段，避免首屏读文件）。</summary>
+internal sealed class RecentProjectRecord
+{
+    public string Path { get; set; } = string.Empty;
+
+    public string Name { get; set; } = string.Empty;
+
+    public int TaskCount { get; set; }
+
+    /// <summary>最后一次保存的时间（UTC，ISO 8601）。</summary>
+    public string Utc { get; set; } = string.Empty;
 }
 
 internal static class AppSettingsStore
