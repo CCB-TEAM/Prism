@@ -462,7 +462,12 @@ public partial class MainViewModel : ViewModelBase
     private void GoConvert() => CurrentView = "Convert";
 
     [RelayCommand]
-    private void GoSettings() => CurrentView = "Settings";
+    private void GoSettings()
+    {
+        // 进设置页时才算缓存占用：枚举目录不该跟着每个属性求值跑
+        RefreshCacheUsage();
+        CurrentView = "Settings";
+    }
 
     // ============ 工作区标签（配置 / 浏览 / 替换） ============
 
@@ -5893,6 +5898,8 @@ public partial class MainViewModel : ViewModelBase
         {
             // 临时目录枚举失败时同样忽略。
         }
+
+        RefreshCacheUsage();
     }
 
     private void ClearPreview()

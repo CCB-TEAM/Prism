@@ -128,4 +128,52 @@ public static class AndroidCachePolicy
 
         return false;
     }
+
+    /// <summary>统计一个目录里的文件数与总字节（目录不存在就是 0）。</summary>
+    public static (int Files, long Bytes) Measure(string folder)
+    {
+        if (!Directory.Exists(folder))
+        {
+            return (0, 0);
+        }
+
+        int files = 0;
+        long bytes = 0;
+        try
+        {
+            foreach (string file in Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories))
+            {
+                try
+                {
+                    bytes += new FileInfo(file).Length;
+                    files++;
+                }
+                catch
+                {
+                    // 统计不了的不影响总数
+                }
+            }
+        }
+        catch
+        {
+            // 目录读不了就报 0
+        }
+
+        return (files, bytes);
+    }
+
+    /// <summary>把几处加起来（目录不存在的不计）。</summary>
+    public static (int Files, long Bytes) MeasureAll(IEnumerable<string> folders)
+    {
+        int files = 0;
+        long bytes = 0;
+        foreach (string folder in folders)
+        {
+            (int partFiles, long partBytes) = Measure(folder);
+            files += partFiles;
+            bytes += partBytes;
+        }
+
+        return (files, bytes);
+    }
 }

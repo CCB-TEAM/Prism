@@ -373,6 +373,61 @@
                         </Grid>
                     </StackPanel>
                 </Border>
+
+                <!-- ══ 缓存与存储 ══ -->
+                <!-- 手机上选中的文件要复制进私有目录（SAF 只给 content://），
+                     Pak 副本可能几个 GB —— 看不见就会觉得"怎么越来越大"。 -->
+                <Border Classes="group tile" IsVisible="{Binding HasCacheData}">
+                    <StackPanel>
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="11" Margin="18,16,18,13">
+                            <Border Grid.Column="0" Classes="icon-chip small" VerticalAlignment="Center">
+                                <TextBlock Text="💾" FontSize="{DynamicResource Fs14}"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                                <TextBlock Text="缓存与存储" Classes="group-title" />
+                                <TextBlock Text="{Binding CacheTotalText, StringFormat='应用私有目录 · 共 {0}'}" Classes="group-sub" />
+                            </StackPanel>
+                        </Grid>
+                        <Border Classes="row-divider" />
+
+                        <Grid Classes="row" ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" Spacing="2">
+                                <TextBlock Text="Pak 与映射副本" Classes="row-label" />
+                                <TextBlock Text="换一个包时旧副本会自动删掉" Classes="row-desc" />
+                            </StackPanel>
+                            <TextBlock Grid.Column="1" Text="{Binding PakCacheText}"
+                                       Classes="row-desc" VerticalAlignment="Center" />
+                        </Grid>
+                        <Border Classes="row-divider" />
+
+                        <Grid Classes="row" ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" Spacing="2">
+                                <TextBlock Text="素材副本" Classes="row-label" />
+                                <TextBlock Text="换图/换音频时复制的那一份，可以随时清" Classes="row-desc" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding AssetCacheText}" Classes="row-desc" VerticalAlignment="Center" />
+                                <Button Content="清理" Classes="ghost" Command="{Binding ClearAssetCacheCommand}" />
+                            </StackPanel>
+                        </Grid>
+                        <Border Classes="row-divider" />
+
+                        <Grid Classes="row" ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" Spacing="2">
+                                <TextBlock Text="工程素材" Classes="row-label" />
+                                <TextBlock Text="保存工程时收进 &lt;工程名&gt;.assets/ 的素材" Classes="row-desc" />
+                            </StackPanel>
+                            <TextBlock Grid.Column="1" Text="{Binding ProjectAssetsText}"
+                                       Classes="row-desc" VerticalAlignment="Center" />
+                        </Grid>
+
+                        <TextBlock Text="{Binding CacheNoteText}"
+                                   Classes="row-desc"
+                                   TextWrapping="Wrap"
+                                   Margin="18,12,18,16" />
+                    </StackPanel>
+                </Border>
             </WrapPanel>
 
             <!-- ══ 日志 ══ -->

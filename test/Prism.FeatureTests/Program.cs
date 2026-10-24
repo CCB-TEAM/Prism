@@ -2109,6 +2109,10 @@ try
           !Prism.Desktop.Services.AndroidCachePolicy.IsCacheCopy(cacheRoot, Path.Combine(root, "mine.pak")),
         "只有私有目录里的副本算缓存，用户自己选的原文件不会被删");
 
+    (int cacheFiles, long cacheBytes) = Prism.Desktop.Services.AndroidCachePolicy.Measure(assetsFolder);
+    Check(cacheFiles == 1 && cacheBytes == 1,
+        $"缓存占用能统计出来（{cacheFiles} 个 / {cacheBytes} 字节）");
+
     Section("结果");
 }
 finally
