@@ -77,11 +77,20 @@ public partial class MainViewModel
                 return ProjectDisplayName;
             }
 
-            return PatchItems.Count > 0 ? "未保存的改动" : string.Empty;
+            // 什么都没有时也留一个入口：工程这件事不该等"有改动"才出现，
+            // 点开就能「打开工程」或「保存当前工程」。
+            return PatchItems.Count > 0 ? "未保存的改动" : "工程";
         }
     }
 
-    public bool ShowProjectChip => !string.IsNullOrEmpty(ProjectChipText);
+    /// <summary>
+    /// 页头的工程入口始终可见。
+    ///
+    /// 之前它只在"有改动或已打开工程"时出现，于是想先建个工程、或者想打开一个工程，
+    /// 都得先随便改动点什么才行 —— 入口不该被状态挡住。
+    /// 保留这个属性是为了视图那边只有一个开关可绑，将来真要按状态隐藏也只改这里。
+    /// </summary>
+    public bool ShowProjectChip => true;
 
     public string ProjectChipTooltip
     {
@@ -89,7 +98,9 @@ public partial class MainViewModel
         {
             if (!HasProject)
             {
-                return $"当前 {PatchItems.Count} 项替换还没保存成工程文件。点这里「另存为工程」，下次打开就能接着改。";
+                return PatchItems.Count > 0
+                    ? $"当前 {PatchItems.Count} 项替换还没保存成工程文件。点这里「保存工程」，下次打开就能接着改。"
+                    : "还没有打开工程。点这里可以打开一个工程，或者把当前状态存成新的工程文件。";
             }
 
             string tip = ProjectPath;
@@ -191,12 +202,8 @@ public partial class MainViewModel
 
     private async Task SaveProjectCoreAsync(string? localPath, IStorageFile? storage)
     {
-        if (PatchItems.Count == 0)
-        {
-            StatusText = "还没有任何替换项，工程里没东西可存。";
-            return;
-        }
-
+        // 没有替换项也允许保存：工程还记着 Pak / 映射 / 输出路径，
+        // 先存个骨架、下次打开接着加，比"必须先改点什么"合理。
         string directory = ResolveProjectDirectory(localPath);
         string stem = ProjectFileStem(localPath, storage);
         ModProject project = await BuildProjectSnapshotAsync(directory, stem);
@@ -228,7 +235,13 @@ public partial class MainViewModel
         IsProjectDirty = false;
         RememberRecentProject();
         NotifyProjectState();
-        StatusText = $"工程已保存：{ProjectDisplayName}（{project.Tasks.Count} 项，素材在 {stem}.assets）";
+
+        string assetNote = Directory.Exists(Path.Combine(directory, stem + ".assets"))
+            ? $"，素材在 {stem}.assets"
+            : string.Empty;
+        StatusText = project.Tasks.Count == 0
+            ? $"工程已保存：{ProjectDisplayName}（还没有替换项，Pak 与配置已记下）"
+            : $"工程已保存：{ProjectDisplayName}（{project.Tasks.Count} 项{assetNote}）";
         AddLog($"保存工程：{ProjectPath}（{project.Tasks.Count} 项）", "工程");
     }
 
@@ -436,14 +449,25 @@ public partial class MainViewModel
 
             string directory = ResolveProjectDirectory(localPath);
             string pakPath = project.Paks.Count > 0 ? ProjectStore.ToAbsolute(directory, project.Paks[0]) : string.Empty;
-            PakPath = pakPath;
-            UsmapPath = ProjectStore.ToAbsolute(directory, project.Usmap);
+            // 工程里没记 Pak / 映射时保持当前配置不动 —— 打开一个空工程不该把
+            // 用户刚配好的 Pak 路径抹掉。
+            if (!string.IsNullOrWhiteSpace(pakPath))
+            {
+                PakPath = pakPath;
+            }
+
+            string projectUsmap = ProjectStore.ToAbsolute(directory, project.Usmap);
+            if (!string.IsNullOrWhiteSpace(projectUsmap))
+            {
+                UsmapPath = projectUsmap;
+            }
+
             UseOodleCompression = project.Oodle;
 
             string pakNote;
             if (string.IsNullOrWhiteSpace(pakPath))
             {
-                pakNote = "工程里没记 Pak。";
+                pakNote = "工程里没记 Pak，保留当前配置。";
             }
             else if (!File.Exists(pakPath))
             {

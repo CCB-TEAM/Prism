@@ -1891,6 +1891,25 @@ try
     // ── 模组工程：改天还能接着改 ──
     Section("F14 · 模组工程（.prismproj）");
 
+    // 0) 入口不该被"有没有改动"挡住：没有任何替换项时，照样能打开/保存工程
+    var emptyProjectVm = new Prism.Desktop.ViewModels.MainViewModel();
+    Check(emptyProjectVm.ShowProjectChip && emptyProjectVm.ProjectChipText == "工程",
+        $"页头的工程入口始终可见（{emptyProjectVm.ProjectChipText}）");
+
+    string emptyProjectDir = Path.Combine(root, "empty-project");
+    Directory.CreateDirectory(emptyProjectDir);
+    string emptyProjectPath = Path.Combine(emptyProjectDir, "骨架.prismproj");
+    Pump(emptyProjectVm.SaveProjectToAsync(emptyProjectPath));
+    Check(File.Exists(emptyProjectPath), "没有替换项也能先把工程存下来");
+    Prism.Desktop.Models.ModProject emptyReloaded =
+        Prism.Desktop.Services.ProjectStore.Load(emptyProjectPath);
+    Check(emptyReloaded.Tasks.Count == 0, "空工程读回来是空的，不是坏文件");
+
+    var openEmptyVm = new Prism.Desktop.ViewModels.MainViewModel();
+    Pump(openEmptyVm.OpenProjectFromAsync(emptyProjectPath));
+    Check(openEmptyVm.HasProject && openEmptyVm.PatchItems.Count == 0,
+        $"打开空工程：列表为空但工程已打开（{openEmptyVm.ProjectChipText}）");
+
     // 1) 纯读写层：格式往返、相对路径、素材收集
     string projectHome = Path.Combine(root, "project-home");
     Directory.CreateDirectory(projectHome);
