@@ -56,6 +56,13 @@ Browse pak contents, preview textures / audio / 3D meshes / localization, export
 - **The AES key never goes into the project file** — it stays in local settings, so whoever you send
   the project to supplies their own.
 
+**Android and caching**
+- The system picker only grants `content://` access, so picked files are copied into app-private
+  storage: **paks / mappings** go to `paks/` (never auto-cleaned; picking a new one replaces the old
+  copy), **source assets** go to `picked/` (cleaned on launch based on what settings still reference).
+  They used to share one folder, which let launch cleanup delete a pak an open project still needed.
+- Exports go through SAF to your own folders and are unaffected by the app cache.
+
 **Pak merging**
 - Select multiple paks at once and drag to reorder; **the higher entry wins** on conflicting paths.
   Every entry is removable and reorderable — there is no pinned "main pak".

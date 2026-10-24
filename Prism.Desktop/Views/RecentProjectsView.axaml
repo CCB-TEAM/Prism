@@ -1,0 +1,69 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Prism.Desktop.ViewModels"
+             xmlns:models="using:Prism.Desktop.Models"
+             x:Class="Prism.Desktop.Views.RecentProjectsView"
+             x:DataType="vm:MainViewModel">
+
+    <!--
+        最近工程：一块内容，两个位置。
+        宽窗放在页面最下面（上面先讲"这里能做哪四件事"），
+        手机放在入口列表上面（一进来就是"接着上次的"）。
+        抽成控件就是为了同一个版式只写一份，别让两边慢慢长得不一样。
+    -->
+    <StackPanel Spacing="10"
+                MaxWidth="{Binding HomeGridMaxWidth}"
+                HorizontalAlignment="Stretch"
+                IsVisible="{Binding HasRecentProjects}">
+
+        <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Grid.Column="0"
+                       Text="最近工程"
+                       FontSize="{DynamicResource Fs10}"
+                       LetterSpacing="1.2"
+                       Foreground="{DynamicResource TextMutedBrush}"
+                       VerticalAlignment="Center" />
+            <Button Grid.Column="1"
+                    Content="打开工程…"
+                    Classes="ghost"
+                    FontSize="{DynamicResource Fs11}"
+                    Command="{Binding OpenProjectCommand}" />
+        </Grid>
+
+        <ItemsControl ItemsSource="{Binding VisibleRecentProjects}">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <!-- 卡片宽度由视图模型算：宽窗固定 220，手机按可用宽度铺满 -->
+                    <WrapPanel Orientation="Horizontal" ItemWidth="{Binding $parent[UserControl].DataContext.RecentProjectCardWidth}" />
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="models:RecentProjectItem">
+                    <Button Classes="card home-entry narrow"
+                            Margin="0,0,8,8"
+                            Padding="12,9"
+                            Command="{Binding $parent[UserControl].DataContext.OpenRecentProjectCommand}"
+                            CommandParameter="{Binding}"
+                            ToolTip.Tip="{Binding Path}">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <StackPanel Grid.Column="0" Spacing="2">
+                                <TextBlock Text="{Binding Name}"
+                                           FontSize="{DynamicResource Fs12}"
+                                           FontWeight="SemiBold"
+                                           TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding MetaText}"
+                                           FontSize="{DynamicResource Fs10}"
+                                           Foreground="{DynamicResource TextMutedBrush}" />
+                            </StackPanel>
+                            <TextBlock Grid.Column="1"
+                                       Text="›"
+                                       FontSize="{DynamicResource Fs14}"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       VerticalAlignment="Center" />
+                        </Grid>
+                    </Button>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </StackPanel>
+</UserControl>

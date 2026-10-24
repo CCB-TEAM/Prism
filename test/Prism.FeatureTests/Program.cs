@@ -2086,6 +2086,29 @@ try
         Console.WriteLine("        跳过工程里的本地化断言（locres.pak 未生成）");
     }
 
+    // 7) 安卓私有目录：paks/（你选的包）不自动清理，picked/（素材副本）按引用清理
+    string cacheRoot = Path.Combine(root, "android-cache");
+    string docsFolder = Path.Combine(cacheRoot, Prism.Desktop.Services.AndroidCachePolicy.DocumentsFolder);
+    string assetsFolder = Path.Combine(cacheRoot, Prism.Desktop.Services.AndroidCachePolicy.AssetsFolder);
+    Directory.CreateDirectory(docsFolder);
+    Directory.CreateDirectory(assetsFolder);
+    string pakCopy = Path.Combine(docsFolder, "kards.pak");
+    string staleAsset = Path.Combine(assetsFolder, "stale.png");
+    string liveAsset = Path.Combine(assetsFolder, "live.png");
+    File.WriteAllBytes(pakCopy, [1, 2, 3]);
+    File.WriteAllBytes(staleAsset, [4]);
+    File.WriteAllBytes(liveAsset, [5]);
+
+    HashSet<string> cacheKeep = Prism.Desktop.Services.AndroidCachePolicy.BuildKeepSet([liveAsset, null, string.Empty]);
+    int staleRemoved = Prism.Desktop.Services.AndroidCachePolicy.Cleanup(assetsFolder, cacheKeep);
+    Check(staleRemoved == 1 && !File.Exists(staleAsset) && File.Exists(liveAsset),
+        $"素材副本按引用清理，还在用的留着（删了 {staleRemoved} 个）");
+    Check(File.Exists(pakCopy), "你选的 Pak 在 paks/ 里，启动清理不会碰它");
+    Check(Prism.Desktop.Services.AndroidCachePolicy.IsCacheCopy(cacheRoot, pakCopy) &&
+          Prism.Desktop.Services.AndroidCachePolicy.IsCacheCopy(cacheRoot, liveAsset) &&
+          !Prism.Desktop.Services.AndroidCachePolicy.IsCacheCopy(cacheRoot, Path.Combine(root, "mine.pak")),
+        "只有私有目录里的副本算缓存，用户自己选的原文件不会被删");
+
     Section("结果");
 }
 finally

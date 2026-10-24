@@ -162,6 +162,9 @@ public partial class MainViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(IsNotCompact));
         OnPropertyChanged(nameof(TopStatusMaxWidth));
+        OnPropertyChanged(nameof(RecentProjectCardWidth));
+        // 手机只摆 3 张最近工程卡，布局一换就要重算
+        RebuildVisibleRecentProjects();
     }
 
     /// <summary>
@@ -215,6 +218,7 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(ShowWideCards));
         OnPropertyChanged(nameof(ShowNarrowCards));
         OnPropertyChanged(nameof(SettingsCardWidth));
+        OnPropertyChanged(nameof(RecentProjectCardWidth));
 
         // 窄窗没有侧栏：宽度归零，内容边距随之消失
         if (!_sidebarAnimating)
@@ -1708,7 +1712,8 @@ public partial class MainViewModel : ViewModelBase
         string? path = await PickFileAsync(
             "选择基准本地化文件（游戏原版的 .locres）",
             ["*.locres"],
-            MergeBaseLocresPath);
+            MergeBaseLocresPath,
+            documentCache: true);
 
         if (path is not null)
         {
@@ -4967,7 +4972,7 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand]
     private async Task BrowseConvertSourceAsync()
     {
-        string? path = await PickFileAsync("选择待转换的 Pak", ["*.pak"], ConvertSourcePath);
+        string? path = await PickFileAsync("选择待转换的 Pak", ["*.pak"], ConvertSourcePath, documentCache: true);
         if (path is not null)
         {
             ConvertSourcePath = path;
@@ -5534,7 +5539,7 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand]
     private async Task BrowsePakAsync()
     {
-        string? path = await PickFileAsync("选择 Pak 文件", ["*.pak"], PakPath);
+        string? path = await PickFileAsync("选择 Pak 文件", ["*.pak"], PakPath, documentCache: true);
         if (path is not null)
         {
             PakPath = path;
@@ -5556,7 +5561,8 @@ public partial class MainViewModel : ViewModelBase
             "选择映射文件（.usmap / .jmap）",
             PakTool.Core.MappingsLoader.Patterns,
             UsmapPath,
-            ["application/octet-stream", "application/gzip", "application/json"]);
+            ["application/octet-stream", "application/gzip", "application/json"],
+            documentCache: true);
         if (path is not null)
         {
             UsmapPath = path;
@@ -5724,7 +5730,8 @@ public partial class MainViewModel : ViewModelBase
         string title,
         string[] patterns,
         string? replaceCachePath = null,
-        IReadOnlyList<string>? mimeTypes = null)
+        IReadOnlyList<string>? mimeTypes = null,
+        bool documentCache = false)
     {
         // 无头测试没有 StorageProvider，注入这个委托就能把"选文件"之后的全流程跑通。
         if (FilePickerOverride is not null)
@@ -5755,7 +5762,12 @@ public partial class MainViewModel : ViewModelBase
             // SAF 返回 content:// URI，无本地路径：复制到应用私有目录。
             // 文件名加短唯一后缀，避免不同来源同名文件互相覆盖；
             // 更换选择后旧缓存立即删除，下次启动还会清理未引用文件。
-            string destDir = Path.Combine(PrivateDataDir(), "picked");
+            //
+            // 分成两个目录：你选的包/映射进 paks/（启动清理不碰），素材副本进 picked/。
+            // 混在一个目录里时，"启动清理"会顺手删掉工程要用的 Pak —— 见 AndroidCachePolicy。
+            string destDir = Path.Combine(
+                PrivateDataDir(),
+                documentCache ? AndroidCachePolicy.DocumentsFolder : AndroidCachePolicy.AssetsFolder);
             Directory.CreateDirectory(destDir);
             string stem = SanitizeFileName(Path.GetFileNameWithoutExtension(file.Name));
             string extension = Path.GetExtension(file.Name);
@@ -5798,7 +5810,6 @@ public partial class MainViewModel : ViewModelBase
             return;
         }
 
-        string pickedRoot = Path.GetFullPath(Path.Combine(PrivateDataDir(), "picked"));
         string oldFullPath;
         try
         {
@@ -5809,7 +5820,8 @@ public partial class MainViewModel : ViewModelBase
             return;
         }
 
-        if (!oldFullPath.StartsWith(pickedRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
+        // 只删我们自己的缓存副本（paks/ 与 picked/ 都算），别误删用户自己选的原文件。
+        if (!AndroidCachePolicy.IsCacheCopy(PrivateDataDir(), oldFullPath) ||
             string.Equals(oldFullPath, Path.GetFullPath(newPath), StringComparison.OrdinalIgnoreCase))
         {
             return;
@@ -5831,50 +5843,27 @@ public partial class MainViewModel : ViewModelBase
             return;
         }
 
-        var keep = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        // 合并列表可能有多项，逐项保留（否则下次启动前就被清掉了）。
-        IEnumerable<string?> tracked = new[] { PakPath, UsmapPath, ConvertSourcePath }
+        // 只收拾素材副本那一格（picked/）。你选的包与映射在 paks/，这里不碰 ——
+        // 旧版本把它们混在一起，于是启动清理会删掉工程还要用的 Pak。
+        IEnumerable<string?> tracked = new[]
+            {
+                PakPath,
+                UsmapPath,
+                ConvertSourcePath,
+                ConvertOutputPath,
+                MergeBaseLocresPath,
+                MergeOutputPath,
+            }
             .Concat(MergePaks.Select(p => (string?)p.Path));
-        foreach (string? path in tracked)
-        {
-            if (string.IsNullOrWhiteSpace(path))
-            {
-                continue;
-            }
+        HashSet<string> keep = AndroidCachePolicy.BuildKeepSet(tracked);
 
-            try
-            {
-                keep.Add(Path.GetFullPath(path));
-            }
-            catch
-            {
-                // 非法路径无法作为缓存保留项。
-            }
-        }
-
-        string pickedRoot = Path.Combine(PrivateDataDir(), "picked");
         try
         {
-            if (Directory.Exists(pickedRoot))
+            string assetsRoot = Path.Combine(PrivateDataDir(), AndroidCachePolicy.AssetsFolder);
+            int removed = AndroidCachePolicy.Cleanup(assetsRoot, keep);
+            if (removed > 0)
             {
-                foreach (string file in Directory.EnumerateFiles(pickedRoot))
-                {
-                    string fullPath;
-                    try
-                    {
-                        fullPath = Path.GetFullPath(file);
-                    }
-                    catch
-                    {
-                        continue;
-                    }
-
-                    if (!keep.Contains(fullPath))
-                    {
-                        TryDeleteFile(fullPath);
-                    }
-                }
+                AddLog($"清理素材缓存：{removed} 个文件", "缓存");
             }
         }
         catch

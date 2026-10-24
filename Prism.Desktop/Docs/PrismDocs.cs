@@ -321,6 +321,8 @@ public static class PrismDocs
                 new DocParagraph("1.2.1 及更早版本在缺 oo2core 原生库时，repak 会 panic 并 abort 进程，.NET 拦不住。现在会先探测，缺库时自动降级为不压缩并在状态栏说明。"),
                 new DocHeading("手机上和电脑上操作一样吗"),
                 new DocParagraph("界面是同一份，手机上窄屏会变成单列。文件通过系统选择器授权访问，导出走目录授权，不需要「所有文件」权限。"),
+                new DocHeading("手机上选的 Pak 存在哪？"),
+                new DocParagraph("系统选择器给的是 content:// 授权，没有本地路径，所以应用会先复制一份到自己私有目录再读。你选的 Pak 与映射放在 paks/，素材副本放在 picked/：启动时只清理 picked/ 里没人用的素材，paks/ 不会被自动删除，换一个才会删掉旧的。想腾空间就到系统设置里清除应用数据（导出的文件在外部目录，不受影响）。"),
                 new DocHeading("更新检查失败"),
                 new DocParagraph("查更新走的是 GitHub 的公开接口，公司网络或代理下可能连不上。这不影响任何本地功能；也可以直接到 GitHub 的 Releases 页面手动下载。"),
             ]),

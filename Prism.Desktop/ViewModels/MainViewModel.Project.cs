@@ -25,6 +25,7 @@ namespace Prism.Desktop.ViewModels;
 public partial class MainViewModel
 {
     private readonly ObservableCollection<RecentProjectItem> _recentProjects = [];
+    private readonly ObservableCollection<RecentProjectItem> _visibleRecentProjects = [];
     private ModProject? _project;
     private IStorageFile? _projectStorageFile;
     private string _projectLocalPath = string.Empty;
@@ -58,10 +59,48 @@ public partial class MainViewModel
         SaveSettings();
     }
 
-    /// <summary>最近打开的工程（最新的在前）。</summary>
+    /// <summary>最近打开的工程（最新的在前，设置里最多留 8 条）。</summary>
     public ObservableCollection<RecentProjectItem> RecentProjects => _recentProjects;
 
+    /// <summary>
+    /// 欢迎页实际显示的那几项。
+    ///
+    /// 手机上一屏放不下八张卡：这块在入口列表上面，摆太多就把"从哪开始"挤出屏幕。
+    /// 所以按布局截断（手机 3 张、宽窗全部），内存里仍留全量。
+    /// </summary>
+    public ObservableCollection<RecentProjectItem> VisibleRecentProjects => _visibleRecentProjects;
+
+    /// <summary>手机上最多显示几张最近工程卡。</summary>
+    public int MaxRecentProjectCards => IsCompact ? 3 : _recentProjects.Count;
+
+    private void RebuildVisibleRecentProjects()
+    {
+        _visibleRecentProjects.Clear();
+        foreach (RecentProjectItem item in _recentProjects.Take(MaxRecentProjectCards))
+        {
+            _visibleRecentProjects.Add(item);
+        }
+    }
+
     public bool HasRecentProjects => _recentProjects.Count > 0;
+
+    /// <summary>
+    /// 最近工程卡片宽度：宽窗固定 220 一行几张都行；手机按可用宽度铺满，
+    /// 免得 430 的屏上左边一列 220、右边空一半。
+    /// </summary>
+    public double RecentProjectCardWidth
+    {
+        get
+        {
+            if (!IsCompact)
+            {
+                return 220d;
+            }
+
+            double available = WindowWidth - SidebarWidth - 48d;
+            return Math.Max(200d, Math.Floor(available));
+        }
+    }
 
     public bool HasProject => !string.IsNullOrWhiteSpace(ProjectPath);
 
@@ -783,6 +822,7 @@ public partial class MainViewModel
                 DescribeRecent(record) + DescribeRecentMissing(record.Path)));
         }
 
+        RebuildVisibleRecentProjects();
         OnPropertyChanged(nameof(HasRecentProjects));
     }
 

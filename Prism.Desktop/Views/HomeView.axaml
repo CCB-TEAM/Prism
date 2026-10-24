@@ -20,8 +20,8 @@
             <Setter Property="MinHeight" Value="128" />
         </Style>
         <Style Selector="Button.home-entry.narrow">
-            <Setter Property="Padding" Value="14,11" />
-            <Setter Property="MinHeight" Value="68" />
+            <Setter Property="Padding" Value="13,10" />
+            <Setter Property="MinHeight" Value="62" />
         </Style>
 
         <!-- 更新说明的一行：小标题更重更亮，正文弱一档 -->
@@ -68,54 +68,10 @@
             </StackPanel>
 
             <!--
-                最近工程：欢迎页原来只有"选一个工作区开始"，而真正接着干活时想要的是
-                "上次那个工程"。卡片直接打开工程（重开 Pak、重建替换列表），
-                没有工程时给一句怎么存下来的提示。
+                手机：一进来就是"接着上次的"（入口列表在下面，滚下去才看得到）。
+                宽窗：这块挪到页面最下面（见文件末尾），上面先讲这里能做哪四件事。
             -->
-            <StackPanel Spacing="8"
-                        MaxWidth="{Binding HomeGridMaxWidth}"
-                        HorizontalAlignment="Stretch"
-                        IsVisible="{Binding HasRecentProjects}">
-                <Grid ColumnDefinitions="*,Auto">
-                    <TextBlock Grid.Column="0"
-                               Text="最近工程"
-                               FontSize="{DynamicResource Fs13}"
-                               FontWeight="SemiBold"
-                               VerticalAlignment="Center" />
-                    <Button Grid.Column="1"
-                            Content="打开工程…"
-                            Classes="ghost"
-                            FontSize="{DynamicResource Fs11}"
-                            Command="{Binding OpenProjectCommand}" />
-                </Grid>
-
-                <ItemsControl ItemsSource="{Binding RecentProjects}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <WrapPanel Orientation="Horizontal" ItemWidth="220" />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="models:RecentProjectItem">
-                            <Button Classes="card home-entry narrow"
-                                    Margin="0,0,8,8"
-                                    Command="{Binding $parent[UserControl].DataContext.OpenRecentProjectCommand}"
-                                    CommandParameter="{Binding}"
-                                    ToolTip.Tip="{Binding Path}">
-                                <StackPanel Spacing="2">
-                                    <TextBlock Text="{Binding Name}"
-                                               FontSize="{DynamicResource Fs13}"
-                                               FontWeight="SemiBold"
-                                               TextTrimming="CharacterEllipsis" />
-                                    <TextBlock Text="{Binding MetaText}"
-                                               FontSize="{DynamicResource Fs10}"
-                                               Foreground="{DynamicResource TextMutedBrush}" />
-                                </StackPanel>
-                            </Button>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </StackPanel>
+            <local:RecentProjectsView IsVisible="{Binding IsCompact}" />
 
             <!--
                 宽屏：6 列网格。每张卡片跨 2 列，第 1 行 3 张、第 2 行 2 张居中，
@@ -245,11 +201,11 @@
             <!-- 窄屏：入口纵向排列，保持等宽等高 -->
             <StackPanel x:Name="NarrowCards"
                         MaxWidth="420"
-                        HorizontalAlignment="Center"
+                        HorizontalAlignment="Stretch"
                         Spacing="10"
                         IsVisible="{Binding ShowNarrowCards}">
                 <Button Command="{Binding GoWorkspaceCommand}" Classes="card home-entry narrow">
-                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
                         <Border Classes="icon-chip small" VerticalAlignment="Center">
                             <TextBlock Text="📦" FontSize="{DynamicResource Fs16}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
@@ -260,10 +216,14 @@
                                        Foreground="{DynamicResource TextMutedBrush}"
                                        TextTrimming="CharacterEllipsis" />
                         </StackPanel>
-                    </Grid>
-                </Button>
+                        <TextBlock Grid.Column="2"
+                                   Text="›"
+                                   FontSize="{DynamicResource Fs14}"
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   VerticalAlignment="Center" />
+                    </Grid>                </Button>
                 <Button Command="{Binding GoMergeCommand}" Classes="card home-entry narrow">
-                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
                         <Border Classes="icon-chip small" VerticalAlignment="Center">
                             <TextBlock Text="🔗" FontSize="{DynamicResource Fs16}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
@@ -274,10 +234,14 @@
                                        Foreground="{DynamicResource TextMutedBrush}"
                                        TextTrimming="CharacterEllipsis" />
                         </StackPanel>
-                    </Grid>
-                </Button>
+                        <TextBlock Grid.Column="2"
+                                   Text="›"
+                                   FontSize="{DynamicResource Fs14}"
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   VerticalAlignment="Center" />
+                    </Grid>                </Button>
                 <Button Command="{Binding GoConvertCommand}" Classes="card home-entry narrow">
-                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
                         <Border Classes="icon-chip small" VerticalAlignment="Center">
                             <TextBlock Text="🔄" FontSize="{DynamicResource Fs16}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
@@ -288,10 +252,14 @@
                                        Foreground="{DynamicResource TextMutedBrush}"
                                        TextTrimming="CharacterEllipsis" />
                         </StackPanel>
-                    </Grid>
-                </Button>
+                        <TextBlock Grid.Column="2"
+                                   Text="›"
+                                   FontSize="{DynamicResource Fs14}"
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   VerticalAlignment="Center" />
+                    </Grid>                </Button>
                 <Button Command="{Binding GoBrowseCommand}" Classes="card home-entry narrow">
-                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
                         <Border Classes="icon-chip small" VerticalAlignment="Center">
                             <TextBlock Text="🔍" FontSize="{DynamicResource Fs16}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
@@ -302,10 +270,14 @@
                                        Foreground="{DynamicResource TextMutedBrush}"
                                        TextTrimming="CharacterEllipsis" />
                         </StackPanel>
-                    </Grid>
-                </Button>
+                        <TextBlock Grid.Column="2"
+                                   Text="›"
+                                   FontSize="{DynamicResource Fs14}"
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   VerticalAlignment="Center" />
+                    </Grid>                </Button>
                 <Button Command="{Binding GoSettingsCommand}" Classes="card home-entry narrow">
-                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
                         <Border Classes="icon-chip small" VerticalAlignment="Center">
                             <TextBlock Text="⚙" FontSize="{DynamicResource Fs16}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
@@ -316,8 +288,12 @@
                                        Foreground="{DynamicResource TextMutedBrush}"
                                        TextTrimming="CharacterEllipsis" />
                         </StackPanel>
-                    </Grid>
-                </Button>
+                        <TextBlock Grid.Column="2"
+                                   Text="›"
+                                   FontSize="{DynamicResource Fs14}"
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   VerticalAlignment="Center" />
+                    </Grid>                </Button>
             </StackPanel>
             <!--
                 桌面（≥980px）的欢迎页。
@@ -491,7 +467,24 @@
                     <Run Text="从左侧「解包 &amp; 模组」开始" />
                     <Run Text="　·　放入游戏的 Pak 请放在 Paks 目录下" Foreground="{DynamicResource TextMutedBrush}" />
                 </TextBlock>
+
+                <!--
+                    最近工程（宽窗版）：放在页面最下面。
+                    上面讲"这里能做哪四件事"（介绍），这里才是"接着上次的干什么"（入口）；
+                    没有工程时整段不出现，新用户看到的就是原来那屏欢迎页。
+                -->
+                <local:RecentProjectsView />
             </StackPanel>
+
+            <!--
+                手机页脚：没有侧栏，上面那句"从左侧开始"在这儿是错的。
+                这一句放在宽窗文档区外面，否则窄屏整块都是隐藏的（踩过）。
+            -->
+            <TextBlock FontSize="{DynamicResource Fs11}"
+                       Foreground="{DynamicResource TextMutedBrush}"
+                       TextWrapping="Wrap"
+                       Text="点上面任一入口开始 · 全部在本机完成，不上传任何文件"
+                       IsVisible="{Binding IsCompact}" />
 
         </StackPanel>
 
