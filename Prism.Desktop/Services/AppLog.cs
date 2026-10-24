@@ -40,6 +40,10 @@ public static class AppLog
     private static string? _mirrorPath;
     private static bool _mirrorFailed;
 
+    /// <summary>副镜像（Android 的外部私有目录）；与主镜像同时写。</summary>
+    private static string? _secondaryPath;
+    private static bool _secondaryFailed;
+
     /// <summary>日志级别阈值：低于该级别的记录被丢弃。</summary>
     public static LogLevel MinimumLevel { get; set; } = LogLevel.Debug;
 
@@ -171,6 +175,40 @@ public static class AppLog
         }
     }
 
+    /// <summary>
+    /// 追加一个「副镜像」：日志同时写进第二个文件。
+    ///
+    /// 用来在 Android 上多写一份到应用的外部私有目录（adb 能直接 pull，用户用文件管理器也看得见），
+    /// 而主镜像仍留在应用内部目录。两者互不覆盖 —— 单独一个路径的话，
+    /// 谁后调用谁生效，排查时经常发现"日志是空的"。
+    /// </summary>
+    public static void EnableSecondaryMirror(string path)
+    {
+        try
+        {
+            string? directory = Path.GetDirectoryName(path);
+            if (!string.IsNullOrWhiteSpace(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            lock (Gate)
+            {
+                _secondaryPath = path;
+                _secondaryFailed = false;
+                File.WriteAllText(path, string.Empty, Encoding.UTF8);
+            }
+        }
+        catch
+        {
+            lock (Gate)
+            {
+                _secondaryPath = null;
+                _secondaryFailed = true;
+            }
+        }
+    }
+
     /// <summary>纯日志正文（不含环境头），用于设置页预览。</summary>
     public static string FullText
     {
@@ -288,19 +326,30 @@ public static class AppLog
 
     private static void AppendToMirror(LogRecord record)
     {
-        if (_mirrorPath is null || _mirrorFailed)
+        string line = Format(record) + Environment.NewLine;
+        if (_mirrorPath is not null && !_mirrorFailed)
         {
-            return;
+            try
+            {
+                File.AppendAllText(_mirrorPath, line, Encoding.UTF8);
+            }
+            catch
+            {
+                // 磁盘满/权限变化时停用镜像，不影响内存日志与 UI。
+                _mirrorFailed = true;
+            }
         }
 
-        try
+        if (_secondaryPath is not null && !_secondaryFailed)
         {
-            File.AppendAllText(_mirrorPath, Format(record) + Environment.NewLine, Encoding.UTF8);
-        }
-        catch
-        {
-            // 磁盘满/权限变化时停用镜像，不影响内存日志与 UI。
-            _mirrorFailed = true;
+            try
+            {
+                File.AppendAllText(_secondaryPath, line, Encoding.UTF8);
+            }
+            catch
+            {
+                _secondaryFailed = true;
+            }
         }
     }
 

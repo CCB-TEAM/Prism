@@ -25,6 +25,7 @@ public class MainActivity : AvaloniaMainActivity
     private string? _currentAudioPath;
     private bool _audioPrepared;
     private System.Threading.Timer? _audioPositionTimer;
+    private bool _logMirrorConfigured;
 
     public static MainActivity? Current { get; private set; }
 
@@ -35,6 +36,38 @@ public class MainActivity : AvaloniaMainActivity
 
         // 手机上没有 ffmpeg：M4A / AAC / FLAC 这类素材交给系统解码器
         UAssetAudio.Core.AudioSourceDecoder.PlatformDecoder = AndroidAudioDecoder.TryDecode;
+
+        ConfigureLogMirror();
+    }
+
+    /// <summary>
+    /// 把日志镜像改到「应用的外部私有目录」：<c>/sdcard/Android/data/&lt;包名&gt;/files/</c>。
+    ///
+    /// 共享代码里那份日志写在应用内部存储（/data/user/0/...），出问题时要 adb root 才能看；
+    /// 外部私有目录用 adb 就能 pull，用户也能用文件管理器看到。
+    /// 只配一次：<see cref="Prism.Desktop.Services.AppLog.EnableFileMirror"/> 会清空目标文件。
+    /// </summary>
+    private void ConfigureLogMirror()
+    {
+        if (_logMirrorConfigured)
+        {
+            return;
+        }
+
+        _logMirrorConfigured = true;
+        try
+        {
+            Java.IO.File? directory = GetExternalFilesDir(null);
+            if (directory is not null)
+            {
+                string path = System.IO.Path.Combine(directory.AbsolutePath, "prism-last-session.log");
+                Prism.Desktop.Services.AppLog.EnableSecondaryMirror(path);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"日志镜像位置设置失败：{ex}");
+        }
     }
 
     protected override void OnResume()

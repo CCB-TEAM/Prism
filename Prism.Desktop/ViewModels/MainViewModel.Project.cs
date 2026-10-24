@@ -217,8 +217,9 @@ public partial class MainViewModel
             file = await top.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
             {
                 Title = "保存模组工程",
+                // 扩展名已经写在建议文件名里；再给 DefaultExtension 会在手机上变成
+                // 「未命名工程.prismproj.prismproj」（DocumentsUI 会照它再补一次）。
                 SuggestedFileName = SuggestedProjectFileName,
-                DefaultExtension = "prismproj",
                 FileTypeChoices = [new FilePickerFileType("Prism 模组工程") { Patterns = ["*.prismproj"] }],
             });
         }
@@ -241,25 +242,49 @@ public partial class MainViewModel
 
     private async Task SaveProjectCoreAsync(string? localPath, IStorageFile? storage)
     {
+        // Android：一律走 SAF 流，绝不用「本地路径」直接写。
+        //
+        // 坑：对 DocumentsUI 返回的 content:// URI，TryGetLocalPath() 会翻译成
+        // /storage/emulated/0/... 这样的真实路径 —— 那是分区存储下别人的地界，
+        // 直接 File.WriteAllText 会 SecurityException。而系统在返回 URI 前已经把空文件建好了，
+        // 于是用户看到的就是「工程是 0 字节」。
+        if (OperatingSystem.IsAndroid())
+        {
+            localPath = null;
+        }
+
         // 没有替换项也允许保存：工程还记着 Pak / 映射 / 输出路径，
         // 先存个骨架、下次打开接着加，比"必须先改点什么"合理。
         string directory = ResolveProjectDirectory(localPath);
         string stem = ProjectFileStem(localPath, storage);
         ModProject project = await BuildProjectSnapshotAsync(directory, stem);
 
-        if (!string.IsNullOrWhiteSpace(localPath))
+        bool fellBackToPrivateCopy = false;
+        if (storage is not null)
+        {
+            // 先在自己目录里落一份，再去写用户选的位置。
+            // SAF 的写入偶发失败（提供者拒绝、空间不足、URI 失效），
+            // 有这一份至少工作不丢，而且它本身是个本地路径，能直接继续用。
+            string backup = Path.Combine(DefaultProjectDirectory(), stem + ProjectStore.Extension);
+            await Task.Run(() => ProjectStore.Save(backup, project));
+
+            try
+            {
+                byte[] bytes = Encoding.UTF8.GetBytes(ProjectStore.Serialize(project));
+                await WriteToStorageFileAsync(storage, bytes);
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warn("工程", $"写到你选的位置失败，暂存到应用私有目录：{ex.Message}");
+                fellBackToPrivateCopy = true;
+                localPath = backup;
+                StatusText = $"保存到所选位置失败（{ex.Message}），已先存在应用私有目录，工程不会丢。";
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(localPath))
         {
             string target = localPath;
             await Task.Run(() => ProjectStore.Save(target, project));
-        }
-        else if (storage is not null)
-        {
-            byte[] bytes = Encoding.UTF8.GetBytes(ProjectStore.Serialize(project));
-            await using Stream stream = await storage.OpenWriteAsync();
-            // SAF 的写入不保证截断：JSON 比旧内容短时会留下尾巴，必须自己截。
-            stream.SetLength(0);
-            await stream.WriteAsync(bytes);
-            await stream.FlushAsync();
         }
         else
         {
@@ -278,10 +303,61 @@ public partial class MainViewModel
         string assetNote = Directory.Exists(Path.Combine(directory, stem + ".assets"))
             ? $"，素材在 {stem}.assets"
             : string.Empty;
-        StatusText = project.Tasks.Count == 0
-            ? $"工程已保存：{ProjectDisplayName}（还没有替换项，Pak 与配置已记下）"
-            : $"工程已保存：{ProjectDisplayName}（{project.Tasks.Count} 项{assetNote}）";
+        if (!fellBackToPrivateCopy)
+        {
+            StatusText = project.Tasks.Count == 0
+                ? $"工程已保存：{ProjectDisplayName}（还没有替换项，Pak 与配置已记下）"
+                : $"工程已保存：{ProjectDisplayName}（{project.Tasks.Count} 项{assetNote}）";
+        }
+
         AddLog($"保存工程：{ProjectPath}（{project.Tasks.Count} 项）", "工程");
+    }
+
+    /// <summary>
+    /// 往 SAF / 文件提供者的目标写整份内容。
+    ///
+    /// 这里踩过一个坑：Android 的目标流（ParcelFileDescriptor 包出来的 OutputStream）**不支持 SetLength**。
+    /// 原来的写法是「SetLength(0) 截断 → 写」，结果截断生效、SetLength 抛异常，
+    /// 于是给用户留了一个 0 字节的工程文件（屏幕上还只看到一句错误，容易以为是导出成功）。
+    /// 现在：先写、再尽力截断、最后回读长度核对；长度不对就明确报错，绝不留空文件。
+    /// </summary>
+    private static async Task WriteToStorageFileAsync(IStorageFile storage, byte[] bytes)
+    {
+        await using (Stream stream = await storage.OpenWriteAsync())
+        {
+            await stream.WriteAsync(bytes);
+            await stream.FlushAsync();
+            try
+            {
+                // 打开时多数提供者已经截断过；没截断的（旧内容更长）在这里收尾。
+                if (stream.CanSeek)
+                {
+                    stream.SetLength(bytes.Length);
+                }
+            }
+            catch (Exception ex) when (ex is NotSupportedException or IOException or ArgumentException)
+            {
+                AppLog.Warn("工程", $"目标流不支持截断，按实际写入长度为准：{ex.Message}");
+            }
+        }
+
+        try
+        {
+            await using Stream verify = await storage.OpenReadAsync();
+            if (verify.CanSeek && verify.Length != bytes.Length)
+            {
+                throw new ModProjectException(
+                    $"工程写入不完整：期望 {bytes.Length:N0} 字节，实际 {verify.Length:N0} 字节。确认目标目录还有空间，或换一个位置再存一次。");
+            }
+        }
+        catch (ModProjectException)
+        {
+            throw;
+        }
+        catch
+        {
+            // 有的提供者写完不让立刻读回来，校验失败不该当成保存失败。
+        }
     }
 
     /// <summary>把当前状态攒成工程对象；这一步顺手把素材收进 assets 目录。</summary>
@@ -409,7 +485,9 @@ public partial class MainViewModel
         }
 
         IStorageFile file = files[0];
-        string? local = file.TryGetLocalPath();
+        // Android：URI 对应的「本地路径」只是翻译出来的样子，读不了真东西（分区存储），
+        // 一律走 SAF 流；桌面端才有真正的本地路径。
+        string? local = OperatingSystem.IsAndroid() ? null : file.TryGetLocalPath();
         await RunBusyAsync(() => LoadProjectCoreAsync(local, file));
     }
 
@@ -453,6 +531,11 @@ public partial class MainViewModel
 
     private async Task LoadProjectCoreAsync(string? localPath, IStorageFile? storage)
     {
+        if (OperatingSystem.IsAndroid())
+        {
+            localPath = null;
+        }
+
         ModProject project;
         if (!string.IsNullOrWhiteSpace(localPath))
         {
@@ -926,14 +1009,15 @@ public partial class MainViewModel
         SelectedPatchItem = null;
     }
 
-    private string SuggestedProjectFileName
-    {
-        get
-        {
-            string stem = SafeStem(ProjectDisplayName);
-            return stem + ProjectStore.Extension;
-        }
-    }
+    /// <summary>
+    /// 保存对话框里的建议文件名。
+    ///
+    /// 扩展名要我们自己带上：手机的系统保存界面并不会替我们补（不写就真的没有后缀，
+    /// 之后「打开工程」的 *.prismproj 过滤就看不到它了）。
+    /// 同时**不要**再给 FilePickerSaveOptions.DefaultExtension —— 两个都给会变成
+    /// 「xxx.prismproj.prismproj」。
+    /// </summary>
+    private string SuggestedProjectFileName => SafeStem(ProjectDisplayName) + ProjectStore.Extension;
 
     /// <summary>构建补丁 Pak 时的建议文件名：有工程就用工程名，比 patch_20250601_120000 有用得多。</summary>
     private string SuggestedPakFileName => SafeStem(ProjectDisplayName) + "_P.pak";
