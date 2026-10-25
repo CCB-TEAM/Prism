@@ -5,8 +5,8 @@
     <SupportedOSPlatformVersion>23</SupportedOSPlatformVersion>
     <Nullable>enable</Nullable>
     <ApplicationId>com.ccbteam.prism.desktop</ApplicationId>
-    <ApplicationVersion>19</ApplicationVersion>
-    <ApplicationDisplayVersion>1.3.8</ApplicationDisplayVersion>
+    <ApplicationVersion>20</ApplicationVersion>
+    <ApplicationDisplayVersion>1.3.9</ApplicationDisplayVersion>
     <AndroidPackageFormat>apk</AndroidPackageFormat>
     <EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
     <!-- 与 Android 版 Prism 一致：Release 禁用裁剪/AOT，避免兼容问题 -->

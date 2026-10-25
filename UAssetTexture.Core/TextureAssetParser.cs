@@ -56,7 +56,9 @@ public static class TextureAssetParser
             throw new FileNotFoundException("Matching .uexp was not found.", uexpPath);
 
         var mappings = string.IsNullOrWhiteSpace(usmapPath) ? null : new Usmap(usmapPath);
-        UAsset asset = new(fullAssetPath, engineVersion, mappings, CustomSerializationFlags.SkipParsingExports);
+        // UE5.5 之前 cook 的包得按 5.4 解析摘要，否则 UAssetAPI 会读出不存在的 SavedHash 直接抛错。
+        var effectiveEngineVersion = CookedAssetVersion.Resolve(fullAssetPath, engineVersion);
+        UAsset asset = new(fullAssetPath, effectiveEngineVersion, mappings, CustomSerializationFlags.SkipParsingExports);
 
         var rawExport = asset.Exports.OfType<RawExport>().FirstOrDefault()
             ?? throw new InvalidOperationException("No raw export was found. This tool currently expects cooked texture exports.");

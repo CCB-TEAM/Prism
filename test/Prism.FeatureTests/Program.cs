@@ -2178,6 +2178,34 @@ try
           PackageSummaryLayout.DecideProfile([versioned]) == PackageSummaryProfileDecision.KeepRequestedProfile,
         "没有样本 / 样本都带版本号 → 不动版本号");
 
+    // ══════════════════════════════════════════════════════════════
+    Section("F16 · 贴图替换用的引擎版本号（UAssetAPI 一侧）");
+
+    // UAssetAPI 也是靠"传进去的引擎版本号"去套 cooked 包摘要的排布，老包要降到 5.4。
+    string legacyAsset = Path.Combine(root, "legacy.uasset");
+    File.WriteAllBytes(legacyAsset, summaryHead(-8, 0, 0, 0, 0, withUe5Field: true));
+    string modernAsset = Path.Combine(root, "modern.uasset");
+    File.WriteAllBytes(modernAsset, summaryHead(-9, 0, 0, 0, 0, withUe5Field: true));
+    string versionedAsset = Path.Combine(root, "versioned.uasset");
+    File.WriteAllBytes(versionedAsset, summaryHead(-8, 864, 522, 1012, 0, withUe5Field: true));
+    string truncatedAsset = Path.Combine(root, "short.uasset");
+    File.WriteAllBytes(truncatedAsset, [0xC1, 0x83, 0x2A, 0x9E, 0xF8, 0xFF, 0xFF, 0xFF]);
+
+    Check(CookedAssetVersion.IsUnversionedBeforeSavedHash(legacyAsset),
+        "认出 UE5.5 之前 cook 的资产头（legacy -8 + 版本号全 0）");
+    Check(CookedAssetVersion.Resolve(legacyAsset, EngineVersion.VER_UE5_6) ==
+          CookedAssetVersion.PreSavedHashEngineVersion,
+        "老资产把引擎版本号降到 5.4 再解析");
+    Check(CookedAssetVersion.Resolve(modernAsset, EngineVersion.VER_UE5_6) == EngineVersion.VER_UE5_6,
+        "新资产（legacy -9）保持调用方要求的版本号");
+    Check(CookedAssetVersion.Resolve(versionedAsset, EngineVersion.VER_UE5_6) == EngineVersion.VER_UE5_6,
+        "有版本号的资产不用降级（文件里写的版本说了算）");
+    Check(CookedAssetVersion.Resolve(legacyAsset, EngineVersion.VER_UE5_4) == EngineVersion.VER_UE5_4,
+        "调用方本来就按老版本读时原样返回");
+    Check(!CookedAssetVersion.IsUnversionedBeforeSavedHash(truncatedAsset) &&
+          CookedAssetVersion.Resolve(truncatedAsset, EngineVersion.VER_UE5_6) == EngineVersion.VER_UE5_6,
+        "文件头不够长时不动版本号，交给 UAssetAPI 自己报错");
+
     Section("结果");
 }
 finally

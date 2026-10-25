@@ -49,7 +49,8 @@ public sealed class MaterialInstanceParameterService
     private static UAsset LoadAsset(string assetPath, EngineVersion engineVersion, string? usmapPath)
     {
         var mappings = string.IsNullOrWhiteSpace(usmapPath) ? null : new Usmap(usmapPath);
-        return new UAsset(Path.GetFullPath(assetPath), engineVersion, mappings);
+        var fullPath = Path.GetFullPath(assetPath);
+        return new UAsset(fullPath, CookedAssetVersion.Resolve(fullPath, engineVersion), mappings);
     }
 
     private static NormalExport FindMaterialInstanceExport(UAsset asset)
