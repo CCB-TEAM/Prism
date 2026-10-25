@@ -7,7 +7,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>..\Prism.Desktop\Assets\prism.ico</ApplicationIcon>
     <!-- 与 Prism.Desktop 的版本保持一致：日志头、文件属性里的版本号取自入口程序集 -->
-    <Version>1.3.7</Version>
+    <Version>1.3.8</Version>
   </PropertyGroup>
 
   <ItemGroup>

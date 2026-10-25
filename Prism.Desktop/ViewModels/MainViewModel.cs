@@ -2571,8 +2571,11 @@ public partial class MainViewModel : ViewModelBase
         await RunBusyAsync(async () =>
         {
             PakOpenResult result = await OpenPakCoreAsync();
-            StatusText = $"已打开 {Path.GetFileName(PakPath)}：{result.FileCount:N0} 个文件。";
+            StatusText = $"已打开 {Path.GetFileName(PakPath)}：{result.FileCount:N0} 个文件。" +
+                         (result.CookedSummaryNote is { Length: > 0 } note ? $"（{note}）" : string.Empty);
             AddLog($"打开 Pak：{Path.GetFileName(PakPath)}（{result.FileCount:N0} 个文件）");
+            if (result.CookedSummaryNote is { Length: > 0 } cookedNote)
+                AddLog(cookedNote);
             CurrentTabIndex = 1;
             await NavigateToAsync(string.Empty);
         });

@@ -2113,6 +2113,71 @@ try
     Check(cacheFiles == 1 && cacheBytes == 1,
         $"缓存占用能统计出来（{cacheFiles} 个 / {cacheBytes} 字节）");
 
+    // ══════════════════════════════════════════════════════════════
+    Section("F15 · cooked 老包的摘要排布（legacy -8 / -9）");
+
+    // 摘要头：tag + legacyFileVersion + [UE3] + UE4 + [UE5] + licensee
+    static byte[] summaryHead(int legacy, int ue3, int ue4, int ue5, int licensee, bool withUe5Field)
+    {
+        using var ms = new MemoryStream();
+        using var bw = new BinaryWriter(ms);
+        bw.Write(PackageSummaryLayout.PackageFileTag);
+        bw.Write(legacy);
+        if (legacy != -4)
+            bw.Write(ue3);
+        bw.Write(ue4);
+        if (withUe5Field)
+            bw.Write(ue5);
+        bw.Write(licensee);
+        bw.Write(new byte[16]); // 后面跟着的真实内容（SavedHash / CustomVersions …）随便填
+        bw.Flush();
+        return ms.ToArray();
+    }
+
+    PackageSummaryLayout legacyUnversioned = PackageSummaryLayout.Parse(
+        summaryHead(-8, 0, 0, 0, 0, withUe5Field: true));
+    Check(legacyUnversioned.Flavor == PackageSummaryFlavor.UnversionedBeforeSavedHash &&
+          legacyUnversioned.NeedsPreSavedHashProfile,
+        $"legacy -8 + 版本号全 0 → 认成 UE5.5 之前的排布（{legacyUnversioned.Flavor}）");
+
+    PackageSummaryLayout modernUnversioned = PackageSummaryLayout.Parse(
+        summaryHead(-9, 0, 0, 0, 0, withUe5Field: true));
+    Check(modernUnversioned.Flavor == PackageSummaryFlavor.UnversionedWithSavedHash &&
+          !modernUnversioned.NeedsPreSavedHashProfile,
+        $"legacy -9 + 版本号全 0 → 认成带 SavedHash 的新排布（{modernUnversioned.Flavor}）");
+
+    PackageSummaryLayout versioned = PackageSummaryLayout.Parse(
+        summaryHead(-8, 864, 522, 1012, 0, withUe5Field: true));
+    Check(versioned.Flavor == PackageSummaryFlavor.Versioned,
+        $"写了真实版本号的包不受影响（{versioned.Flavor}）");
+    Check(versioned.IsUnversioned == false, "有版本号的包不会被当成 unversioned");
+
+    PackageSummaryLayout ue4Unversioned = PackageSummaryLayout.Parse(
+        summaryHead(-7, 0, 0, 0, 0, withUe5Field: false));
+    Check(ue4Unversioned.Flavor == PackageSummaryFlavor.UnversionedBeforeSavedHash &&
+          !ue4Unversioned.NeedsPreSavedHashProfile,
+        "UE4 年代（legacy -7）的 unversioned 包不乱套 UE5 版本号");
+
+    Check(PackageSummaryLayout.Parse([]).Flavor == PackageSummaryFlavor.Unknown &&
+          PackageSummaryLayout.Parse([1, 2, 3]).Flavor == PackageSummaryFlavor.Unknown,
+        "短包 / 脏数据判不出来时保持 Unknown，不会瞎猜");
+    Check(PackageSummaryLayout.Parse(summaryHead(-8, 0, 0, 0, 0, withUe5Field: true)[..8])
+              .Flavor == PackageSummaryFlavor.Unknown,
+        "只给 8 字节时宁可判不出来也不越界");
+
+    Check(PackageSummaryLayout.DecideProfile([legacyUnversioned]) ==
+          PackageSummaryProfileDecision.UsePreSavedHashProfile,
+        "抽到的全是老排布 → 换 UE5.4 的版本号再读");
+    Check(PackageSummaryLayout.DecideProfile([modernUnversioned]) ==
+          PackageSummaryProfileDecision.KeepRequestedProfile,
+        "抽到新排布 → 保持调用方要求的版本号");
+    Check(PackageSummaryLayout.DecideProfile([legacyUnversioned, modernUnversioned]) ==
+          PackageSummaryProfileDecision.KeepRequestedProfile,
+        "混装（两代包都有）→ 保持请求的版本号，别把本来能读的新包读坏");
+    Check(PackageSummaryLayout.DecideProfile([]) == PackageSummaryProfileDecision.KeepRequestedProfile &&
+          PackageSummaryLayout.DecideProfile([versioned]) == PackageSummaryProfileDecision.KeepRequestedProfile,
+        "没有样本 / 样本都带版本号 → 不动版本号");
+
     Section("结果");
 }
 finally

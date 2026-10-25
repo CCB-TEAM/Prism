@@ -325,6 +325,8 @@ public static class PrismDocs
                 new DocParagraph("系统选择器给的是 content:// 授权，没有本地路径，所以应用会先复制一份到自己私有目录再读。你选的 Pak 与映射放在 paks/，素材副本放在 picked/：启动时只清理 picked/ 里没人用的素材，paks/ 不会被自动删除，换一个才会删掉旧的。想腾空间就到系统设置里清除应用数据（导出的文件在外部目录，不受影响）。"),
                 new DocHeading("更新检查失败"),
                 new DocParagraph("查更新走的是 GitHub 的公开接口，公司网络或代理下可能连不上。这不影响任何本地功能；也可以直接到 GitHub 的 Releases 页面手动下载。"),
+                new DocHeading("点开文件报「Read size is bigger than remaining archive length」"),
+                new DocParagraph("这是 UE5.5 之前的引擎 cook 出来的包：摘要里不写版本号，布局也比现在的包少一段（没有 SavedHash）。1.3.7 及更早的版本一律按新格式读，于是整包资产都打不开，但列表看起来又完全正常。现在打开 Pak 时会先抽几个资产头看一眼，认出来是这批老包就自动按 UE5.4 的格式读，状态栏会写明「已按 UE5.4 的格式读」。"),
             ]),
     ];
 }

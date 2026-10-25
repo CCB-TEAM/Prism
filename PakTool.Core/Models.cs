@@ -14,7 +14,9 @@ public sealed record PakOpenResult(
     int FileCount,
     int RequiredKeyCount,
     IReadOnlyList<string> MountedArchives,
-    IReadOnlyList<OperationTimingDto> Timings);
+    IReadOnlyList<OperationTimingDto> Timings,
+    // 非空表示这个包是 UE5.5 之前 cook 的老排布，已自动换成那个年代的版本号来读。
+    string? CookedSummaryNote = null);
 
 public sealed record OperationTimingDto(
     string Name,

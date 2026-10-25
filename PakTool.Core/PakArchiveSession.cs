@@ -28,6 +28,7 @@ using CUE4Parse_Conversion.Meshes;
 using CUE4Parse_Conversion.Meshes.PSK;
 using CUE4Parse_Conversion.Sounds;
 using CUE4Parse_Conversion.Textures;
+using CUE4Parse.UE4.Exceptions;
 using System.Buffers.Binary;
 using System.Globalization;
 using System.Text;
@@ -106,6 +107,11 @@ public sealed class PakArchiveSession : IDisposable
         provider.PostMount();
         AddTiming(timings, "PostMount", stepClock);
 
+        // cooked 老包要看一眼摘要排布再决定版本号，否则标签页里每个资产都会解析失败。
+        stepClock.Restart();
+        string? cookedSummaryNote = ApplyCookedSummaryProfile(provider);
+        AddTiming(timings, "DetectCookedSummary", stepClock);
+
         _provider = provider;
         stepClock.Restart();
         var mountedArchives = provider.MountedVfs.Select(vfs => vfs.Name).Order(StringComparer.OrdinalIgnoreCase).ToArray();
@@ -117,7 +123,8 @@ public sealed class PakArchiveSession : IDisposable
             provider.Files.Count,
             provider.RequiredKeys.Count,
             mountedArchives,
-            timings);
+            timings,
+            cookedSummaryNote);
     }
 
     /// <summary>
@@ -233,8 +240,23 @@ public sealed class PakArchiveSession : IDisposable
         var provider = Provider;
         var fixedPath = provider.FixPath(assetPath);
 
-        if (!provider.TryLoadPackage(fixedPath, out var package))
-            throw new InvalidOperationException($"Could not load package: {assetPath}");
+        IPackage package;
+        try
+        {
+            package = provider.LoadPackage(fixedPath);
+        }
+        catch (Exception ex) when (IsMissingMappingsError(ex))
+        {
+            throw new InvalidOperationException("This asset uses unversioned properties. Import the matching mapping file (.usmap or .jmap), then try again.", ex);
+        }
+        catch (Exception ex) when (IsPackageSummaryError(ex))
+        {
+            throw new InvalidOperationException(DescribePackageSummaryError(ex), ex);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Could not load package: {assetPath}", ex);
+        }
 
         var exports = package.GetExports()
             .Take(Math.Max(1, maxExports))
@@ -392,6 +414,10 @@ public sealed class PakArchiveSession : IDisposable
             catch (Exception ex) when (IsMissingMappingsError(ex))
             {
                 throw new InvalidOperationException("This asset uses unversioned properties. Import the matching mapping file (.usmap or .jmap), then preview it again.", ex);
+            }
+            catch (Exception ex) when (IsPackageSummaryError(ex))
+            {
+                throw new InvalidOperationException(DescribePackageSummaryError(ex), ex);
             }
 
             var deferredBlueprints = new List<UObject>();
@@ -3144,6 +3170,20 @@ public sealed class PakArchiveSession : IDisposable
                (ex.InnerException is not null && IsMissingMappingsError(ex.InnerException));
     }
 
+    /// <summary>
+    /// 包摘要层面的解析失败（版本对不上、magic 不对、整包压缩……）。
+    /// 这类原始消息是给开发者看的（<c>Read size is bigger than remaining archive length.</c>
+    /// 之类），直接弹到状态栏上用户只会一脸问号。
+    /// </summary>
+    private static bool IsPackageSummaryError(Exception ex) => ex is ParserException;
+
+    private static string DescribePackageSummaryError(Exception ex)
+    {
+        string reason = ex.Message.Split('\n')[0].Trim();
+        return $"这个资产读不出来：包里的版本信息和当前引擎对不上（{reason}）。" +
+               "同一批 cook 出来的资产大概率也一样；如果整包都这样，就是包本身用的引擎版本我们还没覆盖到。";
+    }
+
     private static bool TryResolveGameFile(DefaultFileProvider provider, string path, out GameFile file)
     {
         if (provider.TryGetGameFile(path, out file!))
@@ -3238,6 +3278,69 @@ public sealed class PakArchiveSession : IDisposable
             default:
                 throw new NotSupportedException($"Texture preview does not support decoded pixel format {texture.PixelFormat} yet.");
         }
+    }
+
+    /// <summary>
+    /// UE5.5 之前 cook 的包要换个版本号才读得动，这里在挂载完成、还没人读包的时候判断一次。
+    ///
+    /// cooked 包的摘要里版本号全是 0，CUE4Parse 只能拿"会话声明的引擎版本号"去套摘要排布。
+    /// 默认按 UE5.6 读，遇到 legacy -8 的老包就会去找根本不存在的 SavedHash，接着把包名字符串
+    /// 当成 CustomVersionCount，抛 "Read size is bigger than remaining archive length" ——
+    /// 表现就是列表正常、点任何一个文件都报错。
+    ///
+    /// 版本号挂在会话的 <see cref="VersionContainer"/> 上，改一次之后每次 LoadPackage 都生效；
+    /// 这里先改 Game 再置空 Ver，让 Ver 跟着 Game 重算，并且不打开"显式版本"开关
+    /// （显式版本会让包内自己写了版本号的资产也用上我们的版本号，那才会真的读坏）。
+    /// </summary>
+    private string? ApplyCookedSummaryProfile(DefaultFileProvider provider)
+    {
+        var versions = provider.Versions;
+        if (!(versions.Ver >= EUnrealEngineObjectUE5Version.PACKAGE_SAVED_HASH))
+            return null; // 调用方本来就没按 UE5.5+ 读，摘要排布是对的
+
+        List<PackageSummaryLayout> samples = SampleSummaryLayouts(provider, out int sampledCount);
+        if (sampledCount == 0)
+            return null;
+
+        if (PackageSummaryLayout.DecideProfile(samples) != PackageSummaryProfileDecision.UsePreSavedHashProfile)
+            return null;
+
+        versions.Game = EGame.GAME_UE5_4;
+        versions.Ver = default;
+
+        const string note = "这个包是 UE5.5 之前 cook 的，已按 UE5.4 的格式读";
+        LogDecode($"{note}（抽样 {sampledCount} 个资产头：{string.Join(", ", samples.Select(s => s.LegacyFileVersion))}）");
+        return note;
+    }
+
+    /// <summary>
+    /// 抽几个最小的 .uasset 读摘要头。挑最小的：几十 KB 到几百 KB，读起来没负担，
+    /// 而且同一批 cook 出来的资产头格式是一样的。
+    /// </summary>
+    private static List<PackageSummaryLayout> SampleSummaryLayouts(DefaultFileProvider provider, out int sampledCount)
+    {
+        const int MaxSamples = 6;
+        const long MaxSampleBytes = 4L * 1024 * 1024;
+
+        var samples = new List<PackageSummaryLayout>();
+        sampledCount = 0;
+
+        foreach (GameFile file in provider.Files.Values
+                     .Where(file => file.IsUePackage &&
+                                    file.Size is > 0 and <= MaxSampleBytes &&
+                                    file.Extension.Equals("uasset", StringComparison.OrdinalIgnoreCase))
+                     .OrderBy(file => file.Size)
+                     .Take(MaxSamples))
+        {
+            byte[]? head = file.SafeRead();
+            if (head is null || head.Length < PackageSummaryLayout.MinHeaderBytes)
+                continue;
+
+            sampledCount++;
+            samples.Add(PackageSummaryLayout.Parse(head));
+        }
+
+        return samples;
     }
 
     private void DisposeProvider()
