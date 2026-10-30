@@ -73,9 +73,12 @@
                            HorizontalAlignment="Center" />
                 </Border>
 
-                <!-- UMG 控件蓝图：按 Slate 布局规则渲染出的界面，点控件看属性 -->
+                <!--
+                    UMG 控件蓝图：按 Slate 布局规则渲染出的界面，点控件看属性。
+                    画布 ↔ 下方详情、控件树 ↔ 属性之间的两条细条都能按住拖动改大小。
+                -->
                 <Border Classes="card" Padding="0" IsVisible="{Binding HasWidgetPreview}">
-                    <Grid RowDefinitions="Auto,300,Auto">
+                    <Grid x:Name="WidgetPanelGrid" RowDefinitions="Auto,320,10,Auto">
                         <DockPanel Grid.Row="0" Margin="12,10,12,6">
                             <TextBlock Text="界面预览"
                                        FontSize="{DynamicResource Fs12}"
@@ -92,19 +95,37 @@
                                       FontSize="{DynamicResource Fs10}" />
                         </DockPanel>
 
-                        <Panel Grid.Row="1">
+                        <Panel Grid.Row="1" MinHeight="140">
                             <views:WidgetPreviewView Preview="{Binding WidgetPreview}"
                                                      Root="{Binding WidgetRoot}"
                                                      SelectedNode="{Binding SelectedWidgetNode, Mode=TwoWay}"
                                                      ShowOutlines="{Binding ShowWidgetOutlines}" />
                         </Panel>
 
-                        <Grid Grid.Row="2"
-                              ColumnDefinitions="200,*"
-                              ColumnSpacing="10"
-                              Margin="12,8,12,12"
-                              MaxHeight="260">
-                            <Border Background="{DynamicResource SurfaceAltBrush}"
+                        <!-- 画布与下方详情之间的拖拽条 -->
+                        <Border Grid.Row="2"
+                                Classes="widget-row-handle"
+                                Background="Transparent"
+                                Cursor="SizeNorthSouth"
+                                PointerPressed="OnWidgetCanvasHandlePressed"
+                                PointerMoved="OnWidgetCanvasHandleMoved"
+                                PointerReleased="OnWidgetCanvasHandleReleased">
+                            <Border Height="3"
+                                    Width="44"
+                                    CornerRadius="2"
+                                    Background="{DynamicResource DividerBrush}"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center" />
+                        </Border>
+
+                        <Grid Grid.Row="3"
+                              x:Name="WidgetDetailsGrid"
+                              ColumnDefinitions="240,10,*"
+                              Margin="12,0,12,12"
+                              MaxHeight="320">
+                            <Border Grid.Column="0"
+                                    MinWidth="120"
+                                    Background="{DynamicResource SurfaceAltBrush}"
                                     CornerRadius="6"
                                     Padding="4">
                                 <ListBox ItemsSource="{Binding WidgetTreeItems}"
@@ -124,7 +145,24 @@
                                 </ListBox>
                             </Border>
 
+                            <!-- 控件树与属性之间的拖拽条 -->
                             <Border Grid.Column="1"
+                                    Classes="widget-column-handle"
+                                    Background="Transparent"
+                                    Cursor="SizeWestEast"
+                                    PointerPressed="OnWidgetColumnHandlePressed"
+                                    PointerMoved="OnWidgetColumnHandleMoved"
+                                    PointerReleased="OnWidgetColumnHandleReleased">
+                                <Border Height="32"
+                                        Width="3"
+                                        CornerRadius="2"
+                                        Background="{DynamicResource DividerBrush}"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center" />
+                            </Border>
+
+                            <Border Grid.Column="2"
+                                    MinWidth="160"
                                     Background="{DynamicResource SurfaceAltBrush}"
                                     CornerRadius="6"
                                     Padding="8,4">

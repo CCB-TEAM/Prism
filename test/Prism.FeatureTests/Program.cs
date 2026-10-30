@@ -4,6 +4,7 @@ using Prism.Desktop.Services.Widgets;
 using UAssetTexture.Core;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.VisualTree;
 using UAssetAPI.UnrealTypes;
 
 // Avalonia.Controls 里也有 Image、Avalonia 里也有 Size，这里只用到 ImageSharp 的泛型 Image<Rgba32>，
@@ -2340,6 +2341,48 @@ try
     Check(!widgetVm.HasWidgetPreview && widgetVm.WidgetTreeItems.Count == 0,
         "清空预览后控件树也清空");
 
+    Section("F18 · 区域拖拽（列表↔预览 / 画布↔详情 / 控件树↔属性）");
+
+    Prism.FeatureTests.UiFixture.EnsureInitialized();
+    {
+        (Prism.Desktop.Views.MainWindow splitWindow, Prism.Desktop.ViewModels.MainViewModel splitVm) = Prism.FeatureTests.UiFixture.CreateShell();
+        splitWindow.Show();
+        Prism.FeatureTests.UiFixture.RunJobs();
+        splitVm.CurrentTabIndex = 1;
+        splitVm.GoWorkspaceCommand.Execute(null);
+        Prism.FeatureTests.UiFixture.RunJobs();
+
+        // 横屏/竖屏两套布局各有一个预览栏（另一套 IsVisible=false 也还在可视树里），取真在用的那个
+        Prism.Desktop.Views.PreviewPaneView? pane = splitWindow.GetVisualDescendants()
+            .OfType<Prism.Desktop.Views.PreviewPaneView>()
+            .OrderByDescending(candidate => candidate.Bounds.Width)
+            .FirstOrDefault();
+        Check(pane is not null, "浏览页里能找到预览栏");
+
+        double paneWidthBefore = pane?.Bounds.Width ?? 0;
+        bool dragged = Prism.FeatureTests.UiFixture.DragHandle(splitWindow, "browse-handle", -140, 0);
+        Check(dragged, "列表↔预览之间有可拖的条");
+        Check((pane?.Bounds.Width ?? 0) > paneWidthBefore + 60,
+            $"往左拖之后预览栏变宽（{paneWidthBefore:0} → {pane?.Bounds.Width ?? 0:0}）");
+
+        // 塞一份控件预览，让「画布 ↔ 详情」那张卡片出现
+        splitVm.WidgetPreview = previewDto;
+        Prism.FeatureTests.UiFixture.RunJobs();
+
+        Prism.Desktop.Views.WidgetPreviewView? widgetCanvas = splitWindow.GetVisualDescendants()
+            .OfType<Prism.Desktop.Views.WidgetPreviewView>()
+            .OrderByDescending(candidate => candidate.Bounds.Width * candidate.Bounds.Height)
+            .FirstOrDefault();
+        Check(widgetCanvas is not null, "控件预览画布出现在可视树里");
+        double canvasHeightBefore = widgetCanvas?.Bounds.Height ?? 0;
+
+        Check(Prism.FeatureTests.UiFixture.DragHandle(splitWindow, "widget-row-handle", 0, 160),
+            "画布与详情之间有可拖的条");
+        Check((widgetCanvas?.Bounds.Height ?? 0) > canvasHeightBefore + 60,
+            $"往下拖之后画布变高（{canvasHeightBefore:0} → {widgetCanvas?.Bounds.Height ?? 0:0}）");
+
+        splitWindow.Close();
+    }
 
     Section("结果");
 }

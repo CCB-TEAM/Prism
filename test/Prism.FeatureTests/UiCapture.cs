@@ -1,8 +1,11 @@
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using Avalonia.Input;
+using Avalonia.VisualTree;
 using PakTool.Core;
 using Prism.Desktop.ViewModels;
 using Prism.Desktop.Views;
@@ -36,7 +39,7 @@ internal static class UiCapture
             .WithInterFont()
             .SetupWithoutStarting();
 
-        return docsOnly ? CaptureDocs() : CapturePages(outputDirectory);
+return docsOnly ? CaptureDocs() : CapturePages(outputDirectory);
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -182,7 +185,14 @@ internal static class UiCapture
         // 所以这一页只在给了环境变量（PRISM_WIDGET_PAK + 可选 PRISM_WIDGET_USMAP）时才截。
         if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("PRISM_WIDGET_PAK")))
         {
-            pages = [.. pages[..9], ("preview-widget", "GoWorkspace", 1), .. pages[9..]];
+            pages =
+            [
+                .. pages[..9],
+                ("preview-widget", "GoWorkspace", 1),
+                // 同一页再截一张：把列表/预览之间的分隔条往左拖 120px，证明区域能拖
+                ("preview-widget-dragged", "GoWorkspace", 1),
+                .. pages[9..],
+            ];
         }
 
         int written = 0;
@@ -223,9 +233,19 @@ internal static class UiCapture
                     // 预览栏的内置播放器 / 视频画面：同样造一份示例状态
                     if (pageLabel.StartsWith("preview-", StringComparison.Ordinal))
                     {
-                        if (pageLabel == "preview-widget")
+                        if (pageLabel.StartsWith("preview-widget", StringComparison.Ordinal))
                         {
                             SeedWidgetDemo(vm);
+
+                            // 拖两张：画布往下拉高 160px，列表↔预览往左拉 140px（预览变宽）
+                            if (pageLabel.EndsWith("dragged", StringComparison.Ordinal))
+                            {
+                                UiFixture.DragHandle(window, "widget-row-handle", 0, 160);
+                                if (vm.IsLandscape)
+                                {
+                                    UiFixture.DragHandle(window, "browse-handle", -140, 0);
+                                }
+                            }
                         }
                         else
                         {

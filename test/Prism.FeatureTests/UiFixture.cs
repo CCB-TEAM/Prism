@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -53,6 +54,40 @@ internal static class UiFixture
         window.Arrange(new Rect(0, 0, 1280, 900));
 
         return (window, vm);
+    }
+
+    /// <summary>
+    /// 按住带某个类名的拖拽条走一遍真实的按下-移动-抬起。
+    /// 分隔条是自己写的（指针捕获 + 改 GridLength），所以这条路径能真实复现"能不能拖"。
+    /// </summary>
+    public static bool DragHandle(TopLevel window, string handleClass, double dx, double dy)
+    {
+        Border? handle = window.GetVisualDescendants()
+            .OfType<Border>()
+            .FirstOrDefault(candidate => candidate.Classes.Contains(handleClass));
+        if (handle is null)
+        {
+            return false;
+        }
+
+        Point origin = handle.TranslatePoint(new Point(0, 0), window) ?? new Point(0, 0);
+        var start = new Point(
+            origin.X + Math.Max(1, handle.Bounds.Width) / 2,
+            origin.Y + Math.Max(1, handle.Bounds.Height) / 2);
+
+        window.MouseDown(start, MouseButton.Left, RawInputModifiers.LeftMouseButton);
+        RunJobs();
+        for (var step = 1; step <= 6; step++)
+        {
+            window.MouseMove(
+                new Point(start.X + dx * step / 6.0, start.Y + dy * step / 6.0),
+                RawInputModifiers.LeftMouseButton);
+            RunJobs();
+        }
+
+        window.MouseUp(new Point(start.X + dx, start.Y + dy), MouseButton.Left, RawInputModifiers.None);
+        RunJobs();
+        return true;
     }
 
     /// <summary>把待处理的 UI 任务跑完（动画/绑定更新都靠它推进）。</summary>

@@ -160,11 +160,26 @@
 
             <!-- ═══════ 浏览（响应式） ═══════ -->
             <Panel IsVisible="{Binding IsBrowseTab}">
-                    <!-- 横屏：左列表 + 右详情 -->
+                    <!-- 横屏：左列表 + 右详情（中间的细条按住能拖，改左右比例） -->
                     <Grid x:Name="LandscapeLayout"
-                          ColumnDefinitions="2*,3*">
-                        <views:FileBrowserView />
+                          ColumnDefinitions="2*,10,3*">
+                        <views:FileBrowserView Grid.Column="0" MinWidth="280" />
                         <Border Grid.Column="1"
+                                Classes="browse-handle"
+                                Background="Transparent"
+                                Cursor="SizeWestEast"
+                                PointerPressed="OnBrowseHandlePressed"
+                                PointerMoved="OnBrowseHandleMoved"
+                                PointerReleased="OnBrowseHandleReleased">
+                            <Border Width="3"
+                                    Height="44"
+                                    CornerRadius="2"
+                                    Background="{DynamicResource DividerBrush}"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center" />
+                        </Border>
+                        <Border Grid.Column="2"
+                                MinWidth="320"
                                 BorderBrush="{DynamicResource DividerBrush}"
                                 BorderThickness="1,0,0,0"
                                 Background="{DynamicResource CardBrush}">
@@ -266,9 +281,9 @@
                                                            FontSize="{DynamicResource Fs10}"
                                                            Foreground="{DynamicResource TextMutedBrush}"
                                                            TextTrimming="CharacterEllipsis" />
-                                                <TextBlock Text="已替换"
-                                                           FontSize="{DynamicResource Fs10}"
-                                                           Foreground="{DynamicResource PrimaryBrush}"
+                                                <TextBlock Text="已替换"
+                                                           FontSize="{DynamicResource Fs10}"
+                                                           Foreground="{DynamicResource PrimaryBrush}"
                                                            IsVisible="{Binding IsReplaced}" />                                                <TextBlock Text="已编辑"
                                                            FontSize="{DynamicResource Fs10}"
                                                            Foreground="{DynamicResource PrimaryBrush}"

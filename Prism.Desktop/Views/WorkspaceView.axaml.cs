@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -18,6 +19,54 @@ public partial class WorkspaceView : UserControl
 
     /// <summary>拖拽上限：参考 Web 版 parentHeight - 8。</summary>
     private double MaxDrawerHeight => Math.Max(200, PortraitLayout.Bounds.Height - 8);
+
+    // ── 浏览页：列表 ↔ 预览 的分隔条 ──
+    private bool _isDraggingBrowseSplit;
+    private double _browseDragStartX;
+    private double _browseDragStartWidth;
+
+    private const double MinListWidth = 280;
+    private const double MinPreviewWidth = 320;
+
+    private void OnBrowseHandlePressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not Control handle)
+        {
+            return;
+        }
+
+        _isDraggingBrowseSplit = true;
+        _browseDragStartX = e.GetPosition(this).X;
+        _browseDragStartWidth = LandscapeLayout.ColumnDefinitions[0].ActualWidth;
+        if (_browseDragStartWidth <= 1)
+        {
+            _browseDragStartWidth = LandscapeLayout.ColumnDefinitions[0].Width.Value;
+        }
+
+        e.Pointer.Capture(handle);
+        e.Handled = true;
+    }
+
+    private void OnBrowseHandleMoved(object? sender, PointerEventArgs e)
+    {
+        if (!_isDraggingBrowseSplit)
+        {
+            return;
+        }
+
+        double available = Math.Max(0, LandscapeLayout.Bounds.Width - 10);
+        double maxListWidth = Math.Max(MinListWidth, available - MinPreviewWidth);
+        double width = Math.Clamp(_browseDragStartWidth + (e.GetPosition(this).X - _browseDragStartX), MinListWidth, maxListWidth);
+        LandscapeLayout.ColumnDefinitions[0].Width = new GridLength(width);
+        e.Handled = true;
+    }
+
+    private void OnBrowseHandleReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        _isDraggingBrowseSplit = false;
+        e.Pointer.Capture(null);
+        e.Handled = true;
+    }
 
     /// <summary>搜索框回车触发搜索（按钮可能被遮挡时的兜底）。</summary>
     private void OnSearchKeyDown(object? sender, KeyEventArgs e)
