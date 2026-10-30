@@ -72,7 +72,8 @@ public sealed record AssetPreviewDto(
     ModelPreviewDto? Model = null,
     LocresPreviewDto? Locres = null,
     bool CanPlay = false,
-    bool CanExportRaw = true);
+    bool CanExportRaw = true,
+    WidgetPreviewDto? Widget = null);
 
 public sealed record AssetPreviewDetailDto(
     string Label,

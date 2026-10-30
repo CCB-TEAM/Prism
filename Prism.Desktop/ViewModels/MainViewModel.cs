@@ -2858,6 +2858,7 @@ public partial class MainViewModel : ViewModelBase
             PreviewText = preview.Text ?? string.Empty;
             PreviewImage = null;
             ModelPreview = null;
+            WidgetPreview = preview.Widget;
             // 音视频的 Data 是原始载荷（mp4/wav 字节），拿去当图片解会炸在 Skia 里，
             // 之前的"选中视频报 NRE"就是这么来的。只对真图片解，解不出来就算了。
             bool isMediaPayload = preview.Kind is "video" or "audio";
@@ -5918,6 +5919,7 @@ public partial class MainViewModel : ViewModelBase
         _selectedLocresPath = null;
         HasLocresPreview = false;
         ModelPreview = null;
+        WidgetPreview = null;
         PreviewEmptyText = "此文件无预览";
     }
 

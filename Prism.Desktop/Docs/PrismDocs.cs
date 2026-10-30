@@ -110,6 +110,7 @@ public static class PrismDocs
                 [
                     "搜索框输入 kards/Content/Assets/Textures 这类路径会直接跳转到该目录，输入关键词则是全文搜索。",
                     "贴图、音频、视频、模型、本地化都有内置预览：贴图看原图，音频能播放，视频能拖时间轴，模型是线框图。",
+                    "UMG 控件蓝图（WBP_*）会画成「界面预览」：按 Slate 布局规则排版，贴图跟着解析，点控件能看它的属性。",
                     "列表左侧的缩略图可以在「设置 › 行为」里关掉，低配设备会明显更顺。",
                 ]),
                 new DocHeading("替换列表"),
@@ -327,6 +328,8 @@ public static class PrismDocs
                 new DocParagraph("查更新走的是 GitHub 的公开接口，公司网络或代理下可能连不上。这不影响任何本地功能；也可以直接到 GitHub 的 Releases 页面手动下载。"),
                 new DocHeading("点开文件报「Read size is bigger than remaining archive length」"),
                 new DocParagraph("这是 UE5.5 之前的引擎 cook 出来的包：摘要里不写版本号，布局也比现在的包少一段（没有 SavedHash）。1.3.7 及更早的版本一律按新格式读，于是整包资产都打不开，但列表看起来又完全正常。现在打开 Pak 时会先抽几个资产头看一眼，认出来是这批老包就自动按 UE5.4 的格式读，状态栏会写明「已按 UE5.4 的格式读」。"),
+                new DocHeading("能看界面（UMG 控件蓝图）长什么样吗"),
+                new DocParagraph("能。点开 WidgetBlueprint（WBP_ 开头那些）会在预览栏出现「界面预览」：按 Slate 的布局规则把控件树排一遍再画出来，贴图会跟着解析，点控件可以在右边看它的属性（Text、Brush、Padding、锚点等）。顶部「边框」打开会画出每个控件的边界，方便对位置。两点说明：游戏里用的字体读不出来，文字按内置字体近似；滚动框、复杂材质只做近似，动画不参与渲染。"),
             ]),
     ];
 }

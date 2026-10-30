@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using PakTool.Core;
+using Prism.Desktop.Services.Widgets;
 using UAssetTexture.Core;
 using Avalonia;
 using Avalonia.Controls;
@@ -2206,6 +2207,140 @@ try
           CookedAssetVersion.Resolve(truncatedAsset, EngineVersion.VER_UE5_6) == EngineVersion.VER_UE5_6,
         "文件头不够长时不动版本号，交给 UAssetAPI 自己报错");
 
+    Section("F17 · UMG 控件预览（读属性 / 算布局 / 控件树）");
+
+    // 1) 宽容读取：unversioned 序列化只写和默认值不同的字段，属性缺失必须落到默认值。
+    var fontProp = StructProp("Font", Num("Size", 10));
+    var brushProp = StructProp("Brush",
+        new WidgetPropertyDto("ResourceObject", "ObjectProperty",
+            new WidgetObjectRef("Texture2D", "T_Icon", "pkg.T_Icon", "img0")));
+    var probeNode = Play(Dto("Probe", "TextBlock", "", [fontProp, brushProp], []));
+
+    Check(Math.Abs(WidgetLayout.FontSizePx(probeNode) - 10f * WidgetLayout.PointsToPixels) < 0.01f,
+        "Font.Size 磅值换算成像素（96/72）");
+    Check(Math.Abs(WidgetProps.Float(probeNode.Properties, "RenderOpacity", 1) - 1) < 0.001,
+        "没写 RenderOpacity 时按 1");
+    Check(WidgetProps.Enum(probeNode.Properties, "Visibility", "Visible") == "Visible",
+        "没写 Visibility 时按 Visible");
+    Check(WidgetProps.Object(WidgetProps.Struct(probeNode.Properties, "Brush"), "ResourceObject")?.ImageId == "img0",
+        "画刷里的贴图引用带出了已解码图片编号");
+    Check(WidgetProps.Margin(null, "Padding", new WidgetMargin(4, 2, 4, 2)) == new WidgetMargin(4, 2, 4, 2),
+        "空属性的 Margin 回落到调用方给的默认值");
+
+    // 2) SizeBox 覆写尺寸：两个 bOverride 开关都写死时以覆写值为准。
+    var sizeBox = Play(Dto("Root", "SizeBox", "", [
+        BoolProp("bOverride_WidthOverride", true), Num("WidthOverride", 248),
+        BoolProp("bOverride_HeightOverride", true), Num("HeightOverride", 80),
+    ], [], Dto("Body", "Border", "SizeBoxSlot")));
+    var sizeLayout = new WidgetLayout(Measure);
+    sizeLayout.Layout(sizeBox, 1920, 1080);
+    Check(Math.Abs(sizeBox.DesiredWidth - 248) < 0.01f && Math.Abs(sizeBox.DesiredHeight - 80) < 0.01f,
+        $"SizeBox 覆写后是 248×80（实际 {sizeBox.DesiredWidth:0.#}×{sizeBox.DesiredHeight:0.#}）");
+    Check(Math.Abs(sizeBox.Width - 1920) < 0.01f && Math.Abs(sizeBox.Height - 1080) < 0.01f,
+        "根控件铺满整块设计区域（大小由调用方给的画布决定）");
+
+    // 3) 横向盒：两个子控件宽度相加，槽位内边距算进格子里。
+    var boxRow = Play(Dto("Row", "HorizontalBox", "", [], [],
+        Dto("Left", "SizeBox", "HorizontalBoxSlot", [
+            BoolProp("bOverride_WidthOverride", true), Num("WidthOverride", 40),
+            BoolProp("bOverride_HeightOverride", true), Num("HeightOverride", 38),
+        ], [StructProp("Padding", Num("Left", 4), Num("Top", 2), Num("Right", 4), Num("Bottom", 2))]),
+        Dto("Right", "SizeBox", "HorizontalBoxSlot", [
+            BoolProp("bOverride_WidthOverride", true), Num("WidthOverride", 100),
+            BoolProp("bOverride_HeightOverride", true), Num("HeightOverride", 20),
+        ], [])));
+    var rowLayout = new WidgetLayout(Measure);
+    rowLayout.Layout(boxRow, 400, 200);
+    Check(Math.Abs(boxRow.Children[0].X - 4) < 0.01f && Math.Abs(boxRow.Children[1].X - 48) < 0.01f,
+        $"横向盒里第二个子控件的起点把前一个的宽度和内边距算进去（x={boxRow.Children[1].X:0.#}）");
+    Check(Math.Abs(boxRow.DesiredWidth - (40 + 8 + 100)) < 0.01f,
+        $"横向盒的期望宽度是两者之和（实际 {boxRow.DesiredWidth:0.#}）");
+
+    // 4) CanvasPanel：锚点重合时 Offsets 是位置 + 尺寸；拉伸锚点时是四周边距。
+    var canvas = Play(Dto("Canvas", "CanvasPanel", "", [], [],
+        Dto("Fixed", "Border", "CanvasPanelSlot", [], [
+            StructProp("LayoutData",
+                StructProp("Anchors", VecProp("Minimum", 0, 0), VecProp("Maximum", 0, 0)),
+                StructProp("Offsets", Num("Left", 10), Num("Top", 20), Num("Right", 100), Num("Bottom", 30)),
+                VecProp("Alignment", 0, 0)),
+        ]),
+        Dto("Stretched", "Border", "CanvasPanelSlot", [], [
+            StructProp("LayoutData",
+                StructProp("Anchors", VecProp("Minimum", 0, 0), VecProp("Maximum", 1, 1)),
+                StructProp("Offsets", Num("Left", 0), Num("Top", 10), Num("Right", 0), Num("Bottom", 10)),
+                VecProp("Alignment", 0, 0)),
+        ])));
+    var canvasLayout = new WidgetLayout(Measure);
+    canvasLayout.Layout(canvas, 400, 200);
+    Check(Math.Abs(canvas.Children[0].X - 10) < 0.01f && Math.Abs(canvas.Children[0].Y - 20) < 0.01f &&
+          Math.Abs(canvas.Children[0].Width - 100) < 0.01f && Math.Abs(canvas.Children[0].Height - 30) < 0.01f,
+        "CanvasPanel 固定锚点：Offsets 当位置与尺寸");
+    Check(Math.Abs(canvas.Children[1].Width - 400) < 0.01f && Math.Abs(canvas.Children[1].Height - 180) < 0.01f,
+        $"CanvasPanel 拉伸锚点：Offsets 当四周边距（实际 {canvas.Children[1].Width:0.#}×{canvas.Children[1].Height:0.#}）");
+
+    // 5) ScaleBox：子树按未缩放尺寸布局，再整体缩放。
+    var scaleBox = Play(Dto("Scale", "ScaleBox", "", [], [],
+        Dto("Content", "SizeBox", "ScaleBoxSlot", [
+            BoolProp("bOverride_WidthOverride", true), Num("WidthOverride", 100),
+            BoolProp("bOverride_HeightOverride", true), Num("HeightOverride", 50),
+        ], [])));
+    var scaleLayout = new WidgetLayout(Measure);
+    scaleLayout.Layout(scaleBox, 200, 200);
+    Check(Math.Abs(scaleBox.Children[0].Width - 100) < 0.01f && Math.Abs(scaleBox.Children[0].Height - 50) < 0.01f,
+        "ScaleBox 里的内容按自身尺寸布局");
+    Check(Math.Abs(scaleBox.ContentScaleX - 2) < 0.01f && Math.Abs(scaleBox.ContentScaleY - 2) < 0.01f,
+        $"ScaleBox ScaleToFit 取宽高缩放的较小值（实际 {scaleBox.ContentScaleX:0.##}）");
+
+    // 6) Collapsed 的控件不参与布局。
+    var boxWithCollapsed = Play(Dto("Row2", "HorizontalBox", "", [], [],
+        Dto("Collapsed", "SizeBox", "HorizontalBoxSlot", [EnumProp("Visibility", "Collapsed")], []),
+        Dto("Visible", "SizeBox", "HorizontalBoxSlot", [
+            BoolProp("bOverride_WidthOverride", true), Num("WidthOverride", 60),
+            BoolProp("bOverride_HeightOverride", true), Num("HeightOverride", 10),
+        ], [])));
+    var collapsedLayout = new WidgetLayout(Measure);
+    collapsedLayout.Layout(boxWithCollapsed, 400, 100);
+    Check(!boxWithCollapsed.Children[0].IsVisible && Math.Abs(boxWithCollapsed.Children[0].DesiredWidth) < 0.01f,
+        "Collapsed 的控件不参与布局");
+    Check(Math.Abs(boxWithCollapsed.DesiredWidth - 60) < 0.01f,
+        $"Collapsed 的兄弟节点宽度不含它（实际 {boxWithCollapsed.DesiredWidth:0.#}）");
+
+    // 7) 文字：TextBlock 的期望宽度来自注入了度量函数的那一层。
+    var textDto = Dto("Label", "TextBlock", "", [TextProp("Text", "PE-BOX"), fontProp], []);
+    var textNode = Play(textDto);
+    var textLayout = new WidgetLayout(Measure);
+    textLayout.Layout(textNode, 400, 100);
+    Check(Math.Abs(textNode.DesiredWidth - "PE-BOX".Length * WidgetLayout.FontSizePx(textNode) * 0.5f) < 0.01f,
+        $"TextBlock 期望宽度走注入的文字度量（实际 {textNode.DesiredWidth:0.#}）");
+
+    // 8) 控件树 → 预览视图模型：展平成带缩进的列表，选中同步属性表。
+    var previewDto = new WidgetPreviewDto(
+        "WBP_Demo",
+        "WidgetBlueprintGeneratedClass",
+        Dto("Root", "SizeBox", "", [], [], Dto("Row", "HorizontalBox", "SizeBoxSlot", [], [], textDto)),
+        [new WidgetBindingDto("Label", "Text", "GetText")],
+        [],
+        [],
+        null);
+    Prism.FeatureTests.UiFixture.EnsureInitialized();
+    var widgetVm = new Prism.Desktop.ViewModels.MainViewModel { WidgetPreview = previewDto };
+    Check(widgetVm.HasWidgetPreview && widgetVm.WidgetTreeItems.Count == 3,
+        $"控件树展平成 3 行（实际 {widgetVm.WidgetTreeItems.Count}）");
+    Check(widgetVm.WidgetTreeItems[2].Depth == 2, "缩进按层级递进");
+    Check(widgetVm.WidgetSummary.Contains("3 个控件") && widgetVm.WidgetSummary.Contains("1 个绑定"),
+        $"摘要里有控件数与绑定数（实际「{widgetVm.WidgetSummary}」）");
+    widgetVm.SelectedWidgetItem = widgetVm.WidgetTreeItems[2];
+    Check(ReferenceEquals(widgetVm.SelectedWidgetNode, widgetVm.WidgetTreeItems[2].Node),
+        "列表选中 → 画布选中的节点一致");
+    Check(widgetVm.WidgetPropertyRows.Any(row => row.Label == "Text" && row.Value == "PE-BOX"),
+        "属性表里能看到 Text 的真实值");
+    Check(widgetVm.WidgetPropertyRows.Any(row => row.Label == "Font" && row.IsHeader),
+        "结构体属性展开成分组标题");
+    widgetVm.WidgetPreview = null;
+    Check(!widgetVm.HasWidgetPreview && widgetVm.WidgetTreeItems.Count == 0,
+        "清空预览后控件树也清空");
+
+
     Section("结果");
 }
 finally
@@ -2225,6 +2360,46 @@ Console.WriteLine($"通过 {passed} 项，失败 {failures} 项 " + (failures ==
 return failures == 0 ? 0 : 1;
 
 // ── 辅助 ──
+
+// 控件预览测试用的最小 DTO 构造器：只写需要的属性，其余留给"缺属性用默认值"。
+static WidgetPropertyDto Num(string name, double value) => new(name, "FloatProperty", new WidgetNumber(value));
+
+static WidgetPropertyDto BoolProp(string name, bool value) => new(name, "BoolProperty", new WidgetBoolean(value));
+
+static WidgetPropertyDto EnumProp(string name, string value) => new(name, "EnumProperty", new WidgetEnum(value), "ETest");
+
+static WidgetPropertyDto TextProp(string name, string value) => new(name, "TextProperty", new WidgetText(value));
+
+static WidgetPropertyDto VecProp(string name, double x, double y) => new(name, "StructProperty", new WidgetVector(x, y));
+
+static WidgetPropertyDto StructProp(string name, params WidgetPropertyDto[] fields) =>
+    new(name, "StructProperty", new WidgetStruct(name, fields));
+
+static WidgetNodeDto Node(
+    string name,
+    string className,
+    string slotClassName = "",
+    WidgetPropertyDto[]? properties = null,
+    WidgetPropertyDto[]? slotProperties = null,
+    params WidgetNodeDto[] children) =>
+    new(name, className, slotClassName, properties ?? [], slotProperties ?? [], children);
+
+// 控件树构造的别名：读起来像「一个节点」，返回的是还没算布局的 DTO。
+static WidgetNodeDto Dto(
+    string name,
+    string className,
+    string slotClassName = "",
+    WidgetPropertyDto[]? properties = null,
+    WidgetPropertyDto[]? slotProperties = null,
+    params WidgetNodeDto[] children) =>
+    Node(name, className, slotClassName, properties, slotProperties, children);
+
+static WidgetNode Play(WidgetNodeDto dto) =>
+    WidgetNode.FromDto(dto) ?? throw new InvalidOperationException("控件树为空");
+
+// 测试里的文字度量：宽 = 字符数 × 字号 × 0.5，高 = 字号 × 1.2，和真实渲染无关但足够验证传递链路。
+static (float Width, float Height) Measure(WidgetNode node, string text, float fontSizePx, float wrapWidth) =>
+    (text.Length * fontSizePx * 0.5f, fontSizePx * 1.2f);
 
 // 把 Pak 里的一个资产（连同同名 .uexp/.ubulk）取到磁盘，返回 .uasset 路径。
 // 替换逻辑要求模板资产的三件套在同一目录里。

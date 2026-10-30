@@ -73,13 +73,95 @@
                            HorizontalAlignment="Center" />
                 </Border>
 
+                <!-- UMG 控件蓝图：按 Slate 布局规则渲染出的界面，点控件看属性 -->
+                <Border Classes="card" Padding="0" IsVisible="{Binding HasWidgetPreview}">
+                    <Grid RowDefinitions="Auto,300,Auto">
+                        <DockPanel Grid.Row="0" Margin="12,10,12,6">
+                            <TextBlock Text="界面预览"
+                                       FontSize="{DynamicResource Fs12}"
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding WidgetSummary}"
+                                       Margin="10,0,0,0"
+                                       FontSize="{DynamicResource Fs10}"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       VerticalAlignment="Center" />
+                            <CheckBox Content="边框"
+                                      IsChecked="{Binding ShowWidgetOutlines}"
+                                      HorizontalAlignment="Right"
+                                      FontSize="{DynamicResource Fs10}" />
+                        </DockPanel>
+
+                        <Panel Grid.Row="1">
+                            <views:WidgetPreviewView Preview="{Binding WidgetPreview}"
+                                                     Root="{Binding WidgetRoot}"
+                                                     SelectedNode="{Binding SelectedWidgetNode, Mode=TwoWay}"
+                                                     ShowOutlines="{Binding ShowWidgetOutlines}" />
+                        </Panel>
+
+                        <Grid Grid.Row="2"
+                              ColumnDefinitions="200,*"
+                              ColumnSpacing="10"
+                              Margin="12,8,12,12"
+                              MaxHeight="260">
+                            <Border Background="{DynamicResource SurfaceAltBrush}"
+                                    CornerRadius="6"
+                                    Padding="4">
+                                <ListBox ItemsSource="{Binding WidgetTreeItems}"
+                                         SelectedItem="{Binding SelectedWidgetItem, Mode=TwoWay}"
+                                         Background="Transparent"
+                                         BorderThickness="0"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:WidgetTreeItem">
+                                            <TextBlock Text="{Binding DisplayName}"
+                                                       Margin="{Binding Indent}"
+                                                       ToolTip.Tip="{Binding Tooltip}"
+                                                       FontSize="{DynamicResource Fs11}"
+                                                       TextTrimming="CharacterEllipsis" />
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </Border>
+
+                            <Border Grid.Column="1"
+                                    Background="{DynamicResource SurfaceAltBrush}"
+                                    CornerRadius="6"
+                                    Padding="8,4">
+                                <ScrollViewer>
+                                    <ItemsControl ItemsSource="{Binding WidgetPropertyRows}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:WidgetPropertyRow">
+                                                <Grid ColumnDefinitions="*,Auto" Margin="{Binding Indent}">
+                                                    <TextBlock Text="{Binding Label}"
+                                                               FontSize="{DynamicResource Fs11}"
+                                                               ToolTip.Tip="{Binding Tooltip}"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Grid.Column="1"
+                                                               Text="{Binding Value}"
+                                                               FontSize="{DynamicResource Fs11}"
+                                                               Foreground="{DynamicResource TextMutedBrush}"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               IsVisible="{Binding IsValue}" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </Border>
+                        </Grid>
+                    </Grid>
+                </Border>
+
                 <!-- 文本类预览（蓝图伪代码等） -->
                 <Border Classes="card" Padding="14" IsVisible="{Binding HasTextPreview}">
-                    <TextBlock Text="{Binding PreviewText}"
-                               FontFamily="Consolas, Courier New"
-                               FontSize="{DynamicResource Fs11}"
-                               TextWrapping="Wrap"
-                               MaxHeight="320" />
+                    <Expander Header="伪代码 / 文本" IsExpanded="False" HorizontalAlignment="Stretch">
+                        <TextBlock Text="{Binding PreviewText}"
+                                   FontFamily="Consolas, Courier New"
+                                   FontSize="{DynamicResource Fs11}"
+                                   TextWrapping="Wrap"
+                                   MaxHeight="320" />
+                    </Expander>
                 </Border>
 
                 <!-- 3D 模型线框预览：拖动旋转，双击复位，滚轮缩放 -->
@@ -111,7 +193,7 @@
                     <TextBlock Text="未选择文件"
                                FontSize="{DynamicResource Fs14}"
                                HorizontalAlignment="Center" />
-                    <TextBlock Text="在左侧列表里点一个文件查看预览；贴图、模型、音频、视频与蓝图都能读"
+                    <TextBlock Text="在左侧列表里点一个文件查看预览；贴图、模型、音频、视频、蓝图与界面都能读"
                                FontSize="{DynamicResource Fs11}"
                                Foreground="{DynamicResource TextMutedBrush}"
                                TextAlignment="Center"

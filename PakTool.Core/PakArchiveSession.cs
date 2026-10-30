@@ -461,6 +461,38 @@ public sealed class PakArchiveSession : IDisposable
                     deferredBlueprints.Add(value);
             }
 
+            // UMG 控件蓝图：除了伪代码，还能把控件树和贴图拿出来画成界面
+            if (WidgetTreeExtractor.LooksLikeWidgetBlueprint(package))
+            {
+                var widgetPreview = TryReadWidgetPreview(package, fixedPath, out var widgetError);
+                if (widgetPreview is not null && widgetPreview.Root is not null)
+                {
+                    var pseudo = deferredBlueprints.Count > 0 ? CreateBlueprintPreview(package, deferredBlueprints) : null;
+                    var details = new List<AssetPreviewDetailDto>
+                    {
+                        new("Package", widgetPreview.Name),
+                        new("控件", CountWidgets(widgetPreview.Root).ToString("N0") + " 个"),
+                        new("贴图", widgetPreview.Images.Count.ToString("N0") + " 张"),
+                        new("绑定", widgetPreview.Bindings.Count.ToString("N0"))
+                    };
+
+                    if (!string.IsNullOrWhiteSpace(widgetPreview.Note))
+                        details.Add(new("说明", widgetPreview.Note));
+
+                    LogDecode($"Widget preview ready: {widgetPreview.Name}, controls={CountWidgets(widgetPreview.Root)}, images={widgetPreview.Images.Count}");
+                    return new AssetPreviewDto(
+                        "widget",
+                        widgetPreview.Name,
+                        details,
+                        Text: pseudo?.Text,
+                        Widget: widgetPreview,
+                        CanExportRaw: true);
+                }
+
+                if (widgetError is not null)
+                    LogDecode($"Widget preview failed: {widgetError.GetType().Name}: {widgetError.Message}");
+            }
+
             if (deferredBlueprints.Count > 0)
                 return CreateBlueprintPreview(package, deferredBlueprints);
 
@@ -2287,6 +2319,71 @@ public sealed class PakArchiveSession : IDisposable
             exports.FirstOrDefault()?.Name ?? package.Name,
             details,
             Text: text);
+    }
+
+    /// <summary>
+    /// 单独读一个控件蓝图的控件树（给探针/测试用；预览走 ReadPreviewAsync）。
+    /// </summary>
+    public Task<WidgetPreviewDto?> ReadWidgetPreviewAsync(string path, CancellationToken cancellationToken = default)
+    {
+        return Task.Run(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var provider = Provider;
+            var fixedPath = provider.FixPath(path);
+            if (!TryResolveGameFile(provider, fixedPath, out var gameFile) || !gameFile.IsUePackage)
+                return null;
+
+            var package = provider.LoadPackage(gameFile);
+            var preview = TryReadWidgetPreview(package, fixedPath, out var error);
+            if (preview is null && error is not null)
+                throw error;
+
+            return preview;
+        }, cancellationToken);
+    }
+
+    private WidgetPreviewDto? TryReadWidgetPreview(IPackage package, string path, out Exception? error)
+    {
+        error = null;
+        try
+        {
+            var extractor = new WidgetTreeExtractor(package, EncodeWidgetTexture, LogDecode);
+            return extractor.Extract(GetExportBaseName(path, package.Name));
+        }
+        catch (Exception ex)
+        {
+            error = ex;
+            return null;
+        }
+    }
+
+    private WidgetEncodedTexture? EncodeWidgetTexture(UTexture texture)
+    {
+        try
+        {
+            if (!TryEncodeTexturePreview(texture, 512, Provider.Versions.Platform, out var encoded, out _))
+                return null;
+
+            return new WidgetEncodedTexture(encoded.Width, encoded.Height, encoded.PngData);
+        }
+        catch (Exception ex)
+        {
+            LogDecode($"Widget texture {texture.Name} failed: {ex.GetType().Name}: {ex.Message}");
+            return null;
+        }
+    }
+
+    private static int CountWidgets(WidgetNodeDto? node)
+    {
+        if (node is null)
+            return 0;
+
+        var count = 1;
+        foreach (var child in node.Children)
+            count += CountWidgets(child);
+
+        return count;
     }
 
     private static string DecompileClass(IPackage package, UClass blueprintClass)

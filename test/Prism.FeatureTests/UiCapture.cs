@@ -3,6 +3,7 @@ using Avalonia.Headless;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using PakTool.Core;
 using Prism.Desktop.ViewModels;
 using Prism.Desktop.Views;
 
@@ -177,6 +178,13 @@ internal static class UiCapture
             ("docs-settings", "GoDocsSettings", 0),
         ];
 
+        // 控件预览要真实资产才有意义：仓库里不能带受版权保护的 .uasset，
+        // 所以这一页只在给了环境变量（PRISM_WIDGET_PAK + 可选 PRISM_WIDGET_USMAP）时才截。
+        if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("PRISM_WIDGET_PAK")))
+        {
+            pages = [.. pages[..9], ("preview-widget", "GoWorkspace", 1), .. pages[9..]];
+        }
+
         int written = 0;
         foreach ((string viewportLabel, double width, double height, bool collapsed) in viewports)
         {
@@ -215,7 +223,14 @@ internal static class UiCapture
                     // 预览栏的内置播放器 / 视频画面：同样造一份示例状态
                     if (pageLabel.StartsWith("preview-", StringComparison.Ordinal))
                     {
-                        SeedPreviewDemo(vm, video: pageLabel.EndsWith("video", StringComparison.Ordinal));
+                        if (pageLabel == "preview-widget")
+                        {
+                            SeedWidgetDemo(vm);
+                        }
+                        else
+                        {
+                            SeedPreviewDemo(vm, video: pageLabel.EndsWith("video", StringComparison.Ordinal));
+                        }
                     }
 
                     string name = $"{theme}-{viewportLabel}-{pageLabel}.png";
@@ -417,9 +432,56 @@ internal static class UiCapture
         Pump();
     }
 
-    /// <summary>示例封面帧：仓库里的 artifacts/e2e/poster.png（没有就不放图，卡片会显示占位）。</summary>
-    private static Avalonia.Media.Imaging.Bitmap? LoadDemoPoster()
+    /// <summary>
+    /// 控件蓝图预览：用环境变量指向一个真实 .pak，把里面的 WBP 渲染到预览栏里。
+    /// 只在本地评审时用（受版权保护的资产不能进仓库），没给变量就不会有这一页。
+    /// </summary>
+    private static void SeedWidgetDemo(MainViewModel vm)
     {
+        vm.HasAudioPreview = false;
+        vm.HasVideoPreview = false;
+        vm.VideoPoster = null;
+
+        string pak = Environment.GetEnvironmentVariable("PRISM_WIDGET_PAK")!;
+        string? usmap = Environment.GetEnvironmentVariable("PRISM_WIDGET_USMAP");
+        string asset = Environment.GetEnvironmentVariable("PRISM_WIDGET_ASSET")
+                       ?? "kards/Content/LobCorp/UI/WBP_PEBoxCounter.uasset";
+
+        try
+        {
+            // 这里已经初始化 Avalonia，不能用 await（续体会排到没人泵的消息队列上），
+            // 交给线程池跑完再阻塞等待。
+            WidgetPreviewDto? widget = Task.Run(async () =>
+            {
+                using var session = new PakArchiveSession();
+                await session.OpenAsync(new PakOpenOptions([pak], null, usmap)).ConfigureAwait(false);
+                return await session.ReadWidgetPreviewAsync(asset).ConfigureAwait(false);
+            }).GetAwaiter().GetResult();
+
+            if (widget?.Root is not null)
+            {
+                vm.HasPreview = true;
+                vm.SelectedPathText = asset;
+                vm.PreviewTitle = widget.Name;
+                vm.PreviewDetails = new System.Collections.ObjectModel.ObservableCollection<Prism.Desktop.Models.DetailItem>(
+                [
+                    new("控件", CountWidgets(widget.Root).ToString()),
+                    new("贴图", widget.Images.Count.ToString()),
+                    new("绑定", widget.Bindings.Count.ToString()),
+                ]);
+                vm.WidgetPreview = widget;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"  !! 控件预览示例加载失败：{ex.Message}");
+        }
+
+        Pump();
+    }
+
+    /// <summary>示例封面帧：仓库里的 artifacts/e2e/poster.png（没有就不放图，卡片会显示占位）。</summary>
+    private static Avalonia.Media.Imaging.Bitmap? LoadDemoPoster()    {
         DirectoryInfo? dir = new(AppContext.BaseDirectory);
         for (var i = 0; i < 8 && dir is not null; i++)
         {
@@ -514,6 +576,17 @@ internal static class UiCapture
 
         frame.Save(path, new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         return true;
+    }
+
+    private static int CountWidgets(WidgetNodeDto node)
+    {
+        var count = 1;
+        foreach (var child in node.Children)
+        {
+            count += CountWidgets(child);
+        }
+
+        return count;
     }
 
     /// <summary>把排队的布局/绑定/合成任务跑完（headless 下没有消息循环自动驱动）。</summary>
