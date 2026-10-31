@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    蓝图字节码 → 节点图的反编译器（端口自 UE Blueprint Graph Viewer，MIT，
+    版权声明见 LICENSE-UEBlueprintGraphViewer.txt）。UI 无关，Prism 的
+    Prism.Desktop 负责画。
+
+    与 Flora 版本的差异：
+      · 命名空间改成 Prism.BlueprintGraph，去掉 FModel 的宿主依赖；
+      · 宏定义 JSON 改成嵌入资源（安卓没有可写的工作目录可放 Macros/）；
+      · 只读：去掉写回字节码/连线的入口，只保留反编译与布局。
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Prism.BlueprintGraph</RootNamespace>
+    <!-- 端口代码里有大量可空性警告：不是本仓库写的，逐条修没有意义。 -->
+    <NoWarn>$(NoWarn);CS8618;CS8600;CS8601;CS8602;CS8603;CS8604;CS8625;CS8629</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AutomaticGraphLayout" Version="1.1.12" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\external\CUE4Parse\CUE4Parse\CUE4Parse.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Macros\*.json" />
+  </ItemGroup>
+
+</Project>

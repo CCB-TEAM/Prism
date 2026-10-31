@@ -14,6 +14,7 @@
 - 文件管理器式浏览、关键词搜索，以及**在搜索框里直接输入路径跳转**。
 - 把相关的 `.uasset` / `.uexp` / `.ubulk` 归并为一个资产条目。
 - 预览贴图（带缩略图）、音频（内置播放器）、三维网格线框、本地化（`.locres`）、蓝图伪代码。
+- **蓝图节点图（只读）**：cook 后的包没有编辑器节点，图是从每个函数的 Kismet 字节码重建的 —— 事件、函数、宏（ForEach / DoOnce…）、分支与连线都能还原；滚轮缩放、拖动平移，点节点看端口与字节码位置。反编译器移植自 [Flora](https://github.com/CCB-TEAM/Flora)（上游 MIT）。
 - **音频预览**：播放 / 暂停 / 进度条拖动，BINKA 音频在桌面端也能直接听（`prism_binka.dll` 解码）。
 - **视频预览**：内嵌播放（ffmpeg 解帧，`-re` 实时节奏）、封面帧、时长/分辨率、进度条，
   没有 ffmpeg 时给「用系统播放器打开」。
@@ -75,7 +76,7 @@
 
 **诊断**
 - 结构化日志：级别、时间戳、完整异常栈、落盘镜像，以及带环境头的可导出报告。
-- 设置页把外部依赖（UAssetCLI、astcenc、texconv、Oodle）逐条列出并标绿/标红，
+- 设置页的「运行状态」按平台探测：桌面看 UAssetCLI / astcenc / texconv / Oodle / prism_binka，安卓看随 APK 的 `libprism_codecs.so` / `liboodle-data-shared.so`，逐条标绿/标红，
   "贴图替换没反应"这类问题一眼能看出缺哪一样。
 
 **更新**
@@ -267,7 +268,7 @@ Prism **不**分发 Oodle。若你在本地或私有构建中放入 Oodle 相关
 | Pak 合并 | 多选 pak，长按拖动调整覆盖优先级，合成一个 pak |
 | Pak 转换 | 把另一平台 pak 中同路径贴图移植过来，按主 pak 格式重编码 |
 | 使用说明 | 说明书本身：九章、配当前版本的真实截图 |
-| 设置 | 外观、行为、更新、依赖状态、日志 —— **不再重复业务页的输入项** |
+| 设置 | 外观、行为、更新、运行状态、关于与致谢、日志 —— **不再重复业务页的输入项** |
 
 - **搜索框**：输入关键词即搜索；输入 pak 内路径（如 `kards/Content/Assets/Textures`）则跳转。
   占位提示会随输入内容变化，提示当前会走哪种模式。
@@ -279,7 +280,8 @@ Prism **不**分发 Oodle。若你在本地或私有构建中放入 Oodle 相关
   `Docs/PrismDocs.cs` 里以数据形式维护（小标题 / 段落 / 步骤 / 要点 / 截图 / 提示），
   视图只有一套模板 —— 加一章就是加一条记录。截图限高、点开可看原尺寸；
   PNG 由 `--capture --docs` 从**当前构建**按两套主题生成，所以说明书里不会出现已经删掉的按钮。
-- **设置**：分组卡片（图标 + 标题 + 一句副标题）内是细线分隔的行：左侧名称与解释，右侧开关或动作。
+- **设置**：顶部是应用信息带，下面按「外观 / 行为 / 运行状态 / 更新 / 缓存 / 日志 / 关于」分组；每组是一整块浅底列表 + 行分隔线，不再一层层描边套卡片。
+- **关于**：创作者（氧化铜依旧CuO、KardsWalker卡兹走路人）、仓库与许可证、致谢名单都在这一页，链接可直接点开。
   Pak / 映射 / AES / 合并输出 / 转换路径**不再**在这里重复一份 —— 它们属于用它们的那个页面，
   同一份状态两处可改会让用户分不清"到底改了哪边"。保留一个「前往配置」入口维持可发现性。
 - **界面密度自适应**：一套界面两档。窄于 620px 是给手机用的紧凑单列；
@@ -300,7 +302,7 @@ Prism **不**分发 Oodle。若你在本地或私有构建中放入 Oodle 相关
 ## 验证
 
 ```sh
-# 集成测试（371 条断言）：映射格式识别、搜索框路径解析、pak 转换（两条路径 + 全部输出模式）、
+# 集成测试（448 条断言）：映射格式识别、搜索框路径解析、pak 转换（两条路径 + 全部输出模式）、
 # 合并优先级、locres <-> JSON 往返、非 ASCII pak 路径处理、无头 UI 加载与导航，
 # 音频替换（BINKA 经真实 pak 往返）、媒体文件替换、用真实视图模型跑一遍替换页流程，
 # 以及视频预览的 ffmpeg 探测/封面抽取/尺寸换算，
@@ -348,6 +350,13 @@ Prism.Desktop.Desktop/bin/Debug/net10.0/Prism.Desktop.Desktop.exe --smoke <pak> 
 ## 范围
 
 仅支持 `.pak` 归档；未实现 `.utoc` / `.ucas` 容器。不内置映射文件，请从游戏中导入匹配的那份。
+
+## 致谢
+
+- 创作者：[氧化铜依旧CuO](https://space.bilibili.com/3546971308559129)、[KardsWalker卡兹走路人](https://space.bilibili.com/1253227194)
+- [Flora](https://github.com/CCB-TEAM/Flora)：蓝图节点图反编译与控件设计器的参考实现
+- [UE Blueprint Graph Viewer](https://github.com/CCB-TEAM/Flora/tree/main/FModel.BlueprintGraph)（glgen，MIT）：字节码 → 节点图的原始反编译器
+- [CUE4Parse](https://github.com/FabianFG/CUE4Parse)、[UAssetAPI](https://github.com/atenfyr/UAssetAPI)、[Avalonia](https://avaloniaui.net)、FFmpeg、Oodle
 
 ## 许可
 

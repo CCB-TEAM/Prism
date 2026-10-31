@@ -111,6 +111,7 @@ public static class PrismDocs
                     "搜索框输入 kards/Content/Assets/Textures 这类路径会直接跳转到该目录，输入关键词则是全文搜索。",
                     "贴图、音频、视频、模型、本地化都有内置预览：贴图看原图，音频能播放，视频能拖时间轴，模型是线框图。",
                     "UMG 控件蓝图（WBP_*）会画成「界面预览」：按 Slate 布局规则排版，贴图跟着解析，点控件能看它的属性。",
+                    "任意蓝图都可以点「打开节点图」：从 cook 后的 Kismet 字节码重建事件/函数，按节点画出来；滚轮缩放、拖动平移，点节点看端口与字节码位置。只读，不能改逻辑。",
                     "列表与预览之间、画布与下方详情之间、控件树与属性之间都有分隔条，按住拖动就能改比例。",
                     "列表左侧的缩略图可以在「设置 › 行为」里关掉，低配设备会明显更顺。",
                 ]),
@@ -289,12 +290,13 @@ public static class PrismDocs
             Summary: "设置页只放「全局」的东西：主题、行为、更新、依赖状态与日志。Pak 路径这类输入跟着各自的业务页走，不在这里重复一份。",
             Blocks:
             [
-                new DocFigure("settings", "设置：分组卡片 + 行，右侧是开关与动作"),
+                new DocFigure("settings", "设置：应用信息 + 分组列表，右侧是开关与动作"),
                 new DocBullets(
                 [
                     "外观：主题（跟随系统 / 浅色 / 深色）与界面过渡动画。",
                     "行为：纹理缩略图、合并前询问冲突。",
-                    "依赖与诊断：UAssetCLI、astcenc、texconv、Oodle 是否就位，一眼能看出缺哪一样。",
+                    "运行状态：按平台探测真正需要的组件，缺哪一样、影响什么格式，都写在同一行里。",
+                    "关于：创作者、仓库地址、致谢与许可证，链接都能点开。",
                     "日志：最近 400 行；出问题时点「导出日志」把完整报告发出来。",
                 ]),
                 new DocHeading("检查更新"),
@@ -318,7 +320,7 @@ public static class PrismDocs
                 new DocHeading("点了导出没反应？"),
                 new DocParagraph("导出需要一个目标目录。没设置过的话，应用会在你第一次点导出时当场问一次（或者到「配置 › 导出」里先选好），选完会记住；状态栏同时会显示导出了几个文件、输出到哪个目录。"),
                 new DocHeading("提示未找到 UAssetCLI"),
-                new DocParagraph("桌面端的贴图替换依赖主程序旁边的 UAssetCLI/ 目录。如果你是从压缩包里单独拷了 exe 出来，它会找不到；整个目录解压到同一处即可。设置页「依赖与诊断」里能看到具体状态。"),
+                new DocParagraph("桌面端的贴图替换依赖主程序旁边的 UAssetCLI/ 目录。如果你是从压缩包里单独拷了 exe 出来，它会找不到；整个目录解压到同一处即可。设置页「运行状态」里能看到具体状态。"),
                 new DocHeading("勾了 Oodle 之后程序直接消失"),
                 new DocParagraph("1.2.1 及更早版本在缺 oo2core 原生库时，repak 会 panic 并 abort 进程，.NET 拦不住。现在会先探测，缺库时自动降级为不压缩并在状态栏说明。"),
                 new DocHeading("手机上和电脑上操作一样吗"),
@@ -329,8 +331,12 @@ public static class PrismDocs
                 new DocParagraph("查更新走的是 GitHub 的公开接口，公司网络或代理下可能连不上。这不影响任何本地功能；也可以直接到 GitHub 的 Releases 页面手动下载。"),
                 new DocHeading("点开文件报「Read size is bigger than remaining archive length」"),
                 new DocParagraph("这是 UE5.5 之前的引擎 cook 出来的包：摘要里不写版本号，布局也比现在的包少一段（没有 SavedHash）。1.3.7 及更早的版本一律按新格式读，于是整包资产都打不开，但列表看起来又完全正常。现在打开 Pak 时会先抽几个资产头看一眼，认出来是这批老包就自动按 UE5.4 的格式读，状态栏会写明「已按 UE5.4 的格式读」。"),
+                new DocHeading("手机版设置里为什么显示依赖缺失"),
+                new DocParagraph("1.4.2 之前手机版也照桌面端的清单去探测 UAssetCLI.exe、tools/astcenc.exe，手机上当然没有，于是整片显示「缺失」，但纹理由随 APK 的 libprism_codecs.so 在进程内编码，功能是好的。现在按平台分开探测：安卓看 libprism_codecs / liboodle-data-shared 等 .so，桌面才看 UAssetCLI 与 tools/。"),
                 new DocHeading("能看界面（UMG 控件蓝图）长什么样吗"),
                 new DocParagraph("能。点开 WidgetBlueprint（WBP_ 开头那些）会在预览栏出现「界面预览」：按 Slate 的布局规则把控件树排一遍再画出来，贴图会跟着解析，点控件可以在右边看它的属性（Text、Brush、Padding、锚点等）。顶部「边框」打开会画出每个控件的边界，方便对位置。两点说明：游戏里用的字体读不出来，文字按内置字体近似；滚动框、复杂材质只做近似，动画不参与渲染。"),
+                new DocHeading("节点图能看、能改吗"),
+                new DocParagraph("能看，不能改。cook 过的包里编辑器节点和连线都被剥掉了，只剩每个函数的 Kismet 字节码，所以节点图是从字节码反编译重建的：事件、函数、宏（ForEach / DoOnce…）都能还原，分支和顺序也会接上。但原节点位置、注释、节点折叠状态这类编辑器数据不存在，因此布局是按连线重新排的。修改逻辑不在本工具范围内。"),
             ]),
     ];
 }

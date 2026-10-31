@@ -6,7 +6,8 @@
              x:Class="Prism.Desktop.Views.WorkspaceView"
              x:DataType="vm:MainViewModel">
 
-    <DockPanel>
+    <Panel>
+        <DockPanel>
         <!--
             顶栏（标题 / 返回 / 使用说明 / 状态）已上移到应用外壳 Views/MainView.axaml，
             五个页面共用一份。这里只留页面自己的内容。
@@ -228,6 +229,9 @@
                         <!-- 最后一个子元素填充剩余空间 -->
                         <views:FileBrowserView />
                     </DockPanel>
+
+                    <!-- 蓝图节点图：铺在浏览页上面（只读），开关在预览栏的入口 -->
+                    <views:BlueprintGraphPageView IsVisible="{Binding IsBlueprintGraphOpen}" />
                 </Panel>
 
             <!-- ═══════ 替换（响应式） ═══════ -->
@@ -689,4 +693,8 @@
                 </Panel>
         </Panel>
     </DockPanel>
+
+        <!-- 蓝图节点图：铺满整个工作区（连标签与搜索一起盖住），只读 -->
+        <views:BlueprintGraphPageView IsVisible="{Binding IsBlueprintGraphOpen}" />
+    </Panel>
 </UserControl>

@@ -494,7 +494,20 @@ public sealed class PakArchiveSession : IDisposable
             }
 
             if (deferredBlueprints.Count > 0)
-                return CreateBlueprintPreview(package, deferredBlueprints);
+            {
+                var blueprintPreview = CreateBlueprintPreview(package, deferredBlueprints);
+                var summary = TryDescribeBlueprint(provider, fixedPath);
+                if (summary is not null)
+                {
+                    var withGraph = new List<AssetPreviewDetailDto>(blueprintPreview.Details)
+                    {
+                        new("节点图", $"{summary.Functions.Count} 个函数可从字节码重建")
+                    };
+                    blueprintPreview = blueprintPreview with { Details = withGraph, Blueprint = summary };
+                }
+
+                return blueprintPreview;
+            }
 
             var info = await ReadAssetInfoAsync(path, cancellationToken: cancellationToken).ConfigureAwait(false);
             return CreateInfoPreview(info);
@@ -2356,6 +2369,106 @@ public sealed class PakArchiveSession : IDisposable
             error = ex;
             return null;
         }
+    }
+
+    // ── 蓝图节点图 ────────────────────────────────────────────────────────────
+    // 反编译器要反复查 UFUNCTION、属性表与映射，重建一次比每次重新加载包便宜得多。
+    // 只留最近一个资产的实例：切到别的资产时旧包可以被回收。
+
+    private readonly object _blueprintLock = new();
+    private string? _blueprintPath;
+    private Blueprints.BlueprintGraphExtractor? _blueprintExtractor;
+
+    private Blueprints.BlueprintGraphExtractor? GetBlueprintExtractor(DefaultFileProvider provider, string fixedPath)
+    {
+        lock (_blueprintLock)
+        {
+            if (_blueprintExtractor is not null &&
+                string.Equals(_blueprintPath, fixedPath, StringComparison.OrdinalIgnoreCase))
+                return _blueprintExtractor;
+
+            _blueprintExtractor = null;
+            _blueprintPath = null;
+
+            if (!TryResolveGameFile(provider, fixedPath, out var gameFile) || !gameFile.IsUePackage)
+                return null;
+
+            IPackage package;
+            try
+            {
+                package = provider.LoadPackage(gameFile);
+            }
+            catch (Exception ex)
+            {
+                LogDecode($"Blueprint package load failed: {ex.GetType().Name}: {ex.Message}");
+                return null;
+            }
+
+            var extractor = Blueprints.BlueprintGraphExtractor.TryCreate(
+                package,
+                GetExportBaseName(fixedPath, package.Name),
+                provider.MappingsForGame,
+                out var error);
+
+            if (extractor is null)
+            {
+                LogDecode($"Blueprint decompiler skipped {fixedPath}: {error}");
+                return null;
+            }
+
+            _blueprintExtractor = extractor;
+            _blueprintPath = fixedPath;
+            return extractor;
+        }
+    }
+
+    private Blueprints.BlueprintGraphDto? TryDescribeBlueprint(DefaultFileProvider provider, string fixedPath)
+    {
+        try
+        {
+            return GetBlueprintExtractor(provider, fixedPath)?.Describe();
+        }
+        catch (Exception ex)
+        {
+            LogDecode($"Blueprint describe failed: {ex.GetType().Name}: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// 只读的蓝图概览：事件与函数清单。给预览栏的"节点图"入口用。
+    /// </summary>
+    public Task<Blueprints.BlueprintGraphDto?> ReadBlueprintOverviewAsync(string path, CancellationToken cancellationToken = default)
+    {
+        return Task.Run(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var provider = Provider;
+            var fixedPath = provider.FixPath(path);
+            return TryDescribeBlueprint(provider, fixedPath);
+        }, cancellationToken);
+    }
+
+    /// <summary>
+    /// 反编译一个函数/事件成节点图。失败抛 <see cref="InvalidOperationException"/>，由界面显示原因。
+    /// </summary>
+    public Task<Blueprints.BlueprintGraphViewDto?> ReadBlueprintGraphAsync(string path, string functionKey, CancellationToken cancellationToken = default)
+    {
+        return Task.Run(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var provider = Provider;
+            var fixedPath = provider.FixPath(path);
+            var extractor = GetBlueprintExtractor(provider, fixedPath)
+                ?? throw new InvalidOperationException("这不是可以从字节码重建节点图的蓝图资产。");
+
+            var graph = extractor.Decompile(functionKey, out var error);
+            if (graph is null)
+                throw new InvalidOperationException(error ?? "反编译失败。");
+
+            LogDecode($"Blueprint graph ready: {fixedPath} / {functionKey}, nodes={graph.Nodes.Count}, links={graph.Links.Count}");
+            return graph;
+        }, cancellationToken);
     }
 
     private WidgetEncodedTexture? EncodeWidgetTexture(UTexture texture)

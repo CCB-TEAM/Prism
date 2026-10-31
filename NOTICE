@@ -4,6 +4,11 @@ Prism application code is licensed under the MIT License. Some source files,
 libraries, and runtime dependencies are provided by third parties and remain
 under their respective licenses.
 
+- Flora (https://github.com/CCB-TEAM/Flora) is licensed under GPL-3.0.
+  The blueprint bytecode decompiler under BlueprintGraph/ is ported from
+  FModel.BlueprintGraph in that repository. Its original upstream,
+  "UE Blueprint Graph Viewer" (Copyright (c) 2026 glgen), is MIT licensed;
+  the full text is kept at BlueprintGraph/LICENSE-UEBlueprintGraphViewer.txt.
 - CUE4Parse (https://github.com/FabianFG/CUE4Parse) is licensed under the
   Apache License 2.0. See external/CUE4Parse/LICENSE and
   external/CUE4Parse/NOTICE.

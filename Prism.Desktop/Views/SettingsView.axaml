@@ -1,37 +1,59 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Prism.Desktop.ViewModels"
+             xmlns:services="using:Prism.Desktop.Services"
              x:Class="Prism.Desktop.Views.SettingsView"
              x:DataType="vm:MainViewModel">
 
     <!--
         ═══ 设置页 ═══
 
-        这一版把"表单堆在卡片里"换成"分组 + 行"：
-          · 每个分组一张卡，卡头有图标、标题和一句副标题，卡内每一行是一条设置；
-          · 行的左边是"名称 + 解释"，右边是控件 —— 开关在右边缘对齐，扫视时不用来回跳；
-          · 行与行之间用 1px 分隔线，而不是靠间距硬分（原来 4 个 CheckBox 挤在一起，
-            看不出哪几项是一组）。
+        这一版的重点是"别像一排积木"：
+          · 顶部是一条应用信息带（名字/版本/仓库/检查更新），不再把版本号塞进某张卡；
+          · 分组标题放在列表外面，列表本身是一整块浅底 + 行分隔线，不再每张卡都描一圈边；
+          · 宽窗两列、窄窗一列，卡片高度跟着内容走；
+          · 「关于」从一行版权说明扩成创作者 + 致谢 + 许可证，链接都能点开；
+          · 「运行状态」按平台探测：安卓看随包的 .so，桌面看外部 exe/dll。
 
-        同时删掉了一批"重复的输入"：Pak / 映射 / 导出目录 / 合并输出 / 转换路径 / AES
-        都只属于各自的业务页，在这里再放一份输入框，一是和业务页抢同一份状态（用户会
-        困惑"到底改的是哪边"），二是设置页越滚越长。这里只留真正"全局"的偏好，
-        并在「关于」里给一个直达配置页的入口。
+        Pak / 映射 / 输出目录这些输入不再放这里 —— 它们跟着各自业务页走。
     -->
 
     <UserControl.Styles>
-        <!-- 分组卡：卡头 + 行列表，卡片本身不再有大留白 -->
-        <Style Selector="Border.group">
+        <!-- ══ 应用信息带 ══ -->
+        <Style Selector="Border.hero">
             <Setter Property="Background" Value="{DynamicResource CardBrush}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}" />
-            <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="14" />
-            <Setter Property="ClipToBounds" Value="True" />
-            <!-- 卡片按内容高度，不在 UniformGrid 的等高单元格里被拉长：
-                 否则短卡片底下会留一块空壳，看着像没加载完。 -->
-            <Setter Property="VerticalAlignment" Value="Top" />
+            <Setter Property="Padding" Value="18,16" />
+            <Setter Property="Margin" Value="0,0,0,20" />
         </Style>
 
+        <Style Selector="Border.logo-chip">
+            <Setter Property="Width" Value="52" />
+            <Setter Property="Height" Value="52" />
+            <Setter Property="CornerRadius" Value="14" />
+            <Setter Property="Background" Value="{DynamicResource PrimaryBrush}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style Selector="TextBlock.logo-letter">
+            <Setter Property="FontSize" Value="24" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style Selector="TextBlock.app-name">
+            <Setter Property="FontSize" Value="{DynamicResource Fs20}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <Style Selector="TextBlock.app-tag">
+            <Setter Property="FontSize" Value="{DynamicResource Fs11}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+        </Style>
+
+        <!-- ══ 分组 ══ -->
         <Style Selector="TextBlock.group-title">
             <Setter Property="FontSize" Value="{DynamicResource Fs13}" />
             <Setter Property="FontWeight" Value="SemiBold" />
@@ -42,6 +64,24 @@
             <Setter Property="FontSize" Value="{DynamicResource Fs10}" />
             <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
             <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+
+        <!-- 列表底板：没有描边，只靠底色和留白分层 -->
+        <Style Selector="Border.group">
+            <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="ClipToBounds" Value="True" />
+        </Style>
+
+        <Style Selector="Grid.row">
+            <Setter Property="Margin" Value="16,11" />
+            <Setter Property="ColumnSpacing" Value="14" />
+        </Style>
+
+        <Style Selector="Border.row-divider">
+            <Setter Property="Height" Value="1" />
+            <Setter Property="Background" Value="{DynamicResource DividerBrush}" />
+            <Setter Property="Margin" Value="16,0" />
         </Style>
 
         <Style Selector="TextBlock.row-label">
@@ -55,23 +95,9 @@
             <Setter Property="TextWrapping" Value="Wrap" />
         </Style>
 
-        <!-- 行：左右两端对齐，右侧控件垂直居中（ColumnDefinitions 不是样式属性，写在每个 Grid 上） -->
-        <Style Selector="Grid.row">
-            <Setter Property="Margin" Value="18,13" />
-            <Setter Property="ColumnSpacing" Value="14" />
-        </Style>
-
-        <Style Selector="Border.row-divider">
-            <Setter Property="Height" Value="1" />
-            <Setter Property="Background" Value="{DynamicResource DividerBrush}" />
-            <Setter Property="Margin" Value="18,0" />
-        </Style>
-
-        <!-- 主题分段控件 -->
+        <!-- ══ 分段控件 ══ -->
         <Style Selector="Border.segmented">
-            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}" />
-            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceAltBrush}" />
             <Setter Property="CornerRadius" Value="9" />
             <Setter Property="Padding" Value="3" />
         </Style>
@@ -86,18 +112,19 @@
             <Setter Property="MinHeight" Value="0" />
         </Style>
         <Style Selector="Button.seg.active">
-            <Setter Property="Background" Value="{DynamicResource CardBrush}" />
-            <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+            <Setter Property="Background" Value="{DynamicResource PrimaryBrush}" />
+            <Setter Property="Foreground" Value="White" />
             <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
         <Style Selector="Button.seg.active /template/ ContentPresenter">
-            <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+            <Setter Property="Background" Value="{DynamicResource PrimaryBrush}" />
+            <Setter Property="Foreground" Value="White" />
         </Style>
 
-        <!-- 状态点：可用 / 缺失 -->
+        <!-- ══ 状态点 ══ -->
         <Style Selector="Ellipse.dot">
-            <Setter Property="Width" Value="7" />
-            <Setter Property="Height" Value="7" />
+            <Setter Property="Width" Value="8" />
+            <Setter Property="Height" Value="8" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
         <Style Selector="Ellipse.dot.ok">
@@ -107,416 +134,524 @@
             <Setter Property="Fill" Value="{DynamicResource DangerBrush}" />
         </Style>
 
-        <!--
-            卡片外边距：WrapPanel 没有 Spacing，间距靠 margin 给。
-            tile = 并排的半宽卡片（右侧与下方留缝），full = 占满一行的卡片（只留下方）。
-        -->
-        <Style Selector="Border.group.tile">
-            <Setter Property="Margin" Value="0,0,16,16" />
+        <!-- ══ 关于 ══ -->
+        <Style Selector="Border.avatar">
+            <Setter Property="Width" Value="38" />
+            <Setter Property="Height" Value="38" />
+            <Setter Property="CornerRadius" Value="19" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceAltBrush}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
-        <Style Selector="Border.group.full">
-            <Setter Property="Margin" Value="0,0,0,16" />
+
+        <Style Selector="TextBlock.avatar-text">
+            <Setter Property="FontSize" Value="{DynamicResource Fs11}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style Selector="TextBlock.credit-name">
+            <Setter Property="FontSize" Value="{DynamicResource Fs11}" />
+        </Style>
+
+        <Style Selector="TextBlock.credit-detail">
+            <Setter Property="FontSize" Value="{DynamicResource Fs10}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+
+        <!-- 分组外边距：WrapPanel 没有 Spacing；右间隙要和 SettingsCardWidth 里的 24 对上 -->
+        <Style Selector="StackPanel.section">
+            <Setter Property="Margin" Value="0,0,12,20" />
         </Style>
     </UserControl.Styles>
 
     <ScrollViewer>
-        <StackPanel MaxWidth="1060"
+        <StackPanel MaxWidth="1040"
                     HorizontalAlignment="Stretch"
-                    Margin="20,22,20,12"
+                    Margin="20,20,20,14"
                     Spacing="0">
 
-            <!--
-                两列：宽屏两个分组并排，窄窗/手机一个分组一行。
-                用 WrapPanel + 绑定的 ItemWidth，而不是 UniformGrid —— UniformGrid 会把
-                同一行的单元格拉成等高，短卡片底下就留一块空壳（ScrollViewer 量高度时
-                给的是视口高度，不是内容高度）。WrapPanel 只按"一行放得下几个"换行，
-                每张卡片仍按自己的内容定高。
-            -->
+            <!-- ═══════ 应用信息 ═══════ -->
+            <Border Classes="hero">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+                    <Border Grid.Column="0" Classes="logo-chip">
+                        <TextBlock Text="P" Classes="logo-letter" />
+                    </Border>
+
+                    <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="Prism" Classes="app-name" />
+                            <Border Classes="segmented" Padding="8,2" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding VersionText, StringFormat='v{0}'}"
+                                           FontSize="{DynamicResource Fs10}"
+                                           Foreground="{DynamicResource TextMutedBrush}" />
+                            </Border>
+                        </StackPanel>
+                        <TextBlock Text="Pak 资产管理工具 · 浏览、预览、替换、合并与转换"
+                                   Classes="app-tag"
+                                   TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding RuntimeLine}" Classes="app-tag" TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <Button Content="GitHub"
+                                Classes="ghost"
+                                FontSize="{DynamicResource Fs11}"
+                                Command="{Binding OpenLinkCommand}"
+                                CommandParameter="{Binding AppRepositoryUrl}" />
+                        <Button Content="开源许可"
+                                Classes="ghost"
+                                FontSize="{DynamicResource Fs11}"
+                                IsVisible="{Binding IsWideLayout}"
+                                Command="{Binding OpenLinkCommand}"
+                                CommandParameter="https://github.com/CCB-TEAM/Prism/blob/main/LICENSE" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
             <WrapPanel Orientation="Horizontal"
                        ItemWidth="{Binding SettingsCardWidth}"
                        HorizontalAlignment="Left">
 
-                <!-- ══ 外观 ══ -->
-                <Border Classes="group tile">
-                    <StackPanel>
-                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="11" Margin="18,16,18,13">
-                            <Border Grid.Column="0" Classes="icon-chip small" VerticalAlignment="Center">
-                                <TextBlock Text="🎨" FontSize="{DynamicResource Fs14}"
-                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
-                            </Border>
-                            <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
-                                <TextBlock Text="外观" Classes="group-title" />
-                                <TextBlock Text="主题与界面动效" Classes="group-sub" />
-                            </StackPanel>
-                        </Grid>
-                        <Border Classes="row-divider" />
-
-                        <Grid Classes="row" ColumnDefinitions="*,Auto">
-                            <StackPanel Grid.Column="0" Spacing="3">
-                                <TextBlock Text="主题" Classes="row-label" />
-                                <TextBlock Text="浅色在大屏上偏亮，深色更省眼；跟随系统则随 Windows 切换。"
-                                           Classes="row-desc" />
-                            </StackPanel>
-                            <Border Grid.Column="1" Classes="segmented" VerticalAlignment="Center">
-                                <StackPanel Orientation="Horizontal" Spacing="2">
-                                    <Button Content="跟随系统" Classes="seg"
-                                            Classes.active="{Binding IsThemeSystem}"
-                                            Command="{Binding SetThemeCommand}" CommandParameter="system" />
-                                    <Button Content="浅色" Classes="seg"
-                                            Classes.active="{Binding IsThemeLight}"
-                                            Command="{Binding SetThemeCommand}" CommandParameter="light" />
-                                    <Button Content="深色" Classes="seg"
-                                            Classes.active="{Binding IsThemeDark}"
-                                            Command="{Binding SetThemeCommand}" CommandParameter="dark" />
-                                </StackPanel>
-                            </Border>
-                        </Grid>
-                        <Border Classes="row-divider" />
-
-                        <Grid Classes="row" ColumnDefinitions="*,Auto">
-                            <StackPanel Grid.Column="0" Spacing="3">
-                                <TextBlock Text="界面过渡动画" Classes="row-label" />
-                                <TextBlock Text="页面切换时的淡入与轻微位移。低配设备可以关掉。"
-                                           Classes="row-desc" />
-                            </StackPanel>
-                            <ToggleSwitch Grid.Column="1"
-                                          VerticalAlignment="Center"
-                                          OnContent="" OffContent=""
-                                          IsChecked="{Binding IsAnimationsEnabled}" />
-                        </Grid>
-                    </StackPanel>
-                </Border>
-
-                <!-- ══ 行为 ══ -->
-                <Border Classes="group tile">
-                    <StackPanel>
-                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="11" Margin="18,16,18,13">
-                            <Border Grid.Column="0" Classes="icon-chip small" VerticalAlignment="Center">
-                                <TextBlock Text="🧭" FontSize="{DynamicResource Fs14}"
-                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
-                            </Border>
-                            <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
-                                <TextBlock Text="行为" Classes="group-title" />
-                                <TextBlock Text="浏览与合并时的默认动作" Classes="group-sub" />
-                            </StackPanel>
-                        </Grid>
-                        <Border Classes="row-divider" />
-
-                        <Grid Classes="row" ColumnDefinitions="*,Auto">
-                            <StackPanel Grid.Column="0" Spacing="3">
-                                <TextBlock Text="显示纹理缩略图" Classes="row-label" />
-                                <TextBlock Text="在浏览列表里直接预览贴图。关掉能明显减少低配设备的卡顿。"
-                                           Classes="row-desc" />
-                            </StackPanel>
-                            <ToggleSwitch Grid.Column="1"
-                                          VerticalAlignment="Center"
-                                          OnContent="" OffContent=""
-                                          IsChecked="{Binding ShowThumbnails}" />
-                        </Grid>
-                        <Border Classes="row-divider" />
-
-                        <Grid Classes="row" ColumnDefinitions="*,Auto">
-                            <StackPanel Grid.Column="0" Spacing="3">
-                                <TextBlock Text="合并前询问冲突" Classes="row-label" />
-                                <TextBlock Text="合并时遇到同名路径先确认一次；关掉则直接按优先级覆盖。"
-                                           Classes="row-desc" />
-                            </StackPanel>
-                            <ToggleSwitch Grid.Column="1"
-                                          VerticalAlignment="Center"
-                                          OnContent="" OffContent=""
-                                          IsChecked="{Binding AskBeforeReplace}" />
-                        </Grid>
-                    </StackPanel>
-                </Border>
-
-                <!-- ══ 更新 ══ -->
-                <Border Classes="group tile">
-                    <StackPanel>
-                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="11" Margin="18,16,18,13">
-                            <Border Grid.Column="0" Classes="icon-chip small" VerticalAlignment="Center">
-                                <TextBlock Text="⬆" FontSize="{DynamicResource Fs14}"
-                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
-                            </Border>
-                            <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
-                                <TextBlock Text="更新" Classes="group-title" />
-                                <TextBlock Text="从 GitHub 发行版获取新版本" Classes="group-sub" />
-                            </StackPanel>
-                        </Grid>
-                        <Border Classes="row-divider" />
-
-                        <Grid Classes="row" ColumnDefinitions="*,Auto">
-                            <StackPanel Grid.Column="0" Spacing="3">
-                                <TextBlock Text="当前版本" Classes="row-label" />
-                                <TextBlock Text="{Binding VersionLine}" Classes="row-desc" />
-                            </StackPanel>
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10"
-                                        VerticalAlignment="Center">
-                                <ProgressBar Width="110" Height="3"
-                                             Minimum="0" Maximum="1"
-                                             IsIndeterminate="True"
-                                             IsVisible="{Binding IsCheckingUpdate}" />
-                                <Button Content="检查更新"
-                                        Classes="accent"
-                                        Command="{Binding CheckUpdateCommand}"
-                                        IsEnabled="{Binding !IsCheckingUpdate}" />
-                            </StackPanel>
-                        </Grid>
-                        <Border Classes="row-divider" />
-
-                        <Grid Classes="row" ColumnDefinitions="*,Auto">
-                            <StackPanel Grid.Column="0" Spacing="3">
-                                <TextBlock Text="启动时自动检查" Classes="row-label" />
-                                <TextBlock Text="查到新版本会把欢迎页换成更新说明；手机版弹一次可跳过的提示。"
-                                           Classes="row-desc" />
-                            </StackPanel>
-                            <ToggleSwitch Grid.Column="1"
-                                          VerticalAlignment="Center"
-                                          OnContent="" OffContent=""
-                                          IsChecked="{Binding AutoCheckUpdates}" />
-                        </Grid>
-
-                        <!-- 检查结果：一句话状态 + 有更新时的动作 -->
-                        <Border Margin="18,0,18,14" Padding="11,9" CornerRadius="9"
-                                Background="{DynamicResource SurfaceBrush}"
-                                IsVisible="{Binding HasUpdateResult}">
-                            <StackPanel Spacing="7">
-                                <TextBlock Text="{Binding UpdateStatus}"
-                                           FontSize="{DynamicResource Fs11}"
-                                           TextWrapping="Wrap" />
-                                <TextBlock Text="{Binding UpdateActionStatus}"
-                                           FontSize="{DynamicResource Fs10}"
-                                           Foreground="{DynamicResource PrimaryBrush}"
-                                           TextWrapping="Wrap"
-                                           IsVisible="{Binding UpdateActionStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                                <ProgressBar Height="3" Minimum="0" Maximum="1"
-                                             Value="{Binding UpdateProgress}"
-                                             IsVisible="{Binding IsUpdateDownloading}" />
-                                <StackPanel Orientation="Horizontal" Spacing="8"
-                                            IsVisible="{Binding HasUpdate}">
-                                    <Button Content="{Binding InstallButtonText}"
-                                            Classes="primary"
-                                            Command="{Binding InstallUpdateCommand}"
-                                            IsEnabled="{Binding CanInstallUpdate}" />
-                                    <Button Content="发行版页面"
-                                            Classes="ghost"
-                                            Command="{Binding OpenReleasePageCommand}" />
-                                </StackPanel>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-                </Border>
-
-                <!-- ══ 依赖与诊断 ══ -->
-                <Border Classes="group tile">
-                    <StackPanel>
-                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="11" Margin="18,16,18,13">
-                            <Border Grid.Column="0" Classes="icon-chip small" VerticalAlignment="Center">
-                                <TextBlock Text="🧩" FontSize="{DynamicResource Fs14}"
-                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
-                            </Border>
-                            <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
-                                <TextBlock Text="依赖与诊断" Classes="group-title" />
-                                <TextBlock Text="替换与转换需要的外部组件" Classes="group-sub" />
-                            </StackPanel>
-                        </Grid>
-                        <Border Classes="row-divider" />
-
-                        <Grid Classes="row" ColumnDefinitions="*,Auto">
-                            <StackPanel Grid.Column="0" Spacing="2">
-                                <TextBlock Text="UAssetCLI" Classes="row-label" />
-                                <TextBlock Text="解包/回写 uasset（贴图、音频替换）" Classes="row-desc" />
-                            </StackPanel>
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
-                                <Ellipse Classes="dot ok" IsVisible="{Binding HasCli}" />
-                                <Ellipse Classes="dot missing" IsVisible="{Binding !HasCli}" />
-                                <TextBlock Text="{Binding CliValue}" Classes="row-desc" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </Grid>
-                        <Border Classes="row-divider" />
-
-                        <Grid Classes="row" ColumnDefinitions="*,Auto">
-                            <StackPanel Grid.Column="0" Spacing="2">
-                                <TextBlock Text="astcenc" Classes="row-label" />
-                                <TextBlock Text="ASTC 贴图编码（手机包常用）" Classes="row-desc" />
-                            </StackPanel>
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
-                                <Ellipse Classes="dot ok" IsVisible="{Binding HasAstcenc}" />
-                                <Ellipse Classes="dot missing" IsVisible="{Binding !HasAstcenc}" />
-                                <TextBlock Text="{Binding AstcencValue}" Classes="row-desc" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </Grid>
-                        <Border Classes="row-divider" />
-
-                        <Grid Classes="row" ColumnDefinitions="*,Auto">
-                            <StackPanel Grid.Column="0" Spacing="2">
-                                <TextBlock Text="texconv" Classes="row-label" />
-                                <TextBlock Text="DXT / BC 贴图编码（PC 包常用）" Classes="row-desc" />
-                            </StackPanel>
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
-                                <Ellipse Classes="dot ok" IsVisible="{Binding HasTexconv}" />
-                                <Ellipse Classes="dot missing" IsVisible="{Binding !HasTexconv}" />
-                                <TextBlock Text="{Binding TexconvValue}" Classes="row-desc" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </Grid>
-                        <Border Classes="row-divider" />
-
-                        <Grid Classes="row" ColumnDefinitions="*,Auto">
-                            <StackPanel Grid.Column="0" Spacing="2">
-                                <TextBlock Text="Oodle 压缩库" Classes="row-label" />
-                                <TextBlock Text="打包时可选 Oodle；缺失会自动降级为不压缩" Classes="row-desc" />
-                            </StackPanel>
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
-                                <Ellipse Classes="dot ok" IsVisible="{Binding HasOodle}" />
-                                <Ellipse Classes="dot missing" IsVisible="{Binding !HasOodle}" />
-                                <TextBlock Text="{Binding OodleValue}" Classes="row-desc" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </Grid>
-                    </StackPanel>
-                </Border>
-
-                <!-- ══ 缓存与存储 ══ -->
-                <!-- 手机上选中的文件要复制进私有目录（SAF 只给 content://），
-                     Pak 副本可能几个 GB —— 看不见就会觉得"怎么越来越大"。 -->
-                <Border Classes="group tile" IsVisible="{Binding HasCacheData}">
-                    <StackPanel>
-                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="11" Margin="18,16,18,13">
-                            <Border Grid.Column="0" Classes="icon-chip small" VerticalAlignment="Center">
-                                <TextBlock Text="💾" FontSize="{DynamicResource Fs14}"
-                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
-                            </Border>
-                            <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
-                                <TextBlock Text="缓存与存储" Classes="group-title" />
-                                <TextBlock Text="{Binding CacheTotalText, StringFormat='应用私有目录 · 共 {0}'}" Classes="group-sub" />
-                            </StackPanel>
-                        </Grid>
-                        <Border Classes="row-divider" />
-
-                        <Grid Classes="row" ColumnDefinitions="*,Auto">
-                            <StackPanel Grid.Column="0" Spacing="2">
-                                <TextBlock Text="Pak 与映射副本" Classes="row-label" />
-                                <TextBlock Text="换一个包时旧副本会自动删掉" Classes="row-desc" />
-                            </StackPanel>
-                            <TextBlock Grid.Column="1" Text="{Binding PakCacheText}"
-                                       Classes="row-desc" VerticalAlignment="Center" />
-                        </Grid>
-                        <Border Classes="row-divider" />
-
-                        <Grid Classes="row" ColumnDefinitions="*,Auto">
-                            <StackPanel Grid.Column="0" Spacing="2">
-                                <TextBlock Text="素材副本" Classes="row-label" />
-                                <TextBlock Text="换图/换音频时复制的那一份，可以随时清" Classes="row-desc" />
-                            </StackPanel>
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                                <TextBlock Text="{Binding AssetCacheText}" Classes="row-desc" VerticalAlignment="Center" />
-                                <Button Content="清理" Classes="ghost" Command="{Binding ClearAssetCacheCommand}" />
-                            </StackPanel>
-                        </Grid>
-                        <Border Classes="row-divider" />
-
-                        <Grid Classes="row" ColumnDefinitions="*,Auto">
-                            <StackPanel Grid.Column="0" Spacing="2">
-                                <TextBlock Text="工程素材" Classes="row-label" />
-                                <TextBlock Text="保存工程时收进 &lt;工程名&gt;.assets/ 的素材" Classes="row-desc" />
-                            </StackPanel>
-                            <TextBlock Grid.Column="1" Text="{Binding ProjectAssetsText}"
-                                       Classes="row-desc" VerticalAlignment="Center" />
-                        </Grid>
-
-                        <TextBlock Text="{Binding CacheNoteText}"
-                                   Classes="row-desc"
-                                   TextWrapping="Wrap"
-                                   Margin="18,12,18,16" />
-                    </StackPanel>
-                </Border>
-            </WrapPanel>
-
-            <!-- ══ 日志 ══ -->
-            <Border Classes="group full">
-                <StackPanel>
-                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="11" Margin="18,16,18,13">
-                        <Border Grid.Column="0" Classes="icon-chip small" VerticalAlignment="Center">
-                            <TextBlock Text="📄" FontSize="{DynamicResource Fs14}"
-                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Border>
-                        <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
-                            <TextBlock Text="日志" Classes="group-title" />
-                            <TextBlock Text="最近 400 行；出问题时导出完整报告" Classes="group-sub" />
+                <!-- ═══════ 外观 ═══════ -->
+                <StackPanel Classes="section">
+                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="2,0,0,8">
+                        <TextBlock Text="🎨" FontSize="{DynamicResource Fs12}" VerticalAlignment="Center" />
+                        <StackPanel Spacing="0">
+                            <TextBlock Text="外观" Classes="group-title" />
+                            <TextBlock Text="主题与界面动效" Classes="group-sub" />
                         </StackPanel>
-                        <Button Grid.Column="2" Content="导出日志"
-                                Command="{Binding ExportLogCommand}"
-                                Classes="ghost"
-                                VerticalAlignment="Center" />
-                    </Grid>
-                    <Border Classes="row-divider" />
-                    <Border Background="{DynamicResource SurfaceBrush}"
-                            CornerRadius="10"
-                            Margin="18,14"
-                            Padding="12,10"
-                            MaxHeight="240">
-                        <ScrollViewer>
-                            <TextBlock Text="{Binding LogText}"
-                                       FontFamily="Consolas, Courier New"
-                                       FontSize="{DynamicResource Fs11}"
-                                       Foreground="{DynamicResource TextMutedBrush}"
-                                       TextWrapping="Wrap" />
-                        </ScrollViewer>
+                    </StackPanel>
+
+                    <Border Classes="group">
+                        <StackPanel>
+                            <Grid Classes="row" ColumnDefinitions="*,Auto">
+                                <StackPanel Grid.Column="0" Spacing="3">
+                                    <TextBlock Text="主题" Classes="row-label" />
+                                    <TextBlock Text="浅色在大屏上偏亮，深色更省眼；跟随系统则随 Windows 切换。"
+                                               Classes="row-desc" />
+                                </StackPanel>
+                                <Border Grid.Column="1" Classes="segmented" VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal" Spacing="2">
+                                        <Button Content="跟随系统" Classes="seg"
+                                                Classes.active="{Binding IsThemeSystem}"
+                                                Command="{Binding SetThemeCommand}" CommandParameter="system" />
+                                        <Button Content="浅色" Classes="seg"
+                                                Classes.active="{Binding IsThemeLight}"
+                                                Command="{Binding SetThemeCommand}" CommandParameter="light" />
+                                        <Button Content="深色" Classes="seg"
+                                                Classes.active="{Binding IsThemeDark}"
+                                                Command="{Binding SetThemeCommand}" CommandParameter="dark" />
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                            <Border Classes="row-divider" />
+
+                            <Grid Classes="row" ColumnDefinitions="*,Auto">
+                                <StackPanel Grid.Column="0" Spacing="3">
+                                    <TextBlock Text="界面过渡动画" Classes="row-label" />
+                                    <TextBlock Text="页面切换时的淡入与轻微位移。低配设备可以关掉。"
+                                               Classes="row-desc" />
+                                </StackPanel>
+                                <ToggleSwitch Grid.Column="1"
+                                              VerticalAlignment="Center"
+                                              OnContent="" OffContent=""
+                                              IsChecked="{Binding IsAnimationsEnabled}" />
+                            </Grid>
+                        </StackPanel>
                     </Border>
                 </StackPanel>
-            </Border>
 
-            <!-- ══ 关于 ══ -->
-            <Border Classes="group full">
-                <StackPanel>
-                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="11" Margin="18,16,18,13">
-                        <Border Grid.Column="0" Classes="icon-chip small" VerticalAlignment="Center">
-                            <TextBlock Text="ℹ" FontSize="{DynamicResource Fs14}"
-                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Border>
-                        <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                <!-- ═══════ 行为 ═══════ -->
+                <StackPanel Classes="section">
+                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="2,0,0,8">
+                        <TextBlock Text="🧭" FontSize="{DynamicResource Fs12}" VerticalAlignment="Center" />
+                        <StackPanel Spacing="0">
+                            <TextBlock Text="行为" Classes="group-title" />
+                            <TextBlock Text="浏览与合并时的默认动作" Classes="group-sub" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <Border Classes="group">
+                        <StackPanel>
+                            <Grid Classes="row" ColumnDefinitions="*,Auto">
+                                <StackPanel Grid.Column="0" Spacing="3">
+                                    <TextBlock Text="显示纹理缩略图" Classes="row-label" />
+                                    <TextBlock Text="在浏览列表里直接预览贴图。关掉能明显减少低配设备的卡顿。"
+                                               Classes="row-desc" />
+                                </StackPanel>
+                                <ToggleSwitch Grid.Column="1"
+                                              VerticalAlignment="Center"
+                                              OnContent="" OffContent=""
+                                              IsChecked="{Binding ShowThumbnails}" />
+                            </Grid>
+                            <Border Classes="row-divider" />
+
+                            <Grid Classes="row" ColumnDefinitions="*,Auto">
+                                <StackPanel Grid.Column="0" Spacing="3">
+                                    <TextBlock Text="合并前询问冲突" Classes="row-label" />
+                                    <TextBlock Text="合并时遇到同名路径先确认一次；关掉则直接按优先级覆盖。"
+                                               Classes="row-desc" />
+                                </StackPanel>
+                                <ToggleSwitch Grid.Column="1"
+                                              VerticalAlignment="Center"
+                                              OnContent="" OffContent=""
+                                              IsChecked="{Binding AskBeforeReplace}" />
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- ═══════ 运行状态 ═══════ -->
+                <StackPanel Classes="section">
+                    <Grid ColumnDefinitions="*,Auto" Margin="2,0,0,8">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="🧩" FontSize="{DynamicResource Fs12}" VerticalAlignment="Center" />
+                            <StackPanel Spacing="0">
+                                <TextBlock Text="运行状态" Classes="group-title" />
+                                <TextBlock Text="{Binding DependencyHeadline}" Classes="group-sub" />
+                            </StackPanel>
+                        </StackPanel>
+                        <Button Grid.Column="1"
+                                Content="重新检测"
+                                Classes="ghost"
+                                FontSize="{DynamicResource Fs10}"
+                                VerticalAlignment="Center"
+                                Command="{Binding RefreshDependenciesCommand}" />
+                    </Grid>
+
+                    <Border Classes="group">
+                        <StackPanel>
+                            <Grid Classes="row" ColumnDefinitions="*,Auto">
+                                <StackPanel Grid.Column="0" Spacing="2">
+                                    <TextBlock Text="组件检测结果" Classes="row-label" />
+                                    <TextBlock Text="{Binding DependencySummary}" Classes="row-desc" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+                                            VerticalAlignment="Center">
+                                    <Ellipse Classes="dot ok" IsVisible="{Binding !HasMissingDependency}" />
+                                    <Ellipse Classes="dot missing" IsVisible="{Binding HasMissingDependency}" />
+                                </StackPanel>
+                            </Grid>
+
+                            <ItemsControl ItemsSource="{Binding Dependencies}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="services:DependencyCheck">
+                                        <StackPanel>
+                                            <Border Classes="row-divider" />
+                                            <Grid Classes="row" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                                                <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                                    <Ellipse Classes="dot ok" IsVisible="{Binding Available}" />
+                                                    <Ellipse Classes="dot missing" IsVisible="{Binding IsMissing}" />
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="1" Spacing="2">
+                                                    <TextBlock Text="{Binding Name}" Classes="row-label" />
+                                                    <TextBlock Text="{Binding Description}" Classes="row-desc" />
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="2"
+                                                           Text="{Binding Status}"
+                                                           Classes="row-desc"
+                                                           VerticalAlignment="Center" />
+                                            </Grid>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <TextBlock Text="缺组件不会让应用打不开：对应格式会降级（例如没有 Oodle 就按不压缩打包），日志里会写原因。"
+                                       Classes="row-desc"
+                                       Margin="16,10,16,14" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- ═══════ 更新 ═══════ -->
+                <StackPanel Classes="section">
+                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="2,0,0,8">
+                        <TextBlock Text="⬆" FontSize="{DynamicResource Fs12}" VerticalAlignment="Center" />
+                        <StackPanel Spacing="0">
+                            <TextBlock Text="更新" Classes="group-title" />
+                            <TextBlock Text="从 GitHub 发行版获取新版本" Classes="group-sub" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <Border Classes="group">
+                        <StackPanel>
+                            <Grid Classes="row" ColumnDefinitions="*,Auto">
+                                <StackPanel Grid.Column="0" Spacing="3">
+                                    <TextBlock Text="当前版本" Classes="row-label" />
+                                    <TextBlock Text="{Binding VersionLine}" Classes="row-desc" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10"
+                                            VerticalAlignment="Center">
+                                    <ProgressBar Width="110" Height="3"
+                                                 Minimum="0" Maximum="1"
+                                                 IsIndeterminate="True"
+                                                 IsVisible="{Binding IsCheckingUpdate}" />
+                                    <Button Content="检查更新"
+                                            Classes="accent"
+                                            Command="{Binding CheckUpdateCommand}"
+                                            IsEnabled="{Binding !IsCheckingUpdate}" />
+                                </StackPanel>
+                            </Grid>
+                            <Border Classes="row-divider" />
+
+                            <Grid Classes="row" ColumnDefinitions="*,Auto">
+                                <StackPanel Grid.Column="0" Spacing="3">
+                                    <TextBlock Text="启动时自动检查" Classes="row-label" />
+                                    <TextBlock Text="查到新版本会把欢迎页换成更新说明；手机版弹一次可跳过的提示。"
+                                               Classes="row-desc" />
+                                </StackPanel>
+                                <ToggleSwitch Grid.Column="1"
+                                              VerticalAlignment="Center"
+                                              OnContent="" OffContent=""
+                                              IsChecked="{Binding AutoCheckUpdates}" />
+                            </Grid>
+
+                            <Border Margin="16,0,16,14" Padding="11,9" CornerRadius="9"
+                                    Background="{DynamicResource SurfaceAltBrush}"
+                                    IsVisible="{Binding HasUpdateResult}">
+                                <StackPanel Spacing="7">
+                                    <TextBlock Text="{Binding UpdateStatus}"
+                                               FontSize="{DynamicResource Fs11}"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding UpdateActionStatus}"
+                                               FontSize="{DynamicResource Fs10}"
+                                               Foreground="{DynamicResource PrimaryBrush}"
+                                               TextWrapping="Wrap"
+                                               IsVisible="{Binding UpdateActionStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                    <ProgressBar Height="3" Minimum="0" Maximum="1"
+                                                 Value="{Binding UpdateProgress}"
+                                                 IsVisible="{Binding IsUpdateDownloading}" />
+                                    <StackPanel Orientation="Horizontal" Spacing="8"
+                                                IsVisible="{Binding HasUpdate}">
+                                        <Button Content="{Binding InstallButtonText}"
+                                                Classes="primary"
+                                                Command="{Binding InstallUpdateCommand}"
+                                                IsEnabled="{Binding CanInstallUpdate}" />
+                                        <Button Content="发行版页面"
+                                                Classes="ghost"
+                                                Command="{Binding OpenReleasePageCommand}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- ═══════ 缓存与存储 ═══════ -->
+                <StackPanel Classes="section" IsVisible="{Binding HasCacheData}">
+                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="2,0,0,8">
+                        <TextBlock Text="💾" FontSize="{DynamicResource Fs12}" VerticalAlignment="Center" />
+                        <StackPanel Spacing="0">
+                            <TextBlock Text="缓存与存储" Classes="group-title" />
+                            <TextBlock Text="{Binding CacheTotalText, StringFormat='应用私有目录 · 共 {0}'}"
+                                       Classes="group-sub" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <Border Classes="group">
+                        <StackPanel>
+                            <Grid Classes="row" ColumnDefinitions="*,Auto">
+                                <StackPanel Grid.Column="0" Spacing="2">
+                                    <TextBlock Text="Pak 与映射副本" Classes="row-label" />
+                                    <TextBlock Text="换一个包时旧副本会自动删掉" Classes="row-desc" />
+                                </StackPanel>
+                                <TextBlock Grid.Column="1" Text="{Binding PakCacheText}"
+                                           Classes="row-desc" VerticalAlignment="Center" />
+                            </Grid>
+                            <Border Classes="row-divider" />
+
+                            <Grid Classes="row" ColumnDefinitions="*,Auto">
+                                <StackPanel Grid.Column="0" Spacing="2">
+                                    <TextBlock Text="素材副本" Classes="row-label" />
+                                    <TextBlock Text="换图/换音频时复制的那一份，可以随时清" Classes="row-desc" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding AssetCacheText}" Classes="row-desc" VerticalAlignment="Center" />
+                                    <Button Content="清理" Classes="ghost" Command="{Binding ClearAssetCacheCommand}" />
+                                </StackPanel>
+                            </Grid>
+                            <Border Classes="row-divider" />
+
+                            <Grid Classes="row" ColumnDefinitions="*,Auto">
+                                <StackPanel Grid.Column="0" Spacing="2">
+                                    <TextBlock Text="工程素材" Classes="row-label" />
+                                    <TextBlock Text="保存工程时收进 &lt;工程名&gt;.assets/ 的素材" Classes="row-desc" />
+                                </StackPanel>
+                                <TextBlock Grid.Column="1" Text="{Binding ProjectAssetsText}"
+                                           Classes="row-desc" VerticalAlignment="Center" />
+                            </Grid>
+
+                            <TextBlock Text="{Binding CacheNoteText}"
+                                       Classes="row-desc"
+                                       TextWrapping="Wrap"
+                                       Margin="16,10,16,14" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- ═══════ 关于 ═══════ -->
+                <StackPanel Classes="section">
+                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="2,0,0,8">
+                        <TextBlock Text="ℹ" FontSize="{DynamicResource Fs12}" VerticalAlignment="Center" />
+                        <StackPanel Spacing="0">
                             <TextBlock Text="关于" Classes="group-title" />
                             <TextBlock Text="Prism · Pak 资产管理工具" Classes="group-sub" />
                         </StackPanel>
-                        <TextBlock Grid.Column="2" Text="{Binding VersionLine}"
-                                   Classes="row-desc" VerticalAlignment="Center" />
-                    </Grid>
-                    <Border Classes="row-divider" />
+                    </StackPanel>
 
-                    <Grid Classes="row" ColumnDefinitions="*,Auto">
-                        <StackPanel Grid.Column="0" Spacing="2">
-                            <TextBlock Text="Pak、映射与输出路径" Classes="row-label" />
-                            <TextBlock Text="这些路径跟着各自的业务页走，避免两处改同一份状态。" Classes="row-desc" />
-                        </StackPanel>
-                        <Button Grid.Column="1" Content="前往配置"
-                                Classes="accent"
-                                VerticalAlignment="Center"
-                                Command="{Binding GoWorkspaceConfigCommand}" />
-                    </Grid>
-                    <Border Classes="row-divider" />
+                    <Border Classes="group">
+                        <StackPanel>
+                            <!-- 创作者 -->
+                            <ItemsControl ItemsSource="{Binding Creators}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:AboutPerson">
+                                        <Grid Classes="row" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                                            <Border Grid.Column="0" Classes="avatar">
+                                                <TextBlock Text="{Binding Initial}" Classes="avatar-text" />
+                                            </Border>
+                                            <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Name}" Classes="row-label" />
+                                                <TextBlock Text="{Binding Role}" Classes="row-desc" />
+                                            </StackPanel>
+                                            <Button Grid.Column="2"
+                                                    Content="{Binding LinkText}"
+                                                    Classes="ghost"
+                                                    FontSize="{DynamicResource Fs10}"
+                                                    VerticalAlignment="Center"
+                                                    Command="{Binding $parent[ItemsControl].((vm:MainViewModel)DataContext).OpenLinkCommand}"
+                                                    CommandParameter="{Binding Url}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
 
-                    <Grid Classes="row" ColumnDefinitions="*,Auto">
-                        <StackPanel Grid.Column="0" Spacing="2">
-                            <TextBlock Text="使用说明" Classes="row-label" />
-                            <TextBlock Text="每个工作区的完整操作步骤、截图与常见问题。" Classes="row-desc" />
-                        </StackPanel>
-                        <Button Grid.Column="1" Content="打开文档"
-                                Classes="accent"
-                                VerticalAlignment="Center"
-                                Command="{Binding OpenDocsCommand}" CommandParameter="start" />
-                    </Grid>
-                    <Border Classes="row-divider" />
+                            <Border Classes="row-divider" />
 
-                    <Grid Classes="row" ColumnDefinitions="*,Auto">
-                        <StackPanel Grid.Column="0" Spacing="2">
-                            <TextBlock Text="临时目录" Classes="row-label" />
-                            <TextBlock Text="{Binding TempDirectory}" Classes="row-desc" />
+                            <Grid Classes="row" ColumnDefinitions="*,Auto">
+                                <StackPanel Grid.Column="0" Spacing="2">
+                                    <TextBlock Text="源代码" Classes="row-label" />
+                                    <TextBlock Text="{Binding AppRepositoryUrl}" Classes="row-desc" />
+                                </StackPanel>
+                                <Button Grid.Column="1" Content="打开仓库"
+                                        Classes="ghost"
+                                        VerticalAlignment="Center"
+                                        Command="{Binding OpenLinkCommand}"
+                                        CommandParameter="{Binding AppRepositoryUrl}" />
+                            </Grid>
+                            <Border Classes="row-divider" />
+
+                            <Grid Classes="row" ColumnDefinitions="*,Auto">
+                                <StackPanel Grid.Column="0" Spacing="2">
+                                    <TextBlock Text="许可证" Classes="row-label" />
+                                    <TextBlock Text="{Binding AppLicenseText}" Classes="row-desc" />
+                                </StackPanel>
+                                <Button Grid.Column="1" Content="查看"
+                                        Classes="ghost"
+                                        VerticalAlignment="Center"
+                                        Command="{Binding OpenLinkCommand}"
+                                        CommandParameter="https://github.com/CCB-TEAM/Prism/blob/main/LICENSE" />
+                            </Grid>
+                            <Border Classes="row-divider" />
+
+                            <Grid Classes="row" ColumnDefinitions="*,Auto">
+                                <StackPanel Grid.Column="0" Spacing="2">
+                                    <TextBlock Text="使用说明" Classes="row-label" />
+                                    <TextBlock Text="每个工作区的完整操作步骤、截图与常见问题。" Classes="row-desc" />
+                                </StackPanel>
+                                <Button Grid.Column="1" Content="打开文档"
+                                        Classes="accent"
+                                        VerticalAlignment="Center"
+                                        Command="{Binding OpenDocsCommand}" CommandParameter="start" />
+                            </Grid>
+                            <Border Classes="row-divider" />
+
+                            <Grid Classes="row" ColumnDefinitions="*,Auto">
+                                <StackPanel Grid.Column="0" Spacing="2">
+                                    <TextBlock Text="Pak、映射与输出路径" Classes="row-label" />
+                                    <TextBlock Text="这些路径跟着各自的业务页走，避免两处改同一份状态。" Classes="row-desc" />
+                                </StackPanel>
+                                <Button Grid.Column="1" Content="前往配置"
+                                        Classes="accent"
+                                        VerticalAlignment="Center"
+                                        Command="{Binding GoWorkspaceConfigCommand}" />
+                            </Grid>
+                            <Border Classes="row-divider" />
+
+                            <Grid Classes="row" ColumnDefinitions="*,Auto">
+                                <StackPanel Grid.Column="0" Spacing="2">
+                                    <TextBlock Text="临时目录" Classes="row-label" />
+                                    <TextBlock Text="{Binding TempDirectory}" Classes="row-desc" />
+                                </StackPanel>
+                            </Grid>
+
+                            <Border Classes="row-divider" />
+
+                            <StackPanel Margin="16,12,16,6" Spacing="6">
+                                <TextBlock Text="致谢" Classes="row-label" />
+                                <ItemsControl ItemsSource="{Binding Credits}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:AboutCredit">
+                                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" Margin="0,3">
+                                                <TextBlock Grid.Column="0" Text="·" Classes="credit-detail" />
+                                                <StackPanel Grid.Column="1" Spacing="1">
+                                                    <TextBlock Text="{Binding Name}" Classes="credit-name" />
+                                                    <TextBlock Text="{Binding Detail}" Classes="credit-detail" />
+                                                </StackPanel>
+                                                <Button Grid.Column="2"
+                                                        Content="链接"
+                                                        Classes="ghost"
+                                                        FontSize="{DynamicResource Fs10}"
+                                                        VerticalAlignment="Center"
+                                                        IsVisible="{Binding Url, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                        Command="{Binding $parent[ItemsControl].((vm:MainViewModel)DataContext).OpenLinkCommand}"
+                                                        CommandParameter="{Binding Url}" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
                         </StackPanel>
-                        <Button Grid.Column="1" Content="GitHub"
-                                Classes="ghost"
-                                VerticalAlignment="Center"
-                                Command="{Binding OpenReleasePageCommand}" />
-                    </Grid>
+                    </Border>
                 </StackPanel>
-            </Border>
+
+                <!-- ═══════ 日志 ═══════ -->
+                <StackPanel Classes="section">
+                    <Grid ColumnDefinitions="*,Auto" Margin="2,0,0,8">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="📄" FontSize="{DynamicResource Fs12}" VerticalAlignment="Center" />
+                            <StackPanel Spacing="0">
+                                <TextBlock Text="日志" Classes="group-title" />
+                                <TextBlock Text="最近 400 行；出问题时导出完整报告" Classes="group-sub" />
+                            </StackPanel>
+                        </StackPanel>
+                        <Button Grid.Column="1" Content="导出日志"
+                                Command="{Binding ExportLogCommand}"
+                                Classes="ghost"
+                                FontSize="{DynamicResource Fs10}"
+                                VerticalAlignment="Center" />
+                    </Grid>
+
+                    <Border Classes="group">
+                        <Border Background="{DynamicResource SurfaceAltBrush}"
+                                CornerRadius="10"
+                                Margin="14"
+                                Padding="12,10"
+                                MaxHeight="220">
+                            <ScrollViewer>
+                                <TextBlock Text="{Binding LogText}"
+                                           FontFamily="Consolas, Courier New"
+                                           FontSize="{DynamicResource Fs11}"
+                                           Foreground="{DynamicResource TextMutedBrush}"
+                                           TextWrapping="Wrap" />
+                            </ScrollViewer>
+                        </Border>
+                    </Border>
+                </StackPanel>
+            </WrapPanel>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

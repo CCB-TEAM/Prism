@@ -124,7 +124,10 @@ public partial class MainViewModel : ViewModelBase
     ///
     /// 为什么自己算而不是让 WrapPanel 自己排：WrapPanel 在水平方向以无限宽度量孩子，
     /// 卡片会缩成"内容想要的那点宽度"，两列排不出来。给一个确定的槽宽最省事，
-    /// 也让两列的宽度永远一致。减 2 是留给行内取整误差的余量 —— 差 1px 就会掉成单列。
+    /// 也让两列的宽度永远一致。
+    ///
+    /// 减 44 是给两列间隙（12×2）与纵向滚动条留的余量 —— 差几像素就会掉成单列，
+    /// 而"设置页只能单列"正是之前两列怎么也不出来的原因。
     /// </summary>
     public double SettingsCardWidth
     {
@@ -132,8 +135,8 @@ public partial class MainViewModel : ViewModelBase
         {
             // 页面内容区 = 窗口宽 - 侧栏 - 页面左右边距(20+20)
             double content = Math.Max(300d, WindowWidth - SidebarWidth - 40d);
-            double usable = Math.Min(content, 1060d);
-            return IsWideLayout ? Math.Floor((usable - 2d) / 2d) : usable;
+            double usable = Math.Min(content, 1040d);
+            return IsWideLayout ? Math.Floor((usable - 52d) / 2d) : usable;
         }
     }
 
@@ -2859,6 +2862,10 @@ public partial class MainViewModel : ViewModelBase
             PreviewImage = null;
             ModelPreview = null;
             WidgetPreview = preview.Widget;
+
+            // 蓝图节点图：预览里带了概要才给入口；换资产时把上一张图收起来。
+            _blueprintSourcePath = preview.Blueprint is null ? null : item.FullPath;
+            BlueprintSummary = preview.Blueprint;
             // 音视频的 Data 是原始载荷（mp4/wav 字节），拿去当图片解会炸在 Skia 里，
             // 之前的"选中视频报 NRE"就是这么来的。只对真图片解，解不出来就算了。
             bool isMediaPayload = preview.Kind is "video" or "audio";
@@ -5374,6 +5381,7 @@ public partial class MainViewModel : ViewModelBase
             $"{System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture} | 临时目录 {TempDirectory}",
             "启动");
         Services.AppLog.Info($"依赖探测：{CliStatus} / {AstcencStatus} / {TexconvStatus}", "启动");
+        ReloadDependencies();
         if (!string.IsNullOrWhiteSpace(PakPath))
         {
             Services.AppLog.Debug($"上次 Pak 路径：{PakPath}", "启动");

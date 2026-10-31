@@ -47,22 +47,34 @@ public static class SmokeTest
                 return 1;
             }
 
-            IReadOnlyList<ArchiveEntryDto> textures = await session.SearchAsync("T_", 20);
+            IReadOnlyList<ArchiveEntryDto> textures = await session.SearchAsync("T_", 40);
             Console.WriteLine($"[smoke] Search \"T_\": {textures.Count} hits");
-            ArchiveEntryDto? target = textures.FirstOrDefault(e => !e.IsDirectory);
-            if (target is null)
+
+            // 搜索是路径子串匹配，"T_" 也会命中 events / 蓝图这类路径。逐个试到
+            // 真的能出图片的那一个为止 —— 否则冒烟会因为蓝图的 kind=blueprint 误报失败。
+            AssetPreviewDto? preview = null;
+            string? previewPath = null;
+            foreach (ArchiveEntryDto candidate in textures.Where(e => !e.IsDirectory))
             {
-                Console.Error.WriteLine("[smoke] FAIL: no texture entry found");
+                AssetPreviewDto attempt = await session.ReadPreviewAsync(candidate.FullPath);
+                if (attempt.Data is not { Length: > 0 })
+                {
+                    Console.WriteLine($"[smoke] skip \"{candidate.FullPath}\": kind={attempt.Kind}");
+                    continue;
+                }
+
+                preview = attempt;
+                previewPath = candidate.FullPath;
+                break;
+            }
+
+            if (preview is null)
+            {
+                Console.Error.WriteLine("[smoke] FAIL: search hits produced no image preview");
                 return 1;
             }
 
-            AssetPreviewDto preview = await session.ReadPreviewAsync(target.FullPath);
-            Console.WriteLine($"[smoke] Preview \"{target.FullPath}\": kind={preview.Kind}, title={preview.Title}, data={preview.Data?.Length ?? 0} bytes");
-            if (preview.Data is not { Length: > 0 })
-            {
-                Console.Error.WriteLine("[smoke] FAIL: preview produced no image data");
-                return 1;
-            }
+            Console.WriteLine($"[smoke] Preview \"{previewPath}\": kind={preview.Kind}, title={preview.Title}, data={preview.Data?.Length ?? 0} bytes");
 
             // 音频替换自检：能找到 BINKA 流式 SoundWave 就实打实地编一遍、写回一遍。
             // 缺 binka_encode.exe 或映射文件时只提示，不算失败（仓库本就不带这个二进制）。

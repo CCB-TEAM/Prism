@@ -1,0 +1,286 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Prism.Desktop.ViewModels"
+             xmlns:views="using:Prism.Desktop.Views"
+             x:Class="Prism.Desktop.Views.BlueprintGraphPageView"
+             x:DataType="vm:MainViewModel">
+
+    <!--
+        ═══ 蓝图节点图（只读）═══
+
+        从浏览页的预览栏点「打开节点图」进来，铺满内容区：
+          · 顶部：返回、资产名、函数/事件数，以及「只读」说明；
+          · 左侧：事件与函数列表（宽窗）；
+          · 中间：节点画布；
+          · 右侧：选中节点的端口与字节码位置（可以收起）。
+
+        窄窗/手机没有左侧列表，函数改在顶部下拉里选 —— 和 Sidebar 的折叠策略一致。
+        这里没有任何写入口：节点位置、连线、默认值都只用来画图。
+    -->
+
+    <UserControl.Styles>
+        <Style Selector="Border.bp-header">
+            <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}" />
+            <Setter Property="BorderThickness" Value="0,0,0,1" />
+            <Setter Property="Padding" Value="12,10" />
+        </Style>
+
+        <Style Selector="TextBlock.bp-title">
+            <Setter Property="FontSize" Value="{DynamicResource Fs14}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+
+        <Style Selector="TextBlock.bp-sub">
+            <Setter Property="FontSize" Value="{DynamicResource Fs10}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+
+        <Style Selector="Border.bp-badge">
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="7" />
+            <Setter Property="Padding" Value="8,3" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style Selector="TextBlock.bp-badge-text">
+            <Setter Property="FontSize" Value="{DynamicResource Fs10}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+        </Style>
+
+        <Style Selector="Border.bp-side">
+            <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}" />
+            <Setter Property="BorderThickness" Value="0,0,1,0" />
+        </Style>
+
+        <Style Selector="TextBlock.bp-side-title">
+            <Setter Property="FontSize" Value="{DynamicResource Fs10}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+            <Setter Property="Margin" Value="14,12,14,6" />
+        </Style>
+
+        <Style Selector="ListBox.bp-functions">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Padding" Value="6,0,6,8" />
+        </Style>
+
+        <Style Selector="ListBox.bp-functions ListBoxItem">
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="Margin" Value="0,2" />
+            <Setter Property="CornerRadius" Value="8" />
+        </Style>
+
+        <Style Selector="ListBox.bp-functions ListBoxItem:selected /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+        </Style>
+
+        <Style Selector="TextBlock.bp-kind">
+            <Setter Property="FontSize" Value="{DynamicResource Fs10}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+        </Style>
+
+        <Style Selector="Border.bp-details">
+            <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}" />
+            <Setter Property="BorderThickness" Value="1,0,0,0" />
+        </Style>
+
+        <Style Selector="TextBlock.bp-row-label">
+            <Setter Property="FontSize" Value="{DynamicResource Fs11}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style Selector="TextBlock.bp-row-value">
+            <Setter Property="FontSize" Value="{DynamicResource Fs10}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style Selector="TextBlock.bp-details-empty">
+            <Setter Property="FontSize" Value="{DynamicResource Fs11}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Margin" Value="16,14" />
+        </Style>
+    </UserControl.Styles>
+
+    <DockPanel Background="{DynamicResource SurfaceBrush}">
+
+        <!-- ═══ 顶部 ═══ -->
+        <Border DockPanel.Dock="Top" Classes="bp-header">
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                <Button Grid.Column="0"
+                        Content="← 返回"
+                        Classes="ghost"
+                        FontSize="{DynamicResource Fs11}"
+                        VerticalAlignment="Center"
+                        Command="{Binding CloseBlueprintGraphCommand}" />
+
+                <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding BlueprintGraphTitle}" Classes="bp-title" />
+                    <TextBlock Text="{Binding BlueprintGraphSubtitle}" Classes="bp-sub" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <ProgressBar Width="70" Height="3" Minimum="0" Maximum="1"
+                                 IsIndeterminate="True"
+                                 IsVisible="{Binding IsBlueprintGraphBusy}" />
+                    <Button Content="−"
+                            Classes="ghost"
+                            FontSize="{DynamicResource Fs12}"
+                            MinWidth="30"
+                            VerticalAlignment="Center"
+                            Click="OnZoomOutClick" />
+                    <Button Content="＋"
+                            Classes="ghost"
+                            FontSize="{DynamicResource Fs12}"
+                            MinWidth="30"
+                            VerticalAlignment="Center"
+                            Click="OnZoomInClick" />
+                    <Border Classes="bp-badge">
+                        <TextBlock Text="只读" Classes="bp-badge-text" />
+                    </Border>
+                    <Button Classes="ghost"
+                            FontSize="{DynamicResource Fs11}"
+                            VerticalAlignment="Center"
+                            Command="{Binding ToggleBlueprintNodePanelCommand}">
+                        <Panel>
+                            <TextBlock Text="节点详情" IsVisible="{Binding IsWideLayout}" />
+                            <TextBlock Text="详情" IsVisible="{Binding !IsWideLayout}" />
+                        </Panel>
+                    </Button>
+                    <Button Classes="ghost"
+                            FontSize="{DynamicResource Fs11}"
+                            VerticalAlignment="Center"
+                            Click="OnFitClick">
+                        <Panel>
+                            <TextBlock Text="适应画布" IsVisible="{Binding IsWideLayout}" />
+                            <TextBlock Text="适应" IsVisible="{Binding !IsWideLayout}" />
+                        </Panel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- 窄窗：函数选择放在第二行，别和标题抢宽度 -->
+        <Border DockPanel.Dock="Top"
+                Background="{DynamicResource CardBrush}"
+                BorderBrush="{DynamicResource DividerBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="12,8"
+                IsVisible="{Binding !IsWideLayout}">
+            <ComboBox ItemsSource="{Binding BlueprintFunctions}"
+                      SelectedItem="{Binding SelectedBlueprintFunction}"
+                      HorizontalAlignment="Stretch"
+                      FontSize="{DynamicResource Fs11}">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:BlueprintFunctionOption">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="{Binding Icon}" FontSize="{DynamicResource Fs11}" />
+                            <TextBlock Text="{Binding DisplayName}" FontSize="{DynamicResource Fs11}"
+                                       TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
+        </Border>
+
+        <!-- ═══ 状态条 ═══ -->
+        <Border DockPanel.Dock="Bottom"
+                Background="{DynamicResource CardBrush}"
+                BorderBrush="{DynamicResource DividerBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="12,5">
+            <TextBlock Text="{Binding BlueprintGraphStatus}"
+                       Classes="bp-sub"
+                       TextWrapping="Wrap" />
+        </Border>
+
+        <Grid ColumnDefinitions="Auto,*">
+
+            <!-- ═══ 事件 / 函数列表（宽窗）═══ -->
+            <Border Grid.Column="0" Classes="bp-side" Width="236" IsVisible="{Binding IsWideLayout}">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top"
+                               Text="{Binding BlueprintFunctionSummary}"
+                               Classes="bp-side-title" />
+                    <ScrollViewer>
+                        <ListBox Classes="bp-functions"
+                                 ItemsSource="{Binding BlueprintFunctions}"
+                                 SelectedItem="{Binding SelectedBlueprintFunction}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:BlueprintFunctionOption">
+                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                                        <TextBlock Grid.Column="0"
+                                                   Text="{Binding Icon}"
+                                                   FontSize="{DynamicResource Fs11}"
+                                                   VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding DisplayName}"
+                                                   FontSize="{DynamicResource Fs11}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="2"
+                                                   Text="{Binding KindLabel}"
+                                                   Classes="bp-kind"
+                                                   VerticalAlignment="Center" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+
+            <!-- ═══ 画布 + 节点详情 ═══ -->
+            <Grid Grid.Column="1" ColumnDefinitions="*,Auto">
+                <views:BlueprintGraphView x:Name="GraphCanvas"
+                                          Grid.Column="0"
+                                          Graph="{Binding BlueprintGraph}"
+                                          SelectedNodeIndex="{Binding SelectedBlueprintNodeIndex, Mode=TwoWay}" />
+
+                <Border Grid.Column="1" Classes="bp-details" Width="272"
+                        IsVisible="{Binding ShowBlueprintNodePanel}">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top"
+                                   Text="节点详情"
+                                   Classes="bp-side-title" />
+                        <ScrollViewer>
+                            <StackPanel>
+                                <TextBlock Text="点画布上的节点查看端口与字节码位置。"
+                                           Classes="bp-details-empty"
+                                           IsVisible="{Binding !HasSelectedBlueprintNode}" />
+                                <ItemsControl ItemsSource="{Binding BlueprintNodeRows}" Margin="12,0,12,12">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:BlueprintNodeRow">
+                                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6" Margin="0,3">
+                                                <Ellipse Grid.Column="0" Width="7" Height="7"
+                                                         Fill="{Binding PinBrush}"
+                                                         VerticalAlignment="Center"
+                                                         IsVisible="{Binding HasPin}" />
+                                                <TextBlock Grid.Column="1"
+                                                           Text="{Binding Label}"
+                                                           Classes="bp-row-label"
+                                                           Margin="{Binding Indent}" />
+                                                <TextBlock Grid.Column="2"
+                                                           Text="{Binding Value}"
+                                                           Classes="bp-row-value"
+                                                           MaxWidth="150" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+            </Grid>
+        </Grid>
+    </DockPanel>
+</UserControl>

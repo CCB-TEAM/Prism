@@ -1,0 +1,30 @@
+using CUE4Parse.UE4.Kismet;
+using Prism.BlueprintGraph.Engine;
+using static Prism.BlueprintGraph.Engine.EngineBPData;
+using static Prism.BlueprintGraph.Engine.EngineEnums;
+
+namespace Prism.BlueprintGraph.Nodes
+{
+    public class K2Node_VariableGet : BPNode
+    {
+        public GraphPin? TargetPin;
+        public GraphPin VarPin;
+        public PropertyData Property;
+
+        public override string? DefinitionOwner => Property.Owner;
+        public override string? DefinitionMember => Property.Name;
+
+        public K2Node_VariableGet(PropertyData data, string variableName, GraphPin? targetPin, KismetExpression instr) : base("", instr)
+        {
+            Property = data;
+            HeaderHidden = true;
+            Pure = true;
+            TargetPin = targetPin;
+            VarPin = new GraphPin(variableName, EEdGraphPinDirection.EGPD_Output, data.PinType);
+            TintPin = VarPin;
+            AddOutputPin(VarPin);
+            if (TargetPin != null)
+                AddInputPin(TargetPin);
+        }
+    }
+}

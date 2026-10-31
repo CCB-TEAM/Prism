@@ -73,7 +73,8 @@ public sealed record AssetPreviewDto(
     LocresPreviewDto? Locres = null,
     bool CanPlay = false,
     bool CanExportRaw = true,
-    WidgetPreviewDto? Widget = null);
+    WidgetPreviewDto? Widget = null,
+    Blueprints.BlueprintGraphDto? Blueprint = null);
 
 public sealed record AssetPreviewDetailDto(
     string Label,

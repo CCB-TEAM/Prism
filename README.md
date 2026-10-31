@@ -14,6 +14,7 @@ Browse pak contents, preview textures / audio / 3D meshes / localization, export
 - File-manager style browsing, keyword search, and **direct path navigation** from the search box.
 - Groups related `.uasset` / `.uexp` / `.ubulk` into one asset entry.
 - Previews: textures (with thumbnails), audio (built-in player), 3D mesh wireframe, localization (`.locres`), blueprint pseudo-code.
+- **Read-only blueprint node graph**: cooked packages keep only Kismet bytecode, so the graph is rebuilt from it — events, functions, macros (ForEach / DoOnce…), branches and wires; wheel-zoom, drag-pan, click a node for its pins and bytecode offset. Ported from [Flora](https://github.com/CCB-TEAM/Flora) (upstream MIT).
 - **Audio preview**: play / pause / scrub. BINKA sounds decode on desktop too (via `prism_binka.dll`).
 - **Video preview**: embedded playback (ffmpeg decodes frames, `-re` paces them in real time), poster
   frame, duration / resolution, timeline; without ffmpeg you still get "open in system player".
@@ -84,7 +85,7 @@ Browse pak contents, preview textures / audio / 3D meshes / localization, export
 
 **Diagnostics**
 - Structured log with severity, timestamps, full exception stacks, on-disk mirror, and an exportable report with environment header.
-- Settings page lists every external dependency (UAssetCLI, astcenc, texconv, Oodle) with a green/red dot,
+- Settings lists every dependency for the current platform with a green/red dot — desktop: UAssetCLI, astcenc, texconv, Oodle, prism_binka; Android: the bundled `libprism_codecs.so` / `liboodle-data-shared.so`.
   so "texture replacement doesn't work" answers itself.
 
 **Updates**
@@ -328,7 +329,7 @@ A full repack needs temp space equal to the main pak.
 ## Verifying
 
 ```sh
-# Integration tests (371 assertions): mapping format detection, search-box path resolution,
+# Integration tests (448 assertions): mapping format detection, search-box path resolution,
 # pak conversion (both paths + all output modes), merge priority, locres <-> JSON round-trip,
 # non-ASCII pak path handling, headless UI loading and navigation, audio replacement
 # (BINKA round-trip through a real pak), media replacement, the replace-page flow driven
@@ -380,6 +381,13 @@ assertions are skipped.
 
 `.pak` archives only; `.utoc` / `.ucas` containers are not implemented. Mapping files are not bundled —
 import the matching one from the game.
+
+## Credits
+
+- Created by [CuO](https://space.bilibili.com/3546971308559129) and [KardsWalker](https://space.bilibili.com/1253227194)
+- [Flora](https://github.com/CCB-TEAM/Flora): reference implementation of the blueprint graph decompiler and widget designer
+- [UE Blueprint Graph Viewer](https://github.com/CCB-TEAM/Flora/tree/main/FModel.BlueprintGraph) (glgen, MIT): the original bytecode → graph decompiler
+- [CUE4Parse](https://github.com/FabianFG/CUE4Parse), [UAssetAPI](https://github.com/atenfyr/UAssetAPI), [Avalonia](https://avaloniaui.net), FFmpeg, Oodle
 
 ## License
 

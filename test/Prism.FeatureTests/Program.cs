@@ -2384,6 +2384,134 @@ try
         splitWindow.Close();
     }
 
+    Section("F19 · 蓝图节点图（概要 → 函数列表 → 节点详情 → 铺在浏览页上）");
+
+    // 1) 概要到函数列表：事件排在函数前面，入口文案带回函数数。
+    var bpSummary = new PakTool.Core.Blueprints.BlueprintGraphDto(
+        "WBP_Demo_C",
+        "WBP_Demo_C",
+        "/Script/UMG.UserWidget",
+        [
+            new PakTool.Core.Blueprints.BlueprintFunctionDto("Construct", "Construct", "Construct", "event", 4, null),
+            new PakTool.Core.Blueprints.BlueprintFunctionDto("GetValue", "GetValue", "GetValue", "function", 2, null),
+        ],
+        "1 个事件 / 1 个函数");
+
+    var bpVm = new Prism.Desktop.ViewModels.MainViewModel { BlueprintSummary = bpSummary };
+    Check(bpVm.HasBlueprintSummary && bpVm.BlueprintFunctions.Count == 2,
+        $"蓝图概要带出 2 个函数（实际 {bpVm.BlueprintFunctions.Count}）");
+    Check(bpVm.BlueprintFunctions[0].Kind == "event" && bpVm.BlueprintFunctions[0].Icon == "⚡",
+        "事件排在前面并带事件标记");
+    Check(bpVm.BlueprintEntryText.Contains("2 个函数"),
+        $"预览栏入口写明函数数（实际「{bpVm.BlueprintEntryText}」）");
+
+    // 2) 一张最小的图：事件 → 调函数；用来验证节点/连线/端口详情。
+    var eventNode = new PakTool.Core.Blueprints.BlueprintNodeDto(
+        0, "Construct", "K2Node_Event", null, 0, 0, 220, 98, false, false, false, false, 0,
+        [],
+        [new PakTool.Core.Blueprints.BlueprintPinDto("n0o0", "then", false, true, "exec", null, "None", 220, 47, "", false, true)]);
+    var callNode = new PakTool.Core.Blueprints.BlueprintNodeDto(
+        1, "PrintString", "K2Node_CallFunction", "KismetSystemLibrary", 320, 0, 260, 130, false, false, false, false, 12,
+        [
+            new PakTool.Core.Blueprints.BlueprintPinDto("n1i0", "execute", true, true, "exec", null, "None", 320, 47, "", false, true),
+            new PakTool.Core.Blueprints.BlueprintPinDto("n1i1", "InString", true, false, "String", null, "None", 320, 79, "Hello", false, true),
+        ],
+        [new PakTool.Core.Blueprints.BlueprintPinDto("n1o0", "then", false, true, "exec", null, "None", 580, 47, "", false, true)]);
+    var bpGraph = new PakTool.Core.Blueprints.BlueprintGraphViewDto(
+        "Construct", "Construct", "event",
+        [eventNode, callNode],
+        [new PakTool.Core.Blueprints.BlueprintLinkDto("n0o0", "n1i0", "exec")],
+        0, 0, 580, 130,
+        "1 个节点的函数签名由调用处推断",
+        false);
+
+    bpVm.BlueprintGraph = bpGraph;
+    Check(bpVm.HasBlueprintGraph && !bpVm.HasSelectedBlueprintNode, "图加载后还没有选中节点");
+
+    bpVm.SelectedBlueprintNodeIndex = 1;
+    Check(bpVm.HasSelectedBlueprintNode, "点节点后详情面板进入选中态");
+    Check(bpVm.BlueprintNodeRows.Any(row => row.Label == "类型" && row.Value == "K2Node_CallFunction"),
+        "详情里写明节点类型");
+    Check(bpVm.BlueprintNodeRows.Any(row => row.Label == "字节码" && row.Value.Contains("12")),
+        "详情里带语句位置");
+    Check(bpVm.BlueprintNodeRows.Any(row => row.Label == "InString" && row.Value.Contains("Hello")),
+        "详情里能看到端口默认值");
+    Check(bpVm.BlueprintNodeRows.Any(row => row.PinBrush is not null), "笔刷按端口类型着色");
+
+    bpVm.SelectedBlueprintNodeIndex = -1;
+    Check(bpVm.BlueprintNodeRows.Count == 0, "取消选中后详情清空");
+
+    // 3) 真把页面铺到浏览页上：只读画布要出现在可视树里。
+    Prism.FeatureTests.UiFixture.EnsureInitialized();
+    {
+        (Prism.Desktop.Views.MainWindow bpWindow, Prism.Desktop.ViewModels.MainViewModel bpShellVm) =
+            Prism.FeatureTests.UiFixture.CreateShell();
+        bpWindow.Show();
+        Prism.FeatureTests.UiFixture.RunJobs();
+        bpShellVm.CurrentTabIndex = 1;
+        bpShellVm.GoWorkspaceCommand.Execute(null);
+        Prism.FeatureTests.UiFixture.RunJobs();
+
+        bpShellVm.BlueprintSummary = bpSummary;
+        bpShellVm.BlueprintGraph = bpGraph;
+        bpShellVm.IsBlueprintGraphOpen = true;
+        Prism.FeatureTests.UiFixture.RunJobs();
+
+        var page = bpWindow.GetVisualDescendants().OfType<Prism.Desktop.Views.BlueprintGraphPageView>().FirstOrDefault();
+        Check(page is not null && page.IsVisible, "打开节点图后页面铺在浏览页上");
+
+        var bpCanvas = bpWindow.GetVisualDescendants().OfType<Prism.Desktop.Views.BlueprintGraphView>().FirstOrDefault();
+        Check(bpCanvas is not null && bpCanvas.Bounds.Width > 200 && bpCanvas.Bounds.Height > 200,
+            $"节点画布有实际尺寸（{bpCanvas?.Bounds.Width:0}×{bpCanvas?.Bounds.Height:0}）");
+
+        bpShellVm.CloseBlueprintGraphCommand.Execute(null);
+        Prism.FeatureTests.UiFixture.RunJobs();
+        Check(!bpShellVm.IsBlueprintGraphOpen && bpShellVm.BlueprintGraph is null,
+            "返回到列表后图与页面都收起来");
+
+        bpWindow.Close();
+    }
+
+    Section("F20 · 设置：关于信息与按平台探测的依赖");
+
+    var aboutVm = new Prism.Desktop.ViewModels.MainViewModel();
+    Check(aboutVm.Creators.Count == 2 &&
+          aboutVm.Creators.Any(person => person.Name.Contains("CuO") && person.Url.Contains("3546971308559129")),
+        "关于里有氧化铜依旧CuO 的 B 站主页");
+    Check(aboutVm.Creators.Any(person => person.Name.Contains("KardsWalker") && person.Url.Contains("1253227194")),
+        "关于里有 KardsWalker卡兹走路人的 B 站主页");
+    Check(aboutVm.Credits.Any(credit => credit.Name == "Flora" && credit.Url?.Contains("Flora") == true),
+        "致谢里点名 Flora 并给出仓库");
+    Check(aboutVm.Credits.Any(credit => credit.Name.Contains("Blueprint Graph Viewer")),
+        "致谢里保留上游反编译器的 MIT 署名");
+
+    aboutVm.RefreshDependenciesCommand.Execute(null);
+    Check(aboutVm.Dependencies.Count >= 5,
+        $"依赖清单按平台列出组件（{aboutVm.Dependencies.Count} 项）");
+    Check(aboutVm.DependencySummary is "全部就绪" || aboutVm.DependencySummary.EndsWith("项缺失"),
+        $"依赖结论是一句话（实际「{aboutVm.DependencySummary}」）");
+
+    if (OperatingSystem.IsAndroid())
+    {
+        Check(aboutVm.Dependencies.Any(item => item.Name.Contains("prism_codecs")),
+            "安卓列出随包的 prism_codecs");
+        Check(!aboutVm.Dependencies.Any(item => item.Name == "UAssetCLI"),
+            "安卓不再列桌面端的 UAssetCLI（之前整片显示缺失的原因）");
+        Check(aboutVm.DependencyHeadline.Contains(".so"),
+            "安卓的说明写清楚依赖的是 .so");
+    }
+    else
+    {
+        Check(aboutVm.Dependencies.Any(item => item.Name == "UAssetCLI"),
+            "桌面列出 UAssetCLI");
+        Check(aboutVm.Dependencies.Any(item => item.Name.Contains("astcenc")),
+            "桌面列出 astcenc");
+        Check(!aboutVm.Dependencies.Any(item => item.Name.Contains("prism_codecs")),
+            "桌面不列安卓的 .so");
+        Check(aboutVm.DependencyHeadline.Contains("外部组件"),
+            "桌面的说明写清楚依赖的是外部组件");
+    }
+
     Section("结果");
 }
 finally

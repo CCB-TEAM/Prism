@@ -7,6 +7,7 @@ using Avalonia.Threading;
 using Avalonia.Input;
 using Avalonia.VisualTree;
 using PakTool.Core;
+using PakTool.Core.Blueprints;
 using Prism.Desktop.ViewModels;
 using Prism.Desktop.Views;
 
@@ -176,6 +177,8 @@ return docsOnly ? CaptureDocs() : CapturePages(outputDirectory);
             ("merge", "GoMerge", 0),
             ("convert", "GoConvert", 0),
             ("settings", "GoSettings", 0),
+            // 关于在设置页最下面：再截一张滚到底的，评审时能看到创作者与致谢
+            ("settings-about", "GoSettings", 0),
             ("docs-start", "GoDocs", 0),
             ("docs-workspace", "GoDocsWorkspace", 0),
             ("docs-settings", "GoDocsSettings", 0),
@@ -189,6 +192,7 @@ return docsOnly ? CaptureDocs() : CapturePages(outputDirectory);
             [
                 .. pages[..9],
                 ("preview-widget", "GoWorkspace", 1),
+                ("preview-blueprint", "GoWorkspace", 1),
                 // 同一页再截一张：把列表/预览之间的分隔条往左拖 120px，证明区域能拖
                 ("preview-widget-dragged", "GoWorkspace", 1),
                 .. pages[9..],
@@ -217,6 +221,18 @@ return docsOnly ? CaptureDocs() : CapturePages(outputDirectory);
 
                     Navigate(vm, command, tab);
 
+                    if (pageLabel == "settings-about")
+                    {
+                        // 滚到设置页最底（关于/致谢），等布局稳定后再截图
+                        Prism.FeatureTests.UiFixture.RunJobs();
+                        var scroller = window.GetVisualDescendants()
+                            .OfType<ScrollViewer>()
+                            .FirstOrDefault(s => s.GetVisualAncestors().OfType<SettingsView>().Any());
+                        if (scroller is not null)
+                            scroller.Offset = new Vector(0, Math.Max(0, scroller.Extent.Height - scroller.Viewport.Height - 250));
+                        Prism.FeatureTests.UiFixture.RunJobs();
+                    }
+
                     // 替换页需要真的有任务才看得出来长什么样：塞两条示例（音频 / 视频）。
                     if (pageLabel.StartsWith("workspace-replace", StringComparison.Ordinal))
                     {
@@ -233,7 +249,11 @@ return docsOnly ? CaptureDocs() : CapturePages(outputDirectory);
                     // 预览栏的内置播放器 / 视频画面：同样造一份示例状态
                     if (pageLabel.StartsWith("preview-", StringComparison.Ordinal))
                     {
-                        if (pageLabel.StartsWith("preview-widget", StringComparison.Ordinal))
+                        if (pageLabel == "preview-blueprint")
+                        {
+                            SeedBlueprintGraphDemo(vm);
+                        }
+                        else if (pageLabel.StartsWith("preview-widget", StringComparison.Ordinal))
                         {
                             SeedWidgetDemo(vm);
 
@@ -452,6 +472,78 @@ return docsOnly ? CaptureDocs() : CapturePages(outputDirectory);
         Pump();
     }
 
+    /// <summary>
+    /// 蓝图节点图：从同一个真实 .pak 里反编译一个函数，铺满浏览页。
+    /// 只在本地评审时用；资产路径与函数名可以用环境变量换。
+    /// </summary>
+    private static void SeedBlueprintGraphDemo(MainViewModel vm)
+    {
+        vm.HasAudioPreview = false;
+        vm.HasVideoPreview = false;
+        vm.VideoPoster = null;
+        // 上一页（控件预览）留下的卡片要收掉，否则截图里像"蓝图页还带着 PE-BOX"。
+        vm.WidgetPreview = null;
+        vm.PreviewImage = null;
+
+        string pak = Environment.GetEnvironmentVariable("PRISM_WIDGET_PAK")!;
+        string? usmap = Environment.GetEnvironmentVariable("PRISM_WIDGET_USMAP");
+        string asset = Environment.GetEnvironmentVariable("PRISM_BLUEPRINT_ASSET")
+                       ?? "kards/Content/Blueprints/Cards/Neutral/specialCards/card_unit_lc_rabbit_team.uasset";
+        string? function = Environment.GetEnvironmentVariable("PRISM_BLUEPRINT_FUNCTION");
+
+        try
+        {
+            // Avalonia 已经初始化：不能 await，交给线程池跑完再阻塞等待。
+            (BlueprintGraphDto? Summary, BlueprintGraphViewDto? Graph) result = Task.Run(async () =>
+            {
+                using var session = new PakArchiveSession();
+                await session.OpenAsync(new PakOpenOptions([pak], null, usmap)).ConfigureAwait(false);
+                var preview = await session.ReadPreviewAsync(asset).ConfigureAwait(false);
+                var summary = preview.Blueprint ?? await session.ReadBlueprintOverviewAsync(asset).ConfigureAwait(false);
+                if (summary is null || summary.Functions.Count == 0)
+                    return (summary, (BlueprintGraphViewDto?)null);
+
+                var target = summary.Functions.FirstOrDefault(f => f.Key == function)
+                             ?? summary.Functions.FirstOrDefault(f => f.Kind == "function" && f.Key.Contains("FightSnapshot", StringComparison.Ordinal))
+                             ?? summary.Functions.FirstOrDefault(f => f.Kind == "event")
+                             ?? summary.Functions[0];
+                var graph = await session.ReadBlueprintGraphAsync(asset, target.Key).ConfigureAwait(false);
+                return (summary, graph);
+            }).GetAwaiter().GetResult();
+
+            if (result.Summary is null)
+            {
+                Console.Error.WriteLine("  !! 蓝图节点图示例：资产不是可反编译的蓝图");
+                Pump();
+                return;
+            }
+
+            vm.HasPreview = true;
+            vm.SelectedPathText = asset;
+            vm.PreviewTitle = result.Summary.Name;
+            vm.BlueprintSummary = result.Summary;
+
+            if (result.Graph is not null)
+            {
+                vm.BlueprintGraphTitle = result.Summary.ClassName;
+                vm.BlueprintGraphSubtitle = $"{result.Summary.Name} · {result.Graph.DisplayName}";
+                vm.SelectedBlueprintFunction = vm.BlueprintFunctions.FirstOrDefault(
+                    option => option.Key == result.Graph.Key || option.DisplayName == result.Graph.DisplayName);
+
+                // 选中会触发一次真实加载（截图用的 VM 没有打开包，会失败）；
+                // 先把它推完，再把准备好的图放进去，避免失败回调把图清掉。
+                Pump();
+                vm.BlueprintGraph = result.Graph;
+                vm.IsBlueprintGraphOpen = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"  !! 蓝图节点图示例加载失败：{ex.Message}");
+        }
+
+        Pump();
+    }
     /// <summary>
     /// 控件蓝图预览：用环境变量指向一个真实 .pak，把里面的 WBP 渲染到预览栏里。
     /// 只在本地评审时用（受版权保护的资产不能进仓库），没给变量就不会有这一页。
