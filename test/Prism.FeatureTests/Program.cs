@@ -2457,6 +2457,13 @@ try
         bpShellVm.IsBlueprintGraphOpen = true;
         Prism.FeatureTests.UiFixture.RunJobs();
 
+        // 1.4.2 的回归：反编译器和画布都在，但预览栏里的入口没加进 XAML，
+        // 用户只能看到「节点图 N 个函数」的提示却点不进去。这里锁住入口的存在。
+        var entryButtons = bpWindow.GetVisualDescendants().OfType<Button>()
+            .Where(button => button.Content is string text && text.Contains("节点图", StringComparison.Ordinal) && button.IsVisible)
+            .ToList();
+        Check(entryButtons.Count > 0, "预览栏里能看到「节点图」入口");
+
         var page = bpWindow.GetVisualDescendants().OfType<Prism.Desktop.Views.BlueprintGraphPageView>().FirstOrDefault();
         Check(page is not null && page.IsVisible, "打开节点图后页面铺在浏览页上");
 

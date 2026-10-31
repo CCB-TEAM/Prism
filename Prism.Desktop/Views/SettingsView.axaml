@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Prism.Desktop.ViewModels"
              xmlns:services="using:Prism.Desktop.Services"
+             xmlns:views="using:Prism.Desktop.Views"
              x:Class="Prism.Desktop.Views.SettingsView"
              x:DataType="vm:MainViewModel">
 
@@ -168,7 +169,7 @@
     </UserControl.Styles>
 
     <ScrollViewer>
-        <StackPanel MaxWidth="1040"
+        <StackPanel MaxWidth="{Binding SettingsContentMaxWidth}"
                     HorizontalAlignment="Stretch"
                     Margin="20,20,20,14"
                     Spacing="0">
@@ -211,14 +212,14 @@
                 </Grid>
             </Border>
 
-            <WrapPanel Orientation="Horizontal"
-                       ItemWidth="{Binding SettingsCardWidth}"
-                       HorizontalAlignment="Left">
-
-                <!-- ═══════ 外观 ═══════ -->
+        <views:MasonryPanel MinItemWidth="460" MaxColumns="2" ColumnSpacing="12" RowSpacing="20">
+            <!-- ═══════ 外观 ═══════ -->
                 <StackPanel Classes="section">
                     <StackPanel Orientation="Horizontal" Spacing="8" Margin="2,0,0,8">
-                        <TextBlock Text="🎨" FontSize="{DynamicResource Fs12}" VerticalAlignment="Center" />
+                        <Border Classes="icon-chip small" VerticalAlignment="Center">
+                            <TextBlock Text="🎨" FontSize="{DynamicResource Fs14}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
                         <StackPanel Spacing="0">
                             <TextBlock Text="外观" Classes="group-title" />
                             <TextBlock Text="主题与界面动效" Classes="group-sub" />
@@ -267,7 +268,10 @@
                 <!-- ═══════ 行为 ═══════ -->
                 <StackPanel Classes="section">
                     <StackPanel Orientation="Horizontal" Spacing="8" Margin="2,0,0,8">
-                        <TextBlock Text="🧭" FontSize="{DynamicResource Fs12}" VerticalAlignment="Center" />
+                        <Border Classes="icon-chip small" VerticalAlignment="Center">
+                            <TextBlock Text="🧭" FontSize="{DynamicResource Fs14}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
                         <StackPanel Spacing="0">
                             <TextBlock Text="行为" Classes="group-title" />
                             <TextBlock Text="浏览与合并时的默认动作" Classes="group-sub" />
@@ -304,73 +308,13 @@
                     </Border>
                 </StackPanel>
 
-                <!-- ═══════ 运行状态 ═══════ -->
-                <StackPanel Classes="section">
-                    <Grid ColumnDefinitions="*,Auto" Margin="2,0,0,8">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBlock Text="🧩" FontSize="{DynamicResource Fs12}" VerticalAlignment="Center" />
-                            <StackPanel Spacing="0">
-                                <TextBlock Text="运行状态" Classes="group-title" />
-                                <TextBlock Text="{Binding DependencyHeadline}" Classes="group-sub" />
-                            </StackPanel>
-                        </StackPanel>
-                        <Button Grid.Column="1"
-                                Content="重新检测"
-                                Classes="ghost"
-                                FontSize="{DynamicResource Fs10}"
-                                VerticalAlignment="Center"
-                                Command="{Binding RefreshDependenciesCommand}" />
-                    </Grid>
-
-                    <Border Classes="group">
-                        <StackPanel>
-                            <Grid Classes="row" ColumnDefinitions="*,Auto">
-                                <StackPanel Grid.Column="0" Spacing="2">
-                                    <TextBlock Text="组件检测结果" Classes="row-label" />
-                                    <TextBlock Text="{Binding DependencySummary}" Classes="row-desc" />
-                                </StackPanel>
-                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
-                                            VerticalAlignment="Center">
-                                    <Ellipse Classes="dot ok" IsVisible="{Binding !HasMissingDependency}" />
-                                    <Ellipse Classes="dot missing" IsVisible="{Binding HasMissingDependency}" />
-                                </StackPanel>
-                            </Grid>
-
-                            <ItemsControl ItemsSource="{Binding Dependencies}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="services:DependencyCheck">
-                                        <StackPanel>
-                                            <Border Classes="row-divider" />
-                                            <Grid Classes="row" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
-                                                <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
-                                                    <Ellipse Classes="dot ok" IsVisible="{Binding Available}" />
-                                                    <Ellipse Classes="dot missing" IsVisible="{Binding IsMissing}" />
-                                                </StackPanel>
-                                                <StackPanel Grid.Column="1" Spacing="2">
-                                                    <TextBlock Text="{Binding Name}" Classes="row-label" />
-                                                    <TextBlock Text="{Binding Description}" Classes="row-desc" />
-                                                </StackPanel>
-                                                <TextBlock Grid.Column="2"
-                                                           Text="{Binding Status}"
-                                                           Classes="row-desc"
-                                                           VerticalAlignment="Center" />
-                                            </Grid>
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-
-                            <TextBlock Text="缺组件不会让应用打不开：对应格式会降级（例如没有 Oodle 就按不压缩打包），日志里会写原因。"
-                                       Classes="row-desc"
-                                       Margin="16,10,16,14" />
-                        </StackPanel>
-                    </Border>
-                </StackPanel>
-
                 <!-- ═══════ 更新 ═══════ -->
                 <StackPanel Classes="section">
                     <StackPanel Orientation="Horizontal" Spacing="8" Margin="2,0,0,8">
-                        <TextBlock Text="⬆" FontSize="{DynamicResource Fs12}" VerticalAlignment="Center" />
+                        <Border Classes="icon-chip small" VerticalAlignment="Center">
+                            <TextBlock Text="⬆" FontSize="{DynamicResource Fs14}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
                         <StackPanel Spacing="0">
                             <TextBlock Text="更新" Classes="group-title" />
                             <TextBlock Text="从 GitHub 发行版获取新版本" Classes="group-sub" />
@@ -444,7 +388,10 @@
                 <!-- ═══════ 缓存与存储 ═══════ -->
                 <StackPanel Classes="section" IsVisible="{Binding HasCacheData}">
                     <StackPanel Orientation="Horizontal" Spacing="8" Margin="2,0,0,8">
-                        <TextBlock Text="💾" FontSize="{DynamicResource Fs12}" VerticalAlignment="Center" />
+                        <Border Classes="icon-chip small" VerticalAlignment="Center">
+                            <TextBlock Text="💾" FontSize="{DynamicResource Fs14}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
                         <StackPanel Spacing="0">
                             <TextBlock Text="缓存与存储" Classes="group-title" />
                             <TextBlock Text="{Binding CacheTotalText, StringFormat='应用私有目录 · 共 {0}'}"
@@ -493,10 +440,79 @@
                     </Border>
                 </StackPanel>
 
+                <!-- ═══════ 运行状态 ═══════ -->
+                <StackPanel Classes="section">
+                    <Grid ColumnDefinitions="*,Auto" Margin="2,0,0,8">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Border Classes="icon-chip small" VerticalAlignment="Center">
+                            <TextBlock Text="🧩" FontSize="{DynamicResource Fs14}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                            <StackPanel Spacing="0">
+                                <TextBlock Text="运行状态" Classes="group-title" />
+                                <TextBlock Text="{Binding DependencyHeadline}" Classes="group-sub" />
+                            </StackPanel>
+                        </StackPanel>
+                        <Button Grid.Column="1"
+                                Content="重新检测"
+                                Classes="ghost"
+                                FontSize="{DynamicResource Fs10}"
+                                VerticalAlignment="Center"
+                                Command="{Binding RefreshDependenciesCommand}" />
+                    </Grid>
+
+                    <Border Classes="group">
+                        <StackPanel>
+                            <Grid Classes="row" ColumnDefinitions="*,Auto">
+                                <StackPanel Grid.Column="0" Spacing="2">
+                                    <TextBlock Text="组件检测结果" Classes="row-label" />
+                                    <TextBlock Text="{Binding DependencySummary}" Classes="row-desc" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+                                            VerticalAlignment="Center">
+                                    <Ellipse Classes="dot ok" IsVisible="{Binding !HasMissingDependency}" />
+                                    <Ellipse Classes="dot missing" IsVisible="{Binding HasMissingDependency}" />
+                                </StackPanel>
+                            </Grid>
+
+                            <ItemsControl ItemsSource="{Binding Dependencies}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="services:DependencyCheck">
+                                        <StackPanel>
+                                            <Border Classes="row-divider" />
+                                            <Grid Classes="row" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                                                <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                                    <Ellipse Classes="dot ok" IsVisible="{Binding Available}" />
+                                                    <Ellipse Classes="dot missing" IsVisible="{Binding IsMissing}" />
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="1" Spacing="2">
+                                                    <TextBlock Text="{Binding Name}" Classes="row-label" />
+                                                    <TextBlock Text="{Binding Description}" Classes="row-desc" />
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="2"
+                                                           Text="{Binding Status}"
+                                                           Classes="row-desc"
+                                                           VerticalAlignment="Center" />
+                                            </Grid>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <TextBlock Text="缺组件不会让应用打不开：对应格式会降级（例如没有 Oodle 就按不压缩打包），日志里会写原因。"
+                                       Classes="row-desc"
+                                       Margin="16,10,16,14" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
                 <!-- ═══════ 关于 ═══════ -->
                 <StackPanel Classes="section">
                     <StackPanel Orientation="Horizontal" Spacing="8" Margin="2,0,0,8">
-                        <TextBlock Text="ℹ" FontSize="{DynamicResource Fs12}" VerticalAlignment="Center" />
+                        <Border Classes="icon-chip small" VerticalAlignment="Center">
+                            <TextBlock Text="ℹ" FontSize="{DynamicResource Fs14}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
                         <StackPanel Spacing="0">
                             <TextBlock Text="关于" Classes="group-title" />
                             <TextBlock Text="Prism · Pak 资产管理工具" Classes="group-sub" />
@@ -622,7 +638,10 @@
                 <StackPanel Classes="section">
                     <Grid ColumnDefinitions="*,Auto" Margin="2,0,0,8">
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBlock Text="📄" FontSize="{DynamicResource Fs12}" VerticalAlignment="Center" />
+                            <Border Classes="icon-chip small" VerticalAlignment="Center">
+                            <TextBlock Text="📄" FontSize="{DynamicResource Fs14}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
                             <StackPanel Spacing="0">
                                 <TextBlock Text="日志" Classes="group-title" />
                                 <TextBlock Text="最近 400 行；出问题时导出完整报告" Classes="group-sub" />
@@ -651,7 +670,7 @@
                         </Border>
                     </Border>
                 </StackPanel>
-            </WrapPanel>
+            </views:MasonryPanel>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

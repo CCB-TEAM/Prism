@@ -34,6 +34,12 @@
                 </Panel>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2">
+                    <!-- 蓝图节点图入口：放在头部，和「加入替换」同级，不用往下滚去找 -->
+                    <Button Content="节点图"
+                            Command="{Binding OpenBlueprintGraphCommand}"
+                            IsVisible="{Binding HasBlueprintSummary}"
+                            Classes="ghost"
+                            ToolTip.Tip="从 Kismet 字节码重建的节点图（只读）" />
                     <Button Content="加入替换"
                             Command="{Binding AddSelectedToPatchCommand}"
                             Classes="accent" />
@@ -71,6 +77,30 @@
                            Stretch="Uniform"
                            MaxHeight="420"
                            HorizontalAlignment="Center" />
+                </Border>
+
+                <!--
+                    蓝图节点图入口：cook 后的包没有编辑器节点，图是从每个函数的 Kismet
+                    字节码重建的。只读，点开是铺满整个工作区的画布。
+                -->
+                <Border Classes="card" Padding="14" IsVisible="{Binding HasBlueprintSummary}">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                        <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center">
+                            <TextBlock Text="蓝图节点图"
+                                       FontSize="{DynamicResource Fs12}"
+                                       FontWeight="SemiBold" />
+                            <TextBlock Text="从 Kismet 字节码重建事件与函数，点节点看端口和字节码位置。只读。"
+                                       FontSize="{DynamicResource Fs10}"
+                                       Foreground="{DynamicResource TextMutedBrush}"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+                        <Button Grid.Column="1"
+                                Content="{Binding BlueprintEntryText}"
+                                Classes="accent"
+                                FontSize="{DynamicResource Fs11}"
+                                VerticalAlignment="Center"
+                                Command="{Binding OpenBlueprintGraphCommand}" />
+                    </Grid>
                 </Border>
 
                 <!--

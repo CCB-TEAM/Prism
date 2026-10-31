@@ -108,7 +108,7 @@ public partial class MainViewModel : ViewModelBase
     // 内容列宽上限：窄窗保持原有数值（手机布局一行不改），宽屏放开以利用两侧空间。
     public double ConvertContentMaxWidth => IsWideLayout ? 1000 : 620;
     public double MergeContentMaxWidth => IsWideLayout ? 1360 : 560;
-    public double SettingsContentMaxWidth => IsWideLayout ? 1360 : 620;
+    public double SettingsContentMaxWidth => IsWideLayout ? 1200 : 620;
     public double WorkspaceConfigMaxWidth => IsWideLayout ? 1000 : 560;
     public double HomeGridMaxWidth => IsWideLayout ? 1200 : 760;
 
@@ -126,7 +126,7 @@ public partial class MainViewModel : ViewModelBase
     /// 卡片会缩成"内容想要的那点宽度"，两列排不出来。给一个确定的槽宽最省事，
     /// 也让两列的宽度永远一致。
     ///
-    /// 减 44 是给两列间隙（12×2）与纵向滚动条留的余量 —— 差几像素就会掉成单列，
+    /// 减 52 是给两列间隙（12×2）与纵向滚动条留的余量 —— 差几像素就会掉成单列，
     /// 而"设置页只能单列"正是之前两列怎么也不出来的原因。
     /// </summary>
     public double SettingsCardWidth
@@ -135,7 +135,7 @@ public partial class MainViewModel : ViewModelBase
         {
             // 页面内容区 = 窗口宽 - 侧栏 - 页面左右边距(20+20)
             double content = Math.Max(300d, WindowWidth - SidebarWidth - 40d);
-            double usable = Math.Min(content, 1040d);
+            double usable = Math.Min(content, 1200d);
             return IsWideLayout ? Math.Floor((usable - 52d) / 2d) : usable;
         }
     }

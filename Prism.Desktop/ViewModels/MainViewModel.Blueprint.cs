@@ -141,6 +141,7 @@ public partial class MainViewModel
         OnPropertyChanged(nameof(BlueprintFunctionSummary));
         OnPropertyChanged(nameof(BlueprintAssetKind));
         OnPropertyChanged(nameof(HasBlueprintFunctions));
+        OnPropertyChanged(nameof(BlueprintEntryText));
     }
 
     [RelayCommand]

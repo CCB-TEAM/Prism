@@ -192,6 +192,7 @@ return docsOnly ? CaptureDocs() : CapturePages(outputDirectory);
             [
                 .. pages[..9],
                 ("preview-widget", "GoWorkspace", 1),
+                ("preview-blueprint-card", "GoWorkspace", 1),
                 ("preview-blueprint", "GoWorkspace", 1),
                 // 同一页再截一张：把列表/预览之间的分隔条往左拖 120px，证明区域能拖
                 ("preview-widget-dragged", "GoWorkspace", 1),
@@ -251,7 +252,11 @@ return docsOnly ? CaptureDocs() : CapturePages(outputDirectory);
                     {
                         if (pageLabel == "preview-blueprint")
                         {
-                            SeedBlueprintGraphDemo(vm);
+                            SeedBlueprintGraphDemo(vm, openGraph: true);
+                        }
+                        else if (pageLabel == "preview-blueprint-card")
+                        {
+                            SeedBlueprintGraphDemo(vm, openGraph: false);
                         }
                         else if (pageLabel.StartsWith("preview-widget", StringComparison.Ordinal))
                         {
@@ -476,7 +481,7 @@ return docsOnly ? CaptureDocs() : CapturePages(outputDirectory);
     /// 蓝图节点图：从同一个真实 .pak 里反编译一个函数，铺满浏览页。
     /// 只在本地评审时用；资产路径与函数名可以用环境变量换。
     /// </summary>
-    private static void SeedBlueprintGraphDemo(MainViewModel vm)
+    private static void SeedBlueprintGraphDemo(MainViewModel vm, bool openGraph)
     {
         vm.HasAudioPreview = false;
         vm.HasVideoPreview = false;
@@ -494,21 +499,21 @@ return docsOnly ? CaptureDocs() : CapturePages(outputDirectory);
         try
         {
             // Avalonia 已经初始化：不能 await，交给线程池跑完再阻塞等待。
-            (BlueprintGraphDto? Summary, BlueprintGraphViewDto? Graph) result = Task.Run(async () =>
+            (BlueprintGraphDto? Summary, BlueprintGraphViewDto? Graph, AssetPreviewDto? Preview) result = Task.Run(async () =>
             {
                 using var session = new PakArchiveSession();
                 await session.OpenAsync(new PakOpenOptions([pak], null, usmap)).ConfigureAwait(false);
                 var preview = await session.ReadPreviewAsync(asset).ConfigureAwait(false);
                 var summary = preview.Blueprint ?? await session.ReadBlueprintOverviewAsync(asset).ConfigureAwait(false);
                 if (summary is null || summary.Functions.Count == 0)
-                    return (summary, (BlueprintGraphViewDto?)null);
+                    return (summary, (BlueprintGraphViewDto?)null, (AssetPreviewDto?)preview);
 
                 var target = summary.Functions.FirstOrDefault(f => f.Key == function)
                              ?? summary.Functions.FirstOrDefault(f => f.Kind == "function" && f.Key.Contains("FightSnapshot", StringComparison.Ordinal))
                              ?? summary.Functions.FirstOrDefault(f => f.Kind == "event")
                              ?? summary.Functions[0];
                 var graph = await session.ReadBlueprintGraphAsync(asset, target.Key).ConfigureAwait(false);
-                return (summary, graph);
+                return (summary, graph, (AssetPreviewDto?)preview);
             }).GetAwaiter().GetResult();
 
             if (result.Summary is null)
@@ -521,9 +526,12 @@ return docsOnly ? CaptureDocs() : CapturePages(outputDirectory);
             vm.HasPreview = true;
             vm.SelectedPathText = asset;
             vm.PreviewTitle = result.Summary.Name;
+            vm.PreviewText = result.Preview?.Text ?? string.Empty;
+            vm.PreviewDetails = new System.Collections.ObjectModel.ObservableCollection<Prism.Desktop.Models.DetailItem>(
+                (result.Preview?.Details ?? []).Select(detail => new Prism.Desktop.Models.DetailItem(detail.Label, detail.Value)));
             vm.BlueprintSummary = result.Summary;
 
-            if (result.Graph is not null)
+            if (result.Graph is not null && openGraph)
             {
                 vm.BlueprintGraphTitle = result.Summary.ClassName;
                 vm.BlueprintGraphSubtitle = $"{result.Summary.Name} · {result.Graph.DisplayName}";
