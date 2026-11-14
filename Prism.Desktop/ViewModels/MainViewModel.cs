@@ -2544,6 +2544,22 @@ public partial class MainViewModel : ViewModelBase
         ConvertStatus = "就绪";
     }
 
+    /// <summary>
+    /// 把一批转换结果填进明细并给出摘要（截图与回归测试用；真正的转换走 <c>ConvertPakCommand</c>）。
+    ///
+    /// 单独开这个口子是因为明细的可见性挂在 <see cref="HasConvertRows"/> 上，
+    /// 只往集合里 Add 不会触发通知，测试里没法把这一块截出来。
+    /// </summary>
+    public void FillConversionRows(IEnumerable<PakConversionRow> rows, string status)
+    {
+        ConvertRows.Clear();
+        foreach (PakConversionRow row in rows)
+            ConvertRows.Add(row);
+
+        OnPropertyChanged(nameof(HasConvertRows));
+        ConvertStatus = status;
+    }
+
     partial void OnConvertSourcePathChanged(string value)
     {
         ConvertPakCommand.NotifyCanExecuteChanged();
@@ -4927,20 +4943,28 @@ public partial class MainViewModel : ViewModelBase
 
             OnPropertyChanged(nameof(HasConvertRows));
 
-            // 并入的模组文件只在开启开关时才有意义，所以仅在非零时显示。
-            string modFilesNote = counts.OtherFilesIncluded > 0
-                ? $"，并入模组文件 {counts.OtherFilesIncluded:N0}"
+            // 报告分三类，别再混成一句"跳过 N"：
+            //   替换 —— 真正做了跨平台像素转换的贴图；
+            //   原样并入 —— 主 Pak 没有同路径贴图（模组新增素材），没有模板可改格式；
+            //   非纹理 —— 音频/字体/蓝图等，两端通用，按模式直接搬运。
+            bool carryModFiles = mergeAll || includeModFiles;
+            string carriedNote = counts.TexturesCarriedAsIs > 0
+                ? $"，主 Pak 没有的新贴图 {counts.TexturesCarriedAsIs:N0} 张（原样并入，未转换格式）"
+                : string.Empty;
+            string nonTextureNote = counts.NonTextureFiles > 0
+                ? $"，非纹理资产 {counts.NonTextureFiles:N0} 个（{(carryModFiles ? "已原样并入" : "未并入")}）"
                 : string.Empty;
 
             ConvertStatus =
-                $"完成：替换 {counts.Replaced:N0}，主 Pak 缺失 {counts.MissingInTarget:N0}，" +
-                $"跳过 {counts.Skipped:N0}，失败 {counts.Failed:N0}{modFilesNote}";
+                $"完成：替换 {counts.Replaced:N0} 张{carriedNote}，跳过 {counts.Skipped:N0}，" +
+                $"失败 {counts.Failed:N0}{nonTextureNote}，输出 {counts.TotalFiles:N0} 个文件";
 
             AddLog(
                 $"Pak 转换：{Path.GetFileName(sourcePak)} → {Path.GetFileName(targetPak)}，" +
-                $"候选纹理 {counts.TextureCandidates:N0}，替换 {counts.Replaced:N0}，" +
-                $"缺失 {counts.MissingInTarget:N0}，跳过 {counts.Skipped:N0}，失败 {counts.Failed:N0}，" +
-                $"并入模组文件 {counts.OtherFilesIncluded:N0}，输出文件 {counts.TotalFiles:N0}",
+                $"资产 {counts.TextureCandidates:N0}，替换 {counts.Replaced:N0}，" +
+                $"主 Pak 无同路径 {counts.MissingInTarget:N0}（其中原样并入贴图 {counts.TexturesCarriedAsIs:N0}），" +
+                $"非纹理 {counts.NonTextureFiles:N0}，跳过 {counts.Skipped:N0}，失败 {counts.Failed:N0}，" +
+                $"并入文件 {counts.OtherFilesIncluded:N0}，输出文件 {counts.TotalFiles:N0}",
                 "转换");
 
             if (!android)
@@ -4980,8 +5004,11 @@ public partial class MainViewModel : ViewModelBase
     private static string DescribeConversionStatus(UAssetTexture.Core.PakConversionItemStatus status) => status switch
     {
         UAssetTexture.Core.PakConversionItemStatus.Replaced => "已替换",
-        UAssetTexture.Core.PakConversionItemStatus.MissingInTarget => "主 Pak 无此项",
+        // 主 Pak 里没有同路径项：贴图没法重编码，其余资产谈不上"缺失"。
+        UAssetTexture.Core.PakConversionItemStatus.MissingInTarget => "无对应项",
         UAssetTexture.Core.PakConversionItemStatus.Skipped => "跳过",
+        UAssetTexture.Core.PakConversionItemStatus.Carried => "已并入",
+        UAssetTexture.Core.PakConversionItemStatus.NotCarried => "未并入",
         _ => "失败",
     };
 

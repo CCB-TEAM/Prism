@@ -43,20 +43,31 @@ public enum PakConversionMode
     MergeSourceFiles = 3,
 }
 
-/// <summary>单个纹理的转换结果分类。</summary>
+/// <summary>单个资产的转换结果分类。</summary>
 public enum PakConversionItemStatus
 {
     /// <summary>已在主 Pak 找到同路径纹理并完成替换。</summary>
     Replaced = 0,
 
-    /// <summary>源 Pak 有该纹理，但主 Pak 没有同路径条目。</summary>
+    /// <summary>源 Pak 有该纹理，但主 Pak 没有同路径条目（无法作为重编码模板）。</summary>
     MissingInTarget = 1,
 
-    /// <summary>不是纹理资产，或解不出像素（可能缺少映射文件）。</summary>
+    /// <summary>是纹理但解不出像素 / 编码失败（可能缺少映射文件或编码器）。</summary>
     Skipped = 2,
 
     /// <summary>读取 / 编码 / 写回过程中失败。</summary>
     Failed = 3,
+
+    /// <summary>
+    /// 非纹理资产（音频 / 字体 / 蓝图 / 本地化表……），已按当前模式原样并入。
+    ///
+    /// 这类文件两端通用，不需要转换。以前它们会被塞进"解纹理像素"的流程并报成
+    /// "跳过：无法解出源纹理像素"，看起来像是被丢弃了。
+    /// </summary>
+    Carried = 4,
+
+    /// <summary>非纹理资产，但当前模式（只替换贴图）不把它写进输出。</summary>
+    NotCarried = 5,
 }
 
 public sealed record PakConversionOptions(
@@ -113,12 +124,17 @@ public sealed record PakConversionResult(
 
 public sealed record PakConversionCounts(
     int TotalFiles,
+    // 待转换 Pak 里检查过的资产包（.uasset）数量。
     int TextureCandidates,
     int Replaced,
     int MissingInTarget,
     int Skipped,
     int Failed,
-    int OtherFilesIncluded);
+    int OtherFilesIncluded,
+    // 其中的非纹理资产（音频 / 字体 / 蓝图……）数量。
+    int NonTextureFiles = 0,
+    // 主 Pak 里没有同路径、因而原样并入的纹理数量（未做跨平台转换）。
+    int TexturesCarriedAsIs = 0);
 
 /// <summary>
 /// 双端 Pak 转换：把「待转换 Pak」里的纹理像素，替换进「主 Pak」的同路径资产，
@@ -185,7 +201,6 @@ public sealed class PakConversionService
 
             Dictionary<string, ModifiedPakFile> output = new(StringComparer.OrdinalIgnoreCase);
             HashSet<string> targetPaths;
-            HashSet<string> targetTexturePackages;
 
             await EnsureMountedAsync(targetSession, "主 Pak", options.TargetPakPath, aes, mappings)
                 .ConfigureAwait(false);
@@ -219,11 +234,6 @@ public sealed class PakConversionService
                     .ToHashSet(StringComparer.OrdinalIgnoreCase);
             }
 
-            // 主 Pak 里"可能是纹理"的资产：用于判断源纹理是否有对应项。
-            targetTexturePackages = targetPaths
-                .Where(p => IsTextureCandidate(p, targetPaths))
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
             // ── 2. 解包源 Pak ────────────────────────────────────────────────
             progress?.Report(new PakConversionProgress(0, 1, "正在解包待转换 Pak…"));
             List<PakConversionItemResult> items = [];
@@ -232,6 +242,8 @@ public sealed class PakConversionService
             int skipped = 0;
             int failed = 0;
             int otherIncluded = 0;
+            int nonTextureFiles = 0;
+            int texturesCarriedAsIs = 0;
 
             // 已成功重编码的纹理所占的源文件路径（.uasset/.uexp/.ubulk）。
             // 并入阶段要跳过它们，否则会用源平台的像素格式覆盖刚转好的结果。
@@ -245,54 +257,67 @@ public sealed class PakConversionService
                     .CopyAllRawFilesAsync(Path.Combine(tempRoot, "source"))
                     .ConfigureAwait(false);
 
-                HashSet<string> sourcePaths = sourceFiles
-                    .Select(f => f.PakPath)
-                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-                // 纹理候选：_P.uasset 约定，或任意带同名 .uexp 的 .uasset。
-                // 避免对 .uexp/.ubulk 重复工作。
-                List<PakRawFileCopy> textureCandidates = sourceFiles
-                    .Where(f => IsTextureCandidate(f.PakPath, sourcePaths))
+                // 逐个资产包分类，而不是"凡是有 .uexp 的都当纹理候选"。
+                //
+                // 后者会把音频、字体、蓝图统统塞进"解纹理像素"的流程，报告里于是出现
+                // "无法解出源纹理像素：该资产不是纹理"—— 用户看到的像是文件被丢弃了。
+                // 探测只构造主导出、不解像素，成本远低于一次失败的解码。
+                List<PakRawFileCopy> packages = sourceFiles
+                    .Where(f => f.PakPath.EndsWith(".uasset", StringComparison.OrdinalIgnoreCase))
                     .ToList();
 
-                int total = textureCandidates.Count;
+                int total = packages.Count;
                 int index = 0;
 
-                foreach (PakRawFileCopy candidate in textureCandidates)
+                foreach (PakRawFileCopy package in packages)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     index++;
-                    progress?.Report(new PakConversionProgress(index, total, candidate.PakPath));
+                    progress?.Report(new PakConversionProgress(index, total, package.PakPath));
 
-                    // 主 Pak 没有同路径纹理包 → 按模式决定是并入还是跳过。
-                    if (!targetTexturePackages.Contains(candidate.PakPath))
+                    AssetProbeDto probe = await sourceSession
+                        .ProbeAssetAsync(package.PakPath, cancellationToken)
+                        .ConfigureAwait(false);
+
+                    // 明确的非纹理资产（音频 / 字体 / 蓝图 / 本地化表……）：
+                    // 不参与像素转换，按模式原样并入。这类文件两端通用，不需要转换。
+                    if (probe.IsKnownNonTexture)
                     {
-                        if (options.Mode == PakConversionMode.MergeAll)
-                        {
-                            // 只在主 Pak 完全没有该文件时才并入，避免覆盖主 Pak 的 uexp/ubulk。
-                            foreach (PakRawFileCopy related in RelatedFilesOf(candidate.PakPath, sourceFiles))
-                            {
-                                if (!output.ContainsKey(related.PakPath))
-                                {
-                                    output[related.PakPath] = new ModifiedPakFile(related.DiskPath, related.PakPath);
-                                    otherIncluded++;
-                                }
-                            }
-                        }
-
-                        missing++;
+                        nonTextureFiles++;
+                        bool carried = options.Mode is PakConversionMode.MergeAll or PakConversionMode.MergeSourceFiles;
+                        var nonTextureStatus = carried
+                            ? PakConversionItemStatus.Carried
+                            : PakConversionItemStatus.NotCarried;
                         items.Add(new PakConversionItemResult(
-                            candidate.PakPath,
+                            package.PakPath,
+                            nonTextureStatus,
+                            DescribeNonTexture(probe.ExportType!, carried)));
+                        progress?.Report(new PakConversionProgress(index, total, package.PakPath, nonTextureStatus));
+                        continue;
+                    }
+
+                    // 主 Pak 里没有同路径文件 → 无法作为"模板"重编码。
+                    // 这里比对的是**文件是否存在**，不是"是否像纹理"：
+                    // 主 Pak 有该 uasset 但没有 .uexp 的资产同样算"在"。
+                    if (!targetPaths.Contains(package.PakPath))
+                    {
+                        missing++;
+                        bool carry = options.Mode != PakConversionMode.ReplacedOnly;
+                        if (carry && probe.IsTexture)
+                            texturesCarriedAsIs++;
+
+                        items.Add(new PakConversionItemResult(
+                            package.PakPath,
                             PakConversionItemStatus.MissingInTarget,
-                            "主 Pak 中没有同路径纹理"));
-                        progress?.Report(new PakConversionProgress(index, total, candidate.PakPath, PakConversionItemStatus.MissingInTarget));
+                            DescribeMissingInTarget(probe, carry)));
+                        progress?.Report(new PakConversionProgress(index, total, package.PakPath, PakConversionItemStatus.MissingInTarget));
                         continue;
                     }
 
                     try
                     {
                         TextureConversionOutcome conversion = await ConvertTextureAsync(
-                            sourceSession, targetSession, candidate, output, options, tempRoot, cancellationToken)
+                            sourceSession, targetSession, package, output, options, tempRoot, cancellationToken)
                             .ConfigureAwait(false);
 
                         PakConversionItemStatus status = conversion.Status;
@@ -300,30 +325,40 @@ public sealed class PakConversionService
                         {
                             case PakConversionItemStatus.Replaced:
                                 replaced++;
-                                convertedSourcePaths.Add(candidate.PakPath);
-                                foreach (PakRawFileCopy related in RelatedFilesOf(candidate.PakPath, sourceFiles))
+                                convertedSourcePaths.Add(package.PakPath);
+                                foreach (PakRawFileCopy related in RelatedFilesOf(package.PakPath, sourceFiles))
                                 {
                                     convertedSourcePaths.Add(related.PakPath);
                                 }
 
                                 items.Add(new PakConversionItemResult(
-                                    candidate.PakPath,
+                                    package.PakPath,
                                     status,
                                     conversion.Method == PakConversionMethod.RawCopy
                                         ? "格式一致，已无损搬运原始 mip 数据"
                                         : $"已解出像素并按主 Pak 格式（{conversion.TargetFormat}）重新编码",
                                     conversion.Method));
                                 break;
+
+                            case PakConversionItemStatus.MissingInTarget:
+                                // 索引里有、实际取不到（同路径但缺 .uexp 之类）。
+                                missing++;
+                                items.Add(new PakConversionItemResult(
+                                    package.PakPath,
+                                    status,
+                                    DescribeMissingInTarget(probe, options.Mode != PakConversionMode.ReplacedOnly)));
+                                break;
+
                             default:
                                 skipped++;
                                 items.Add(new PakConversionItemResult(
-                                    candidate.PakPath,
+                                    package.PakPath,
                                     status,
                                     conversion.Message ?? "无法解出纹理像素，已跳过"));
                                 break;
                         }
 
-                        progress?.Report(new PakConversionProgress(index, total, candidate.PakPath, status));
+                        progress?.Report(new PakConversionProgress(index, total, package.PakPath, status));
                     }
                     catch (OperationCanceledException)
                     {
@@ -332,8 +367,8 @@ public sealed class PakConversionService
                     catch (Exception ex)
                     {
                         failed++;
-                        items.Add(new PakConversionItemResult(candidate.PakPath, PakConversionItemStatus.Failed, ex.Message));
-                        progress?.Report(new PakConversionProgress(index, total, candidate.PakPath, PakConversionItemStatus.Failed));
+                        items.Add(new PakConversionItemResult(package.PakPath, PakConversionItemStatus.Failed, ex.Message));
+                        progress?.Report(new PakConversionProgress(index, total, package.PakPath, PakConversionItemStatus.Failed));
                     }
                 }
 
@@ -357,8 +392,10 @@ public sealed class PakConversionService
                     foreach (PakRawFileCopy file in sourceFiles)
                     {
                         cancellationToken.ThrowIfCancellationRequested();
-                        if (IsTexturePackagePath(file.PakPath) && targetTexturePackages.Contains(file.PakPath))
-                            continue; // 已由纹理替换逻辑处理
+                        // 只跳过**确实转换成功**的那几件套；其余文件主 Pak 没有就补上，
+                        // 主 Pak 已有的保持原样（不覆盖基底）。
+                        if (convertedSourcePaths.Contains(file.PakPath))
+                            continue;
 
                         if (!output.ContainsKey(file.PakPath))
                         {
@@ -413,12 +450,14 @@ public sealed class PakConversionService
                 packTarget,
                 new PakConversionCounts(
                     output.Count,
-                    replaced + missing + skipped + failed,
+                    replaced + missing + skipped + failed + nonTextureFiles,
                     replaced,
                     missing,
                     skipped,
                     failed,
-                    otherIncluded),
+                    otherIncluded,
+                    nonTextureFiles,
+                    texturesCarriedAsIs),
                 items,
                 packResult.Note);
         }
@@ -602,6 +641,77 @@ public sealed class PakConversionService
         string? TargetFormat = null);
 
     /// <summary>
+    /// 非纹理资产在报告里的一句话说明。
+    ///
+    /// 用户最容易被"跳过 / 找不到"这类词误导 —— 这里必须直说它是什么、
+    /// 有没有进输出，而不是一句"该资产不是纹理"。
+    /// </summary>
+    private static string DescribeNonTexture(string exportType, bool carried)
+    {
+        string kind = DescribeAssetCategory(exportType);
+        return carried
+            ? $"{kind}，两端通用，已原样并入"
+            : $"{kind}，当前模式只输出贴图，未并入（勾选「并入模组的其他文件」可带上）";
+    }
+
+    /// <summary>把导出类名翻译成人话，保留原类名便于排查。</summary>
+    public static string DescribeAssetCategory(string exportType) => exportType switch
+    {
+        "SoundWave" or "SoundCue" or "SoundAttenuation" or "SoundClass" or "SoundMix"
+            or "SoundSubmix" or "MetaSoundSource" or "ReverbEffect" => $"音频（{exportType}）",
+        "Font" or "FontFace" or "RuntimeFontFace" => $"字体（{exportType}）",
+        "BlueprintGeneratedClass" or "WidgetBlueprintGeneratedClass" or "AnimBlueprintGeneratedClass"
+            => $"蓝图（{exportType}）",
+        "DataTable" or "CompositeDataTable" or "CurveTable" or "CompositeCurveTable"
+            => $"数据表（{exportType}）",
+        "DataAsset" or "PrimaryDataAsset" => $"数据资产（{exportType}）",
+        "Material" or "MaterialInstanceConstant" or "MaterialInstanceDynamic" or "MaterialParameterCollection"
+            => $"材质（{exportType}）",
+        "StaticMesh" or "SkeletalMesh" or "Skeleton" => $"模型（{exportType}）",
+        "AnimSequence" or "AnimMontage" or "AnimComposite" or "BlendSpace" or "BlendSpace1D"
+            or "AimOffsetBlendSpace" => $"动画（{exportType}）",
+        "StringTable" => $"字符串表（{exportType}）",
+        "World" or "Level" or "MapBuildDataRegistry" or "WorldSettings" => $"关卡（{exportType}）",
+        "UserDefinedStruct" or "UserDefinedEnum" or "Enum" or "Struct" or "ScriptStruct"
+            => $"类型定义（{exportType}）",
+        "MediaSource" or "FileMediaSource" or "StreamMediaSource" => $"视频（{exportType}）",
+        _ => $"资产（{exportType}）",
+    };
+
+    /// <summary>
+    /// 主 Pak 里没有同路径项时的说明。
+    ///
+    /// 要区分两种情形，否则用户根本判断不出该怎么办：
+    /// <list type="bullet">
+    /// <item>确实不是纹理（音频/字体）—— 它们本来就该原样并入，谈不上"丢失"；</item>
+    /// <item>是纹理，但主 Pak 没有同路径资产（模组新增素材）—— 没有模板就无法重编码。</item>
+    /// </list>
+    /// </summary>
+    private static string DescribeMissingInTarget(AssetProbeDto probe, bool carried)
+    {
+        if (probe.IsKnownNonTexture)
+            return DescribeNonTexture(probe.ExportType!, carried);
+
+        string what = probe.IsTexture ? "主 Pak 里没有这张贴图" : "主 Pak 里没有这个资产";
+        if (!carried)
+        {
+            return $"{what}，当前模式不写入输出（勾选「并入模组的其他文件」可原样带上）";
+        }
+
+        // 类型没识别出来（缺映射 / 包结构异常）：只能原样搬，且不能谎称"已转换"。
+        if (!probe.IsTexture)
+        {
+            return $"{what}；类型未能识别（{probe.Message ?? "缺映射或包结构异常"}），已按源文件原样并入";
+        }
+
+        // 纹理没有模板就改不了像素格式，只能原样并入 —— 这一点必须说清楚，
+        // 否则用户会以为它已经被转换成目标平台格式了。
+        string format = probe.PixelFormat is null ? "源格式" : probe.PixelFormat;
+        return $"{what}（没有可用的重编码模板），已按 {format} 原样并入；" +
+               "这张贴图没有做跨平台转换，两端像素格式不同会显示异常";
+    }
+
+    /// <summary>
     /// 把"解不出源纹理像素"的底层错误翻译成可操作的说明。
     ///
     /// 这一步是跨格式转换最容易卡住的地方，而底层报错（CUE4Parse / UAssetAPI 的
@@ -631,10 +741,11 @@ public sealed class PakConversionService
             return $"{Prefix}：{rawMessage}";
         }
 
-        // 没有异常但也没解出像素：多半不是纹理资产。
+        // 没有异常但也没解出像素：探测已确认它是贴图，所以只能是像素读不出来
+        // （虚拟贴图 / 纹理数组，或像素数据确实为空）。
         return hasMappings
-            ? $"{Prefix}：该资产不是纹理（或纹理数据为空），已跳过。"
-            : $"{Prefix}：该资产不是纹理，或需要映射文件才能解析。请在设置页选择映射文件后重试。";
+            ? $"{Prefix}：贴图存在但像素读不出来（虚拟贴图 / 纹理数组 / 像素数据为空），已跳过。"
+            : $"{Prefix}：贴图存在但需要映射文件才能解出像素。请在设置页选择映射文件后重试。";
     }
 
     /// <summary>把进程内替换产出的三个文件映射回 Pak 内路径。</summary>
@@ -708,37 +819,6 @@ public sealed class PakConversionService
     /// </summary>
     private static string NormalizePakPath(string pakPath) =>
         pakPath.Replace('\\', '/').TrimStart('/');
-
-    /// <summary>
-    /// 是否符合纹理资产的 <c>_P</c> 命名约定。
-    /// 注意这只是<b>候选筛选</b>之一，不是最终判定 —— 最终由实际解码决定。
-    /// </summary>
-    private static bool IsTexturePackagePath(string pakPath)
-    {
-        if (!pakPath.EndsWith(".uasset", StringComparison.OrdinalIgnoreCase))
-            return false;
-
-        string stem = Path.GetFileNameWithoutExtension(pakPath);
-        return stem.EndsWith("_P", StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
-    /// 纹理候选筛选：<c>_P.uasset</c> 约定，或任意 <c>.uasset</c> 且存在同名 <c>.uexp</c>。
-    ///
-    /// 加第二条判据是为了不依赖命名约定：很多游戏不用 <c>_P</c> 后缀，
-    /// 但所有 cooked 资产都有 <c>.uexp</c>。这样转换能覆盖更多游戏，
-    /// 代价是会把少量非纹理资产也纳入候选（解码失败会被记为"跳过"，不影响结果）。
-    /// </summary>
-    private static bool IsTextureCandidate(string pakPath, IReadOnlySet<string> allPaths)
-    {
-        if (IsTexturePackagePath(pakPath))
-            return true;
-
-        if (!pakPath.EndsWith(".uasset", StringComparison.OrdinalIgnoreCase))
-            return false;
-
-        return allPaths.Contains(PakPathFor(pakPath, ".uexp"));
-    }
 
     /// <summary>
     /// 打开 Pak 并确认真的读到了文件；文件数为 0 时立刻中止。

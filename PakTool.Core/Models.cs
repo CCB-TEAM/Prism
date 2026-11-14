@@ -62,6 +62,28 @@ public sealed record TexturePreviewDto(
     byte[] PngData,
     string? PixelFormat = null);
 
+/// <summary>
+/// 资产类型探测结果：只回答"这是什么"，<b>不解像素、不建预览</b>。
+///
+/// Pak 转换需要按类型分流（纹理走像素转换、音频/字体/蓝图原样并入），
+/// 没有这个探测就只能一律按"纹理候选"处理，报告里会出现大量
+/// "无法解出源纹理像素"，让人误以为文件被丢弃了。
+/// </summary>
+public sealed record AssetProbeDto(
+    /// <summary>主导出的类名，例如 <c>Texture2D</c>、<c>SoundWave</c>、<c>FontFace</c>。</summary>
+    string? ExportType,
+    bool IsTexture,
+    /// <summary>纹理的像素格式（仅 <see cref="IsTexture"/> 为 true 时有值），例如 <c>PF_ASTC_6x6</c>。</summary>
+    string? PixelFormat = null,
+    /// <summary>资产使用未版本化属性但缺映射文件 —— 类型无法判定。</summary>
+    bool NeedsMappings = false,
+    /// <summary>探测失败时的原始原因（找不到文件 / 包解析失败）。</summary>
+    string? Message = null)
+{
+    /// <summary>确认为非纹理（拿到了类名且不是 UTexture）。</summary>
+    public bool IsKnownNonTexture => !IsTexture && ExportType is not null;
+}
+
 public sealed record AssetPreviewDto(
     string Kind,
     string Title,

@@ -104,10 +104,16 @@
                             <TextBlock Text="选项" Classes="card-title" />
 
                             <StackPanel Spacing="8" Margin="0,0,0,0">
-                                <CheckBox Content="并入模组的其他文件（蓝图 / 本地化等）"
+                                <CheckBox Content="并入模组的其他文件（音频 / 字体 / 蓝图 / 本地化等）"
                                           IsChecked="{Binding ConvertIncludeModFiles}" />
-                                <CheckBox Content="输出完整整包"
+                                <CheckBox Content="输出完整整包（连主 Pak 的文件一起打包）"
                                           IsChecked="{Binding ConvertMergeAll}" />
+                                <!-- 不勾第一项时输出里只有"转换好的贴图"，模组自带的音视频、
+                                     字体、蓝图不会进去 —— 这是最容易踩的坑，必须写在开关下面。 -->
+                                <TextBlock Text="不勾第一项时，输出里只有贴图；模组的音频 / 视频 / 字体 / 蓝图等不会写进去。"
+                                           FontSize="{DynamicResource Fs10}"
+                                           Foreground="{DynamicResource TextMutedBrush}"
+                                           TextWrapping="Wrap" />
                             </StackPanel>
 
                             <!-- 密钥/映射是这次"转换出废包"的直接原因，所以状态要摆在页面上。
@@ -186,6 +192,7 @@
                                                            FontSize="{DynamicResource Fs10}"
                                                            Foreground="{DynamicResource TextMutedBrush}"
                                                            VerticalAlignment="Center"
+                                                           MaxWidth="440"
                                                            IsVisible="{Binding HasMessage}"
                                                            TextTrimming="CharacterEllipsis"
                                                            ToolTip.Tip="{Binding Message}" />

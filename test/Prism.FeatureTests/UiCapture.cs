@@ -70,6 +70,7 @@ return docsOnly ? CaptureDocs() : CapturePages(outputDirectory);
             ("workspace-replace", "GoWorkspace", 2, vm => SeedPatchDemo(vm, selectMedia: false)),
             ("merge", "GoMerge", 0, SeedMergeDemo),
             ("convert", "GoConvert", 0, null),
+            ("convert-detail", "GoConvert", 0, SeedConvertDemo),
             ("settings", "GoSettings", 0, null),
             ("update", "GoHome", 0, SeedUpdateDemo),
         ];
@@ -125,6 +126,36 @@ return docsOnly ? CaptureDocs() : CapturePages(outputDirectory);
             assetSize: 124_724_173);
     }
 
+    /// <summary>
+    /// 转换明细示例：一条"已替换"、两条"已并入"（音频 / 字体）、一条"无对应项"
+    /// （模组新增贴图，主 Pak 没有模板）。这四种状态就是 1.4.4 修好分类后的全部形态。
+    /// </summary>
+    private static void SeedConvertDemo(MainViewModel vm)
+    {
+        vm.FillConversionRows(
+            [
+                new PakConversionRow(
+                    "kards/Content/Assets/Textures/Icons/FactionIcon_ANZAC_256.uasset",
+                    "已替换",
+                    "已解出像素并按主 Pak 格式（PF_DXT5）重新编码"),
+                new PakConversionRow(
+                    "kards/Content/Assets/Audio/Atmo/AU_Pocessed_Mus/AU_MUS_Kalinka_02.uasset",
+                    "已并入",
+                    "音频（SoundWave），两端通用，已原样并入"),
+                new PakConversionRow(
+                    "kards/Content/Assets/Fonts/FRADMCN_Font.uasset",
+                    "已并入",
+                    "字体（FontFace），两端通用，已原样并入"),
+                new PakConversionRow(
+                    "kards/Content/Assets/Textures/Images/Japan/t_honor.uasset",
+                    "无对应项",
+                    "主 Pak 里没有这张贴图（没有可用的重编码模板），已按 PF_ASTC_6x6 原样并入；" +
+                    "这张贴图没有做跨平台转换，两端像素格式不同会显示异常"),
+            ],
+            "完成：替换 610 张，主 Pak 没有的新贴图 12 张（原样并入，未转换格式），跳过 0，失败 0，" +
+            "非纹理资产 63 个（已原样并入），输出 1,801 个文件");
+    }
+
     /// <summary>合并页示例：两条输入，展示优先级列表的排版。</summary>
     private static void SeedMergeDemo(MainViewModel vm)
     {
@@ -176,6 +207,7 @@ return docsOnly ? CaptureDocs() : CapturePages(outputDirectory);
             ("preview-video", "GoWorkspace", 1),
             ("merge", "GoMerge", 0),
             ("convert", "GoConvert", 0),
+            ("convert-detail", "GoConvert", 0),
             ("settings", "GoSettings", 0),
             // 关于在设置页最下面：再截一张滚到底的，评审时能看到创作者与致谢
             ("settings-about", "GoSettings", 0),
@@ -245,6 +277,12 @@ return docsOnly ? CaptureDocs() : CapturePages(outputDirectory);
                         {
                             SeedPatchDemo(vm, selectMedia: pageLabel.EndsWith("media", StringComparison.Ordinal));
                         }
+                    }
+
+                    // 转换明细：四种状态各来一条，用来评审分类文案是否说得清楚
+                    if (pageLabel == "convert-detail")
+                    {
+                        SeedConvertDemo(vm);
                     }
 
                     // 预览栏的内置播放器 / 视频画面：同样造一份示例状态
@@ -637,6 +675,15 @@ return docsOnly ? CaptureDocs() : CapturePages(outputDirectory);
             WindowWidth = width,
             WindowHeight = height,
             IsSidebarCollapsed = collapsed,
+
+            // 演示路径：截图必须与上一次运行留下的设置无关，否则图里会出现
+            // “prism-feature-tests-2f1e…/locres.pak” 这种一次性路径。
+            // AES 用假的 64 位十六进制串，只为让状态行显示「已填写」。
+            PakPath = @"D:\steam\steamapps\common\KARDS\kards\Content\Paks\kards-Windows.pak",
+            UsmapPath = @"E:\pak\kards1.60_No_UE4SS.jmap",
+            AesKey = "0x" + new string('A', 64),
+            ConvertSourcePath = @"E:\pak\TNO MOD ET1.12.2.pak",
+            ConvertOutputPath = @"E:\pak\out\TNO MOD ET1.12.2-windows_P.pak",
         };
 
         if (Application.Current is { } app)

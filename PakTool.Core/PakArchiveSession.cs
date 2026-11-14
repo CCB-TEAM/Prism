@@ -2703,6 +2703,68 @@ public sealed class PakArchiveSession : IDisposable
     /// <c>maxMipSize</c>（默认 1024）以省内存，而转换必须拿原始分辨率，
     /// 否则重新编码后纹理会被缩小。用 <c>int.MaxValue</c> 取第一个 mip。
     /// </summary>
+    /// <summary>
+    /// 探测资产类型（<b>不</b>解像素、<b>不</b>建预览），用于 Pak 转换时给每一项分流。
+    ///
+    /// 只构造主导出对象：对纹理会顺带拿到像素格式（<c>UTexture.Format</c>），
+    /// 但不会解码任何 mip，因此比 <see cref="TryReadFullTextureAsync"/> 便宜得多。
+    ///
+    /// 失败（找不到 / 缺映射 / 包解析失败）不抛异常，而是返回带说明的结果 ——
+    /// 调用方据此回退到"按纹理处理"，不能让一次探测失败中断整个转换。
+    /// </summary>
+    public Task<AssetProbeDto> ProbeAssetAsync(string assetPath, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(assetPath);
+
+        return Task.Run(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var provider = Provider;
+            var fixedPath = provider.FixPath(assetPath);
+
+            if (!TryResolveGameFile(provider, fixedPath, out var gameFile))
+                return new AssetProbeDto(null, false, Message: "Pak 里找不到这个文件");
+
+            IPackage package;
+            try
+            {
+                package = provider.LoadPackage(gameFile);
+            }
+            catch (Exception ex)
+            {
+                LogDecode($"Probe: package load failed for {fixedPath}: {ex.GetType().Name}: {ex.Message}");
+                return new AssetProbeDto(null, false, Message: ex.Message);
+            }
+
+            string? lastError = null;
+            foreach (var export in package.ExportsLazy)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                UObject value;
+                try
+                {
+                    value = export.Value;
+                }
+                catch (Exception ex) when (IsMissingMappingsError(ex))
+                {
+                    return new AssetProbeDto(null, false, NeedsMappings: true, Message: ex.Message);
+                }
+                catch (Exception ex)
+                {
+                    lastError = ex.Message;
+                    continue;
+                }
+
+                return value is UTexture texture
+                    ? new AssetProbeDto(value.ExportType, true, texture.Format.ToString())
+                    : new AssetProbeDto(value.ExportType, false);
+            }
+
+            return new AssetProbeDto(null, false, Message: lastError ?? "包里没有可识别的导出");
+        }, cancellationToken);
+    }
+
     public Task<TexturePreviewDto?> TryReadFullTextureAsync(string assetPath, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();

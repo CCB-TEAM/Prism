@@ -75,8 +75,10 @@ Browse pak contents, preview textures / audio / 3D meshes / localization, export
 **Pak conversion (cross-platform texture porting)**
 - Move textures from one platform's pak into another's, re-encoded to the target asset's format.
 - Outputs only the changed assets by default — a 7 GB main pak plus one texture yields a **685 KB** mod pak.
-- Optionally carry the mod's other files (blueprints, `.locres`, data tables) straight into the output
-  pak — they are platform-agnostic, so no conversion and no separate merge step is needed.
+- Optionally carry the mod's other files (audio, fonts, blueprints, `.locres`, data tables) straight
+  into the output pak — they are platform-agnostic, so no conversion and no separate merge step is needed.
+- Every asset is type-probed first: textures get re-encoded, audio/fonts/blueprints are copied and
+  reported by category, so no more "the asset is not a texture, skipped" lines that look like lost files.
 - See [How Pak conversion works](#how-pak-conversion-works).
 
 **Localization**
@@ -267,10 +269,21 @@ never silently emits a broken asset.
 Enter the AES key (hex, e.g. `0x...`) on the Settings page. Without it the main pak mounts zero
 files, which surfaces as "no convertible textures".
 
-### Texture candidate detection
+### Asset classification
 
-`_P.uasset` naming is recognized first, but any `.uasset` with a sibling `.uexp` is also accepted —
-so games that do not follow the `_P` convention (for example KARDS `t_xxx.uasset`) convert correctly.
+Every asset is probed before conversion (only the primary export is constructed — no pixel
+decoding), and the result decides what happens to it:
+
+| Asset type | Handling |
+|---|---|
+| Textures (`Texture2D`) | Re-encoded to / copied in the main pak's format |
+| Audio (`SoundWave`), fonts (`Font`/`FontFace`), blueprints, data tables, localization | Platform-agnostic: copied verbatim, nothing rewritten (only included with `MergeSourceFiles` / `MergeAll`) |
+| Textures the main pak does not have (mod-added art) | No template means the pixel format cannot be rewritten, so they are carried in their source format and reported with that format plus a warning |
+
+Previously any `.uasset` with a sibling `.uexp` counted as a "texture candidate", so audio and
+fonts were reported one by one as "could not decode source texture pixels: the asset is not a
+texture" — which reads like the file was dropped. They are now reported as e.g.
+"carried · audio (SoundWave)", and the `_P` naming convention no longer takes part in the decision.
 
 ### Performance
 
@@ -329,7 +342,7 @@ A full repack needs temp space equal to the main pak.
 ## Verifying
 
 ```sh
-# Integration tests (448 assertions): mapping format detection, search-box path resolution,
+# Integration tests (455 assertions): mapping format detection, search-box path resolution,
 # pak conversion (both paths + all output modes), merge priority, locres <-> JSON round-trip,
 # non-ASCII pak path handling, headless UI loading and navigation, audio replacement
 # (BINKA round-trip through a real pak), media replacement, the replace-page flow driven

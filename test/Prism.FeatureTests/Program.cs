@@ -433,6 +433,30 @@ try
             Check(!outPaths.Any(p => p.Contains("MainOnly")), "MergeSourceFiles 不搬运主 Pak 独有的普通文件");
         }
 
+        // ── 资产分类：非纹理资产不该被当成"解不出像素的纹理" ──────────────
+        // 以前凡是有 .uexp 的 .uasset 都算"纹理候选"，音频/字体于是被逐条报成
+        // "无法解出源纹理像素：该资产不是纹理" —— 用户看到的就是"文件被丢弃了"。
+        PakConversionItemResult? extraItem = res.Items.FirstOrDefault(i => i.PakPath.Contains("T_Extra_P"));
+        Check(extraItem?.Status == PakConversionItemStatus.MissingInTarget,
+            "主 Pak 没有同路径的资产记为「无对应项」，而不是跳过");
+        Check(extraItem?.Message?.Contains("当前模式") == true,
+            $"只替换贴图时说明「没并入」以及怎么打开（{extraItem?.Message}）");
+
+        PakConversionItemResult? extraMerged = resMod.Items.FirstOrDefault(i => i.PakPath.Contains("T_Extra_P"));
+        Check(extraMerged?.Message?.Contains("原样并入") == true,
+            $"勾了并入时说清楚它是原样搬过去的（{extraMerged?.Message}）");
+
+        Check(PakConversionService.DescribeAssetCategory("SoundWave").Contains("音频"),
+            "音频资产归类为「音频」");
+        Check(PakConversionService.DescribeAssetCategory("FontFace").Contains("字体"),
+            "字体资产归类为「字体」");
+        Check(PakConversionService.DescribeAssetCategory("BlueprintGeneratedClass").Contains("蓝图"),
+            "蓝图资产归类为「蓝图」");
+
+        Console.WriteLine($"        分类文案: {PakConversionService.DescribeAssetCategory("SoundWave")} / " +
+                          $"{PakConversionService.DescribeAssetCategory("FontFace")} / " +
+                          $"{PakConversionService.DescribeAssetCategory("DataTable")}");
+
         // ── 映射文件对两条路径的不同要求（如实记录） ──────────────────────
         // 快路径（格式/布局一致）只读原始字节，不反序列化 UObject → 不需要映射文件。
         // 重编码路径要解出源纹理像素 → 必须能反序列化 UTexture，未版本化资产就需要映射。
